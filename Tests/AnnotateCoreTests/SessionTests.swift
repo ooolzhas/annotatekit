@@ -222,6 +222,17 @@ enum Fixtures {
         let near = ScreenOutline.nearbyText(for: frame, in: elements, excluding: "Get started")
         #expect(near == ["Above", "Below button"])
     }
+
+    @Test func layoutHasMovedOnlyWhenACommonElementShifts() {
+        let frozen = [element("Title", 10, 100), element("Row", 10, 300), element("Row", 10, 340)]
+        // Same places; a new element and a changed label don't count
+        #expect(!ScreenOutline.hasMoved(from: frozen, to: [element("Title", 10.5, 100), element("Row", 10, 340), element("Clock 9:41", 0, 0)]))
+        // Content slid up for a keyboard
+        #expect(ScreenOutline.hasMoved(from: frozen, to: [element("Title", 10, -41), element("Row", 10, 159)]))
+        // Nothing in common: no evidence it held still
+        #expect(ScreenOutline.hasMoved(from: frozen, to: [element("Other", 10, 100)]))
+        #expect(ScreenOutline.hasMoved(from: [], to: []))
+    }
 }
 
 @Suite struct SessionWriterTests {

@@ -116,7 +116,7 @@ Tools: `get_annotation_session` (prompt plus annotated screens and crops as imag
 
 | Action | Gesture / key |
 |---|---|
-| Enter annotate mode (freezes the screen) | Pencil button, `Annotate.start()`, or launch with `ANNOTATE=1` |
+| Enter annotate mode (freezes the screen) | Pencil button, `Annotate.start()`, or launch with `ANNOTATE=1` (waits for the first settled screen; `ANNOTATE_DELAY=<seconds>` for a fixed wait) |
 | Pin anything | Tap. It snaps to the element under your finger, or pins the exact spot when nothing distinct is there |
 | Walk spot → element → containers | `↑` / `↓` before saving |
 | Comment and save | Type, then `Return` |

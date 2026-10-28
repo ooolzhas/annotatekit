@@ -14,7 +14,7 @@ import Foundation
 
 public actor ChannelServer {
     public static let serverName = "annotate"
-    public static let version = "0.1.0"
+    public static let version = "0.1.1"
     /// Answered regardless of the client's request: Claude Code doesn't register channel servers
     /// that negotiate its newest revision (same effect as MCP_PROTOCOL_NEGOTIATION=legacy).
     public static let protocolVersion = "2025-06-18"

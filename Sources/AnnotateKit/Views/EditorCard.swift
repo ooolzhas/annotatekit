@@ -1,6 +1,7 @@
 // The comment card that opens next to a selection or region, the in-place text retype field, and
 // the region sketch surface. Return saves (TextField submit), Esc cancels (key command), and the
-// card measures itself so OverlayPlacement can keep it on screen and clear of the toolbar.
+// card measures itself so OverlayPlacement can keep it on screen, above the keyboard and clear of
+// the toolbar.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -22,7 +23,10 @@ struct EditorCard: View {
         VStack(alignment: .leading, spacing: 10) {
             header
 
-            TextField("Describe the change", text: $controller.commentText)
+            TextField("Describe the change", text: Binding(
+                get: { controller.commentText },
+                set: { [id = draft.annotation.id] text in controller.setComment(text, forDraft: id) }
+            ))
                 .font(.system(size: 15))
                 .textFieldStyle(.plain)
                 .submitLabel(.done)
@@ -96,6 +100,9 @@ struct EditorCard: View {
     /// Safe bounds minus the strip the toolbar occupies.
     private var placementBounds: CGRect {
         var bounds = controller.safeBounds
+        if let keyboardTop = controller.keyboardTop {
+            bounds.size.height = max(min(bounds.height, keyboardTop - 8 - bounds.minY), 0)
+        }
         let reserved = AnnotateController.toolbarHeight + 8
         if controller.toolbarAtTop {
             bounds.origin.y += reserved

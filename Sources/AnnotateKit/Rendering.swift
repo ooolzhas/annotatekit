@@ -1,9 +1,10 @@
 // Pixels for the session bundle. `Snapshotter` (main actor) captures the app's windows, overlay
-// excluded. `BundleRenderer` is nonisolated and runs off the main thread on Send: the 1x rescale
-// (pixel = point, so session coordinates index straight into it), per-pin crops, the annotated
-// screen with numbered markers, and PNG encoding. Every renderer uses the standard 8-bit sRGB
-// range — the default on wide-color screens is 16-bit extended range, twice the memory and much
-// slower to encode, for no visible gain in UI screenshots.
+// excluded, plus the tiny gray samples a launch-time start waits on. `BundleRenderer` is
+// nonisolated and runs off the main thread on Send: the 1x rescale (pixel = point, so session
+// coordinates index straight into it), per-pin crops, the annotated screen with numbered markers,
+// and PNG encoding. Every renderer uses the standard 8-bit sRGB range — the default on wide-color
+// screens is 16-bit extended range, twice the memory and much slower to encode, for no visible
+// gain in UI screenshots.
 // Also the shared sketch geometry (CGPath) and colors used by both the live overlay and the PNGs,
 // so what the user drew is exactly what the agent sees.
 
@@ -75,11 +76,15 @@ enum SketchPath {
 
 @MainActor
 enum Snapshotter {
-    /// The app's windows composited bottom-up at screen scale, without the overlay.
-    static func captureApp(excluding overlay: UIWindow?) -> UIImage? {
+    /// The app's windows composited bottom-up, without the overlay, at `scale` (default: the
+    /// screen's). The context must not be opaque: `drawHierarchy` paints a transparent window as
+    /// solid black into an opaque one, and almost every app has a clear window above its content
+    /// (UIKit's `UITextEffectsWindow` once any text input has been used, toast windows), which
+    /// blacked out the whole capture.
+    static func captureApp(excluding overlay: UIWindow?, scale: CGFloat? = nil) -> UIImage? {
         let windows = Array(ElementScanner.appWindows(excluding: overlay).reversed())
         guard let screen = overlay?.windowScene?.screen ?? windows.first?.screen else { return nil }
-        let renderer = UIGraphicsImageRenderer(bounds: screen.bounds, format: BundleRenderer.format(scale: screen.scale, opaque: true))
+        let renderer = UIGraphicsImageRenderer(bounds: screen.bounds, format: BundleRenderer.format(scale: scale ?? screen.scale))
         return renderer.image { context in
             UIColor.black.setFill()
             context.fill(screen.bounds)
@@ -88,6 +93,24 @@ enum Snapshotter {
                 window.drawHierarchy(in: frame, afterScreenUpdates: false)
             }
         }
+    }
+
+    /// The app as roughly `width` gray pixels across, for "has the screen changed" checks.
+    static func grayThumbnail(excluding overlay: UIWindow?, width: Int = 40) -> [UInt8]? {
+        let pointWidth = overlay?.windowScene?.screen.bounds.width ?? 0
+        guard pointWidth > 0,
+              let image = captureApp(excluding: overlay, scale: CGFloat(width) / pointWidth)?.cgImage else { return nil }
+        let pixelWidth = image.width, pixelHeight = image.height
+        var pixels = [UInt8](repeating: 0, count: pixelWidth * pixelHeight)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: pixelWidth, height: pixelHeight, bitsPerComponent: 8,
+                bytesPerRow: pixelWidth, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+            return true
+        }
+        return drawn ? pixels : nil
     }
 }
 

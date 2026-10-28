@@ -1,4 +1,5 @@
-// Visible-text outline of a screen and the "nearby text" hints derived from it.
+// Visible-text outline of a screen, the "nearby text" hints derived from it, and whether the live
+// layout still matches it (the overlay only trusts a live scan when it does).
 // No tagging required: every pin carries the labels around it, so an agent can grep for a unique
 // string ("Wake up at", "Halo Pendant") to find the SwiftUI view that draws that part of the screen.
 
@@ -30,6 +31,27 @@ public enum ScreenOutline {
             if result.count == limit { break }
         }
         return result
+    }
+
+    /// Whether the live layout has moved away from a frozen outline: some labeled element present
+    /// in both (same role and text) is now more than `tolerance` points from where it was. Nothing
+    /// in common counts as moved, since there's no evidence the layout held still.
+    public static func hasMoved(from frozen: [ScreenElement], to live: [ScreenElement], tolerance: Double = 1) -> Bool {
+        var frozenFrames: [String: [AnnotationRect]] = [:]
+        for element in frozen {
+            frozenFrames[element.role + "|" + element.label, default: []].append(element.frame)
+        }
+        var compared = 0
+        for element in live {
+            guard let frames = frozenFrames[element.role + "|" + element.label] else { continue }
+            compared += 1
+            let stayed = frames.contains { frame in
+                abs(frame.x - element.frame.x) <= tolerance && abs(frame.y - element.frame.y) <= tolerance
+                    && abs(frame.width - element.frame.width) <= tolerance && abs(frame.height - element.frame.height) <= tolerance
+            }
+            if !stayed { return true }
+        }
+        return compared == 0
     }
 
     /// Labels of elements overlapping `frame` (grown by `padding`), nearest first, unique.

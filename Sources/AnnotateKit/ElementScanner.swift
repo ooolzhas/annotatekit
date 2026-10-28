@@ -4,7 +4,8 @@
 // views hidden behind a sheet out of the results. SwiftUI content arrives as accessibility nodes
 // (see AccessibilityBootstrap); UIKit content arrives as UIViews.
 // `outline` lists every visible labeled element on the current screen (top presented controller,
-// plus its presenter when a sheet doesn't cover it) for the session's grep hints.
+// plus its presenter when a sheet doesn't cover it) for the session's grep hints; `outlineScan`
+// also counts accessibility nodes, which tells the controller when SwiftUI's tree is built.
 // All frames are screen points.
 
 #if DEBUG && canImport(UIKit)
@@ -26,8 +27,14 @@ enum ElementScanner {
 
     /// Labeled elements on the visible screen. Unfiltered; `ScreenOutline.normalized` cleans it up.
     static func outline(excluding overlay: UIWindow?, limit: Int = 600) -> [ScreenElement] {
+        outlineScan(excluding: overlay, limit: limit).elements
+    }
+
+    /// `outline`, plus how many non-view accessibility nodes the walk passed. SwiftUI content
+    /// exists only as such nodes, so zero means its tree hasn't been built (yet).
+    static func outlineScan(excluding overlay: UIWindow?, limit: Int = 600) -> (elements: [ScreenElement], accessibilityNodes: Int) {
         guard let window = appWindows(excluding: overlay).first(where: { $0.windowLevel == .normal })
-            ?? appWindows(excluding: overlay).first else { return [] }
+            ?? appWindows(excluding: overlay).first else { return ([], 0) }
         let space = window.screen.coordinateSpace
 
         var roots: [UIView] = []
@@ -48,7 +55,7 @@ enum ElementScanner {
         for root in roots {
             collector.visit(root, depth: 0)
         }
-        return collector.results
+        return (collector.results, collector.accessibilityNodes)
     }
 
     /// Visible app windows, topmost first.
@@ -73,6 +80,7 @@ private final class OutlineCollector {
     let screenSpace: UICoordinateSpace
     let limit: Int
     private(set) var results: [ScreenElement] = []
+    private(set) var accessibilityNodes = 0
     private var visited = Set<ObjectIdentifier>()
     private var budget: Int
 
@@ -104,6 +112,7 @@ private final class OutlineCollector {
             }
             guard visited.insert(ObjectIdentifier(child)).inserted else { continue }
             budget -= 1
+            accessibilityNodes += 1
             record(child, frame: child.accessibilityFrame, view: nil)
             visitAccessibilityChildren(of: child, depth: depth + 1)
         }

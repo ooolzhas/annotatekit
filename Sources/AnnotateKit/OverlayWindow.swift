@@ -2,7 +2,8 @@
 // and never touches the app's view hierarchy.
 // Idle: the window only accepts touches on the launcher; everything else falls through to the app.
 // Active: it takes every touch and becomes key so Return / Esc / ↑↓ / ⌘Z arrive as key commands.
-// OverlayInstaller attaches the window once a scene is active (`install` may run before that).
+// OverlayInstaller attaches the window once a scene is active (`install` may run before that); a
+// launch-time start then waits for the app's first settled screen.
 // With the launcher hidden, no window exists until annotate mode first starts.
 
 #if DEBUG && canImport(UIKit)
@@ -58,7 +59,7 @@ final class OverlayInstaller {
             self.observer = nil
         }
         if startsActive {
-            controller.start()
+            controller.startWhenSettled()
         }
     }
 }
@@ -107,6 +108,10 @@ final class OverlayHostingController: UIHostingController<OverlayRoot> {
         self.controller = controller
         super.init(rootView: OverlayRoot(controller: controller))
         view.backgroundColor = .clear
+        // No keyboard avoidance: it slid the whole overlay, frozen image and pins included, up by
+        // ~140 pt under the comment keyboard, so taps landed on what was really lower on screen.
+        // The card and toolbar move above the keyboard themselves (`keyboardTop`).
+        safeAreaRegions = .container
     }
 
     @available(*, unavailable)

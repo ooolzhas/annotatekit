@@ -9,7 +9,7 @@ In Xcode choose **File → Add Package Dependencies…**, enter
 In a `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.1.0")
+.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.1.1")
 ```
 
 ## Install the overlay

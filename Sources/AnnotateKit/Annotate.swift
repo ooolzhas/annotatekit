@@ -14,7 +14,9 @@ public struct AnnotateOptions: Sendable {
     /// launch) so un-annotated SwiftUI text, buttons and images are selectable. This is what
     /// XCUITest does; switch it off if it interferes with your app.
     public var enablesAccessibilityTree: Bool
-    /// Launch-environment key that starts the app in annotate mode when set to "1".
+    /// Launch-environment key that starts the app in annotate mode when set to "1", once the first
+    /// screen has settled (past launch screens and splash animations). `<key>_DELAY=<seconds>`
+    /// waits a fixed time instead.
     public var launchEnvironmentKey: String
     /// Also put the prompt on the clipboard on Send. Off by default: the `annotate` CLI on the Mac
     /// delivers sessions to Claude Code; turn this on to paste into other tools.

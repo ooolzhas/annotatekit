@@ -72,7 +72,7 @@ struct OverlayToolbar: View {
         let width = controller.bounds.width - safe.left - safe.right - 24
         let y = controller.toolbarAtTop
             ? safe.top + 6
-            : controller.bounds.maxY - max(safe.bottom, 12) - 6 - height
+            : controller.chromeBottom - 6 - height
 
         HStack(spacing: 8) {
             Image(systemName: "pencil.and.scribble")
@@ -106,6 +106,7 @@ struct OverlayToolbar: View {
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
         .offset(x: safe.left + 12, y: y)
         .animation(.snappy(duration: 0.25), value: controller.toolbarAtTop)
+        .animation(.snappy(duration: 0.25), value: controller.keyboardTop)
         .animation(.snappy(duration: 0.15), value: controller.hint)
     }
 }
@@ -265,8 +266,8 @@ struct ToastView: View {
         .offset(
             x: safe.left + 24,
             y: controller.toolbarAtTop
-                ? controller.bounds.maxY - max(safe.bottom, 12) - 52
-                : controller.bounds.maxY - max(safe.bottom, 12) - AnnotateController.toolbarHeight - 52
+                ? controller.chromeBottom - 52
+                : controller.chromeBottom - AnnotateController.toolbarHeight - 52
         )
         .allowsHitTesting(false)
     }
