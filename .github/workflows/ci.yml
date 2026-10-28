@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core-linux:
+    name: AnnotateCore tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+
+  ios:
+    name: AnnotateKit (iOS Simulator, Debug + Release)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Core tests (macOS)
+        run: swift test
+      # The default bash shell runs with pipefail, so xcodebuild failures survive the pipe
+      - name: Build Debug (overlay compiled in)
+        run: |
+          xcodebuild build -scheme AnnotateKit -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' | xcbeautify
+      - name: Build Release (stubs only)
+        run: |
+          xcodebuild build -scheme AnnotateKit -configuration Release \
+            -destination 'generic/platform=iOS Simulator' | xcbeautify

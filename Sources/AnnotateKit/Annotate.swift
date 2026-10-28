@@ -1,0 +1,67 @@
+// Public entry point. Everything here exists in every configuration so call sites compile in
+// Release, but only DEBUG builds on UIKit platforms install the overlay; elsewhere these are no-ops.
+// Public: Annotate.install(_:file:), start(), stop(), toggle(), isActive; AnnotateOptions
+
+import Foundation
+
+public struct AnnotateOptions: Sendable {
+    /// Floating button that enters annotate mode. Turn off if you trigger it yourself.
+    public var showsLauncher: Bool
+    /// Where session bundles go. Default: `<project root>/.annotate` in the Simulator (found from the
+    /// `install` call site), the app's Documents folder on a device.
+    public var outputDirectory: URL?
+    /// Turns on the in-process accessibility tree so un-annotated SwiftUI text, buttons and images
+    /// are selectable. This is what XCUITest does; switch it off if it interferes with your app.
+    public var enablesAccessibilityTree: Bool
+    /// Launch-environment key that starts the app in annotate mode when set to "1".
+    public var launchEnvironmentKey: String
+
+    public init(
+        showsLauncher: Bool = true,
+        outputDirectory: URL? = nil,
+        enablesAccessibilityTree: Bool = true,
+        launchEnvironmentKey: String = "ANNOTATE"
+    ) {
+        self.showsLauncher = showsLauncher
+        self.outputDirectory = outputDirectory
+        self.enablesAccessibilityTree = enablesAccessibilityTree
+        self.launchEnvironmentKey = launchEnvironmentKey
+    }
+}
+
+@MainActor
+public enum Annotate {
+    /// Call once at launch, e.g. in your `App.init()`. Safe to call in Release (does nothing).
+    /// - Parameter file: leave the default — the call site's path locates your project root.
+    public static func install(_ options: AnnotateOptions = AnnotateOptions(), file: String = #filePath) {
+        #if DEBUG && canImport(UIKit)
+        OverlayInstaller.shared.install(options: options, callerFile: file)
+        #endif
+    }
+
+    /// Enters annotate mode.
+    public static func start() {
+        #if DEBUG && canImport(UIKit)
+        OverlayInstaller.shared.controller.start()
+        #endif
+    }
+
+    /// Leaves annotate mode, keeping unsent annotations.
+    public static func stop() {
+        #if DEBUG && canImport(UIKit)
+        OverlayInstaller.shared.controller.stop()
+        #endif
+    }
+
+    public static func toggle() {
+        isActive ? stop() : start()
+    }
+
+    public static var isActive: Bool {
+        #if DEBUG && canImport(UIKit)
+        OverlayInstaller.shared.controller.isActive
+        #else
+        false
+        #endif
+    }
+}
