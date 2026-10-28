@@ -12,7 +12,7 @@ jobs:
     name: Universal annotate binary
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build (arm64 + x86_64)
         run: swift build -c release --product annotate --arch arm64 --arch x86_64
       - name: Package
