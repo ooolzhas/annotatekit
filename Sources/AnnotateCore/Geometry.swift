@@ -2,6 +2,10 @@
 // swift-corelibs-foundation (Linux), which lacks most of CoreGraphics' CGRect extensions.
 // Also placement math for the overlay: pin badges and the comment card.
 
+#if canImport(CoreGraphics)
+// CGRect's initializers and Equatable conformance live in the CoreGraphics overlay on Apple platforms
+import CoreGraphics
+#endif
 import Foundation
 
 extension CGRect {

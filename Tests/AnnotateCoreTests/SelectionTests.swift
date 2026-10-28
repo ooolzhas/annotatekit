@@ -1,5 +1,9 @@
 // Selection stack ordering/merging/navigation, source resolution, display names and placement math.
 
+#if canImport(CoreGraphics)
+// CGRect's initializers and Equatable conformance live in the CoreGraphics overlay on Apple platforms
+import CoreGraphics
+#endif
 import Foundation
 import Testing
 @testable import AnnotateCore

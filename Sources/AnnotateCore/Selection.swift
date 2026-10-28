@@ -6,6 +6,10 @@
 // tap on nothing distinct (only big containers under it) starts there, so anything is pinnable.
 // `SourceResolver` maps any frame to the nearest `.annotatable()` registration that encloses it.
 
+#if canImport(CoreGraphics)
+// CGRect's initializers and Equatable conformance live in the CoreGraphics overlay on Apple platforms
+import CoreGraphics
+#endif
 import Foundation
 
 public struct ElementCandidate: Sendable, Equatable {

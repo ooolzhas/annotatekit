@@ -4,6 +4,10 @@
 // are there for detail. Element info and nearby text are hints for finding the source, not required.
 // Bump `AnnotationSession.currentSchemaVersion` on any breaking change to these types.
 
+#if canImport(CoreGraphics)
+// CGRect's initializers and Equatable conformance live in the CoreGraphics overlay on Apple platforms
+import CoreGraphics
+#endif
 import Foundation
 
 public struct AnnotationSession: Codable, Sendable, Equatable {

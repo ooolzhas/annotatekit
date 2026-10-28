@@ -2,6 +2,10 @@
 // No tagging required: every pin carries the labels around it, so an agent can grep for a unique
 // string ("Wake up at", "Halo Pendant") to find the SwiftUI view that draws that part of the screen.
 
+#if canImport(CoreGraphics)
+// CGRect's initializers and Equatable conformance live in the CoreGraphics overlay on Apple platforms
+import CoreGraphics
+#endif
 import Foundation
 
 public enum ScreenOutline {
