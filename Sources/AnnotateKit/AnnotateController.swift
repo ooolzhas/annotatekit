@@ -3,7 +3,9 @@
 // that still image, so what you annotate is exactly what gets sent and coordinates can't drift.
 // Tap → SelectionStack of everything under the finger; a tap on nothing distinct pins the spot
 // itself, so every pixel is annotatable. ↑↓ walks spot → element → containers.
-// Drag → region with sketch tools. Return saves, Esc backs out one level, ⌘Z undoes.
+// Drag → region with sketch tools. Draw mode → the whole frozen screen is a canvas; the drawing
+// becomes one pin framed by its bounds and attributed to the view it was drawn over.
+// Return saves, Esc backs out one level, ⌘Z undoes.
 // Send → renders 1x/annotated/hi-res images and crops per screen, writes the bundle, then polls
 // its status.json so the overlay can show the agent picking it up and finishing. No copy/paste.
 
@@ -82,6 +84,8 @@ final class AnnotateController {
     private(set) var frozenImage: UIImage?
     private(set) var currentScreen = 0
     private(set) var delivery: Delivery?
+    /// Draw mode: drags make strokes anywhere instead of selecting or making regions.
+    private(set) var isDrawing = false
 
     @ObservationIgnored private var screens: [Int: CapturedScreen] = [:]
     @ObservationIgnored private var deliveryTask: Task<Void, Never>?
@@ -179,6 +183,55 @@ final class AnnotateController {
         draft = Draft(annotation: region, isNew: true)
     }
 
+    // MARK: Draw mode
+
+    func toggleDrawing() {
+        if isDrawing {
+            saveDraft()
+        } else {
+            beginDrawing()
+        }
+    }
+
+    /// Opens a full-screen sketch draft; strokes stay in screen points until it's saved.
+    func beginDrawing() {
+        finishDraft()
+        selection = nil
+        let canvas = Annotation(
+            index: 0,
+            screen: currentScreen,
+            kind: .sketch,
+            frame: AnnotationRect(bounds),
+            sketch: Sketch(size: AnnotationSize(bounds.size))
+        )
+        draft = Draft(annotation: canvas, isNew: true)
+        isDrawing = true
+    }
+
+    /// Bounds of what's been drawn so far, in screen points (nil before the first stroke).
+    var drawingBounds: CGRect? {
+        guard let draft, draft.annotation.kind == .sketch else { return nil }
+        let points = (draft.annotation.sketch?.strokes ?? []).flatMap(\.points)
+        guard let first = points.first else { return nil }
+        var minX = first.x, minY = first.y, maxX = first.x, maxY = first.y
+        for point in points {
+            minX = min(minX, point.x); minY = min(minY, point.y)
+            maxX = max(maxX, point.x); maxY = max(maxY, point.y)
+        }
+        let origin = isDrawing ? CGPoint.zero : draft.annotation.frame.cgRect.origin
+        return CGRect(x: minX + origin.x, y: minY + origin.y, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// What the comment card and toolbar should stay clear of for `draft`.
+    func focusFrame(for draft: Draft) -> CGRect {
+        if draft.annotation.kind == .sketch, isDrawing {
+            // Before anything is drawn, park the card near the bottom
+            return drawingBounds?.padded(by: 8)
+                ?? CGRect(x: bounds.midX, y: bounds.maxY - safeInsets.bottom - 60, width: 0, height: 0)
+        }
+        return draft.annotation.frame.cgRect
+    }
+
     // MARK: Draft editing
 
     /// Bindable text of the open draft's comment.
@@ -216,6 +269,9 @@ final class AnnotateController {
     /// Saves the draft as a pin, or drops it when there is nothing to act on.
     func saveDraft() {
         guard var current = draft else { return }
+        if current.isNew, current.annotation.kind == .sketch, isDrawing {
+            current.annotation = settledSketch(current.annotation)
+        }
         if current.isEditingText {
             let original = current.annotation.element?.label ?? ""
             let replacement = current.replacementText
@@ -255,7 +311,9 @@ final class AnnotateController {
     // MARK: Keys
 
     func escape() {
-        if draft?.isEditingText == true {
+        if isDrawing {
+            cancelDraft()
+        } else if draft?.isEditingText == true {
             draft?.isEditingText = false
         } else if draft != nil {
             cancelDraft()
@@ -373,6 +431,7 @@ final class AnnotateController {
 
     var hint: String {
         if let draft {
+            if isDrawing { return "Draw anywhere · Return to save · ⌘Z undo" }
             if draft.isEditingText { return "Return to save · Esc to cancel" }
             if draft.annotation.kind == .region { return "Draw to sketch · ⌘Z undo · Esc cancel" }
             return draft.isNew ? "Return to save · ↑↓ to adjust" : "Return to save · Esc to close"
@@ -387,6 +446,7 @@ final class AnnotateController {
         case .element: name = annotation.element?.displayName(maxLabelLength: 22) ?? "Element"
         case .point: name = "Spot \(Int(annotation.anchor.x)), \(Int(annotation.anchor.y))"
         case .region: name = "Region \(Int(annotation.frame.width)) × \(Int(annotation.frame.height))"
+        case .sketch: name = annotation.element.map { "Sketch over \($0.displayName(maxLabelLength: 18))" } ?? "Sketch"
         }
         guard let source = annotation.source else { return name }
         return "\(name) · \(source.shortDescription)"
@@ -404,7 +464,7 @@ final class AnnotateController {
 
     /// The toolbar moves to the top while the user works in the lower part of the screen.
     var toolbarAtTop: Bool {
-        let focus = dragRect ?? draft?.annotation.frame.cgRect
+        let focus = dragRect ?? draft.map { focusFrame(for: $0) }
         guard let focus, bounds.height > 0 else { return false }
         return focus.maxY > bounds.height * 0.6
     }
@@ -504,6 +564,38 @@ final class AnnotateController {
     private func clearDraft() {
         draft = nil
         selection = nil
+        isDrawing = false
+    }
+
+    /// Turns a full-screen drawing into a pin: frame = stroke bounds (padded), points rebased to
+    /// it, plus the smallest real view under the drawing that encloses it, and nearby text.
+    private func settledSketch(_ annotation: Annotation) -> Annotation {
+        guard let drawn = drawingBounds, let strokes = annotation.sketch?.strokes, !strokes.isEmpty else { return annotation }
+        let frame = drawn.padded(by: 8).clipped(to: bounds)
+        var result = annotation
+        result.frame = AnnotationRect(frame)
+        result.anchor = AnnotationPoint(x: frame.midX, y: frame.midY)
+        result.sketch = Sketch(
+            size: AnnotationSize(frame.size),
+            strokes: strokes.map { stroke in
+                Stroke(tool: stroke.tool, points: stroke.points.map { AnnotationPoint(x: $0.x - frame.minX, y: $0.y - frame.minY) })
+            }
+        )
+
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        let candidates = ElementScanner.candidates(at: center, excluding: window)
+            + AnnotatableRegistry.shared.visible(in: bounds).map(\.candidate)
+        let stack = SelectionStack(candidates: candidates, at: center)
+        let enclosing = stack.candidates.first {
+            $0.frame.encloses(drawn, tolerance: 6) && $0.frame.area < bounds.area * 0.4
+        }
+        if var element = enclosing?.info {
+            element.breadcrumb = []
+            result.element = element
+        }
+        result.source = enclosing?.source ?? SourceResolver.resolve(frame: drawn, in: AnnotatableRegistry.shared.visible(in: bounds))
+        result.nearbyText = ScreenOutline.nearbyText(for: frame, in: screens[currentScreen]?.elements ?? [], excluding: result.element?.label)
+        return result
     }
 
     private func removeAnnotation(id: UUID) {

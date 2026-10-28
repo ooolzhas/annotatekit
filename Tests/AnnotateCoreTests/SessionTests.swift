@@ -152,7 +152,21 @@ enum Fixtures {
 
     @Test func regionUsesCenterAndDescribesSketch() {
         #expect(prompt.contains("4. Region at (16, 420, 352×166) — center (192, 503), 48% across, 58% down"))
-        #expect(prompt.contains("   Sketch of the desired layout drawn in red (rectangle, arrow)"))
+        #expect(prompt.contains("   Sketch of the desired layout drawn in red (rectangle, arrow); see the crop"))
+    }
+
+    @Test func sketchNamesTheViewItWasDrawnOver() {
+        let sketch = Annotation(
+            index: 1, kind: .sketch, comment: "make this pop",
+            frame: AnnotationRect(x: 20, y: 290, width: 140, height: 64),
+            element: ElementInfo(role: "button", label: "Get started"),
+            sketch: Sketch(size: AnnotationSize(width: 140, height: 64), strokes: [
+                Stroke(tool: .ellipse, points: [AnnotationPoint(x: 0, y: 0), AnnotationPoint(x: 140, y: 64)])
+            ])
+        )
+        let text = PromptRenderer.render(Fixtures.session(annotations: [sketch]), sessionPath: nil)
+        #expect(text.contains("1. Sketch over Button \"Get started\" at (20, 290, 140×64) — center (90, 322), 22% across, 37% down"))
+        #expect(text.contains("   Drawn on the screen in red (ellipse); see the crop"))
     }
 
     @Test func completionIsLast() {

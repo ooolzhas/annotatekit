@@ -30,12 +30,12 @@ public struct SessionFeed: Sendable {
         SessionInbox.sessionDirectory(id, in: outputDirectory)
     }
 
-    /// "latest" resolves to the newest complete session.
+    /// "latest" (or nothing) resolves to the newest complete session; malformed ids resolve to nil.
     public func resolve(_ id: String?) -> String? {
         guard let id, id != "latest", !id.isEmpty else {
             return SessionInbox.sessionIDs(in: outputDirectory).last
         }
-        return id
+        return SessionInbox.isValidSessionID(id) ? id : nil
     }
 
     /// `--dir` if given, else `.annotate` at the project root above `workingDirectory`.

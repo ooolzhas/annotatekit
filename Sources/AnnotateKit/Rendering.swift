@@ -126,6 +126,9 @@ enum Snapshotter {
             cg.setLineDash(phase: 0, lengths: [6, 4])
             cg.stroke(frame.insetBy(dx: -1, dy: -1))
             cg.setLineDash(phase: 0, lengths: [])
+        case .sketch:
+            // The drawing speaks for itself; no box around it
+            break
         case .point:
             // Crosshair ring: the exact spot matters more than any box
             let ring = CGRect(x: anchor.x - 9, y: anchor.y - 9, width: 18, height: 18)

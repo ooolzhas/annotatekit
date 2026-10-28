@@ -17,7 +17,7 @@ struct EditorCard: View {
 
     var body: some View {
         @Bindable var controller = controller
-        let frame = OverlayPlacement.cardFrame(size: size, anchoredTo: draft.annotation.frame.cgRect, in: placementBounds)
+        let frame = OverlayPlacement.cardFrame(size: size, anchoredTo: controller.focusFrame(for: draft), in: placementBounds)
 
         VStack(alignment: .leading, spacing: 10) {
             header
@@ -33,7 +33,7 @@ struct EditorCard: View {
                 DiffRow(edit: edit)
             }
 
-            if draft.annotation.kind == .region {
+            if draft.annotation.kind == .region || (draft.annotation.kind == .sketch && controller.isDrawing) {
                 SketchTools(controller: controller, draft: draft)
             }
         }
@@ -89,6 +89,7 @@ struct EditorCard: View {
         case .element: return draft.annotation.element?.title ?? "Element"
         case .point: return "Spot \(Int(draft.annotation.anchor.x)), \(Int(draft.annotation.anchor.y))"
         case .region: return "Region \(Int(frame.width)) × \(Int(frame.height))"
+        case .sketch: return draft.annotation.element.map { "Sketch over \($0.title)" } ?? "Sketch"
         }
     }
 
@@ -218,6 +219,53 @@ struct InlineTextEditor: View {
     }
 }
 
+/// Draw mode: the whole frozen screen is the canvas. Strokes are kept in screen points until the
+/// draft is saved, when the controller rebases them onto the drawing's bounds.
+struct DrawingCanvas: View {
+    let controller: AnnotateController
+    let draft: AnnotateController.Draft
+
+    @State private var live: Stroke?
+
+    var body: some View {
+        let strokes = (draft.annotation.sketch?.strokes ?? []) + (live.map { [$0] } ?? [])
+        SketchStrokes(strokes: strokes)
+            .frame(width: controller.bounds.width, height: controller.bounds.height)
+            .contentShape(Rectangle())
+            .gesture(StrokeGesture.make(tool: draft.tool, live: $live) { controller.addStroke($0) })
+    }
+}
+
+/// Shared pen/shape gesture for regions and draw mode, in the attached view's local space.
+@MainActor
+enum StrokeGesture {
+    static func make(tool: Stroke.Tool, live: Binding<Stroke?>, commit: @escaping (Stroke) -> Void) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                let point = AnnotationPoint(value.location)
+                guard var stroke = live.wrappedValue else {
+                    live.wrappedValue = Stroke(tool: tool, points: [AnnotationPoint(value.startLocation), point])
+                    return
+                }
+                if stroke.tool == .pen {
+                    // Skip sub-point jitter so pen paths stay light
+                    if let last = stroke.points.last, hypot(last.x - point.x, last.y - point.y) < 1.5 { return }
+                    stroke.points.append(point)
+                } else {
+                    stroke.points = [stroke.points[0], point]
+                }
+                live.wrappedValue = stroke
+            }
+            .onEnded { _ in
+                defer { live.wrappedValue = nil }
+                guard let stroke = live.wrappedValue, let first = stroke.points.first, let last = stroke.points.last else { return }
+                if stroke.tool == .pen || hypot(last.x - first.x, last.y - first.y) >= 4 {
+                    commit(stroke)
+                }
+            }
+    }
+}
+
 /// Dims everything but the region and turns it into a drawing surface for the selected tool.
 struct RegionEditor: View {
     let controller: AnnotateController
@@ -242,7 +290,7 @@ struct RegionEditor: View {
                 .background(Color.white.opacity(0.3))
                 .overlay(Rectangle().strokeBorder(AnnotateStyle.accent, lineWidth: 2))
                 .contentShape(Rectangle())
-                .gesture(drawGesture)
+                .gesture(StrokeGesture.make(tool: draft.tool, live: $live) { controller.addStroke($0) })
                 .offset(x: frame.minX, y: frame.minY)
 
             ElementChip(title: "Region \(Int(frame.width)) × \(Int(frame.height))")
@@ -250,33 +298,6 @@ struct RegionEditor: View {
                 .offset(x: frame.minX, y: max(frame.minY - 24, controller.safeBounds.minY))
                 .allowsHitTesting(false)
         }
-    }
-
-    private var drawGesture: some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .local)
-            .onChanged { value in
-                let point = AnnotationPoint(value.location)
-                guard var stroke = live else {
-                    live = Stroke(tool: draft.tool, points: [AnnotationPoint(value.startLocation), point])
-                    return
-                }
-                if stroke.tool == .pen {
-                    // Skip sub-point jitter so pen paths stay light
-                    if let last = stroke.points.last, hypot(last.x - point.x, last.y - point.y) < 1.5 { return }
-                    stroke.points.append(point)
-                } else {
-                    stroke.points = [stroke.points[0], point]
-                }
-                live = stroke
-            }
-            .onEnded { _ in
-                defer { live = nil }
-                guard let stroke = live, let first = stroke.points.first, let last = stroke.points.last else { return }
-                let length = hypot(last.x - first.x, last.y - first.y)
-                if stroke.tool == .pen || length >= 4 {
-                    controller.addStroke(stroke)
-                }
-            }
     }
 }
 #endif

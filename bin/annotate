@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Launcher for the `annotate` CLI, used by the Claude Code plugin (as its MCP server command and on
+# the Bash tool's PATH via bin/). Resolves a real binary, then execs it with the same arguments:
+#   1. an `annotate` already installed on PATH (Homebrew, Mint) other than this script
+#   2. a cached copy for this version in the plugin's data folder
+#   3. the universal macOS binary from this version's GitHub Release, checksum-verified
+#   4. a source build with SwiftPM (slow the first time; raise MCP_TIMEOUT if it times out)
+# All diagnostics go to stderr: stdout belongs to the MCP protocol.
+set -euo pipefail
+
+VERSION="0.1.0"
+REPO="ooolzhas/annotate-ios"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+SELF="$ROOT/bin/annotate"
+DATA="${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cache}/annotate}"
+CACHED="$DATA/$VERSION/annotate"
+
+log() { echo "annotate: $*" >&2; }
+
+# Run from the project being worked on, where `.annotate/` lives
+if [[ -n "${CLAUDE_PROJECT_DIR:-}" && -d "$CLAUDE_PROJECT_DIR" ]]; then
+  cd "$CLAUDE_PROJECT_DIR"
+fi
+
+# 1. Installed elsewhere on PATH
+while IFS= read -r candidate; do
+  [[ "$(cd "$(dirname "$candidate")" && pwd -P)/$(basename "$candidate")" == "$SELF" ]] && continue
+  exec "$candidate" "$@"
+done < <(type -ap annotate 2>/dev/null || true)
+
+# 2. Cached
+if [[ -x "$CACHED" ]]; then
+  exec "$CACHED" "$@"
+fi
+
+mkdir -p "$DATA/$VERSION"
+STAGING="$(mktemp -d "$DATA/.staging.XXXXXX")"
+trap 'rm -rf "$STAGING"' EXIT
+
+# 3. Release download (macOS only; the release ships a universal binary)
+if [[ "$(uname -s)" == "Darwin" ]] && command -v curl >/dev/null; then
+  ARCHIVE="annotate-$VERSION-macos-universal.tar.gz"
+  BASE="https://github.com/$REPO/releases/download/v$VERSION"
+  log "downloading $ARCHIVE"
+  if curl -fsSL "$BASE/$ARCHIVE" -o "$STAGING/$ARCHIVE" && curl -fsSL "$BASE/$ARCHIVE.sha256" -o "$STAGING/$ARCHIVE.sha256"; then
+    if (cd "$STAGING" && shasum -a 256 -c "$ARCHIVE.sha256" >/dev/null); then
+      tar -xzf "$STAGING/$ARCHIVE" -C "$STAGING" annotate
+      chmod +x "$STAGING/annotate"
+      mv -f "$STAGING/annotate" "$CACHED"
+      exec "$CACHED" "$@"
+    fi
+    log "checksum mismatch for $ARCHIVE; not using it"
+  else
+    log "no release binary for v$VERSION; building from source"
+  fi
+fi
+
+# 4. Source build
+if ! command -v swift >/dev/null; then
+  log "can't find a release binary or a Swift toolchain. Install with: brew install ooolzhas/tap/annotate"
+  exit 1
+fi
+log "building from source (first run only, may take a minute)"
+swift build -c release --product annotate --package-path "$ROOT" --scratch-path "$DATA/build" >&2
+cp "$DATA/build/release/annotate" "$STAGING/annotate"
+mv -f "$STAGING/annotate" "$CACHED"
+exec "$CACHED" "$@"

@@ -60,11 +60,12 @@ public enum PromptRenderer {
         case .element: subject = annotation.element?.displayName() ?? "Element"
         case .point: subject = "Spot"
         case .region: subject = "Region"
+        case .sketch: subject = "Sketch" + (annotation.element.map { " over \($0.displayName())" } ?? "")
         }
         let box = "(\(num(f.x)), \(num(f.y)), \(num(f.width))×\(num(f.height)))"
         let anchor = annotation.anchor
         let across = percent(anchor.x, of: screenSize.width), down = percent(anchor.y, of: screenSize.height)
-        let verb = annotation.kind == .region ? "center" : "tapped"
+        let verb = annotation.kind == .region || annotation.kind == .sketch ? "center" : "tapped"
         lines.append("\(annotation.index). \(subject) at \(box) — \(verb) (\(num(anchor.x)), \(num(anchor.y))), \(across) across, \(down) down")
 
         if let edit = annotation.textEdit {
@@ -78,7 +79,8 @@ public enum PromptRenderer {
         }
         if let sketch = annotation.sketch, !sketch.strokes.isEmpty {
             let tools = sketch.strokes.map(\.tool.rawValue).joined(separator: ", ")
-            lines.append("\(indent)Sketch of the desired layout drawn in red (\(tools))")
+            let what = annotation.kind == .sketch ? "Drawn on the screen" : "Sketch of the desired layout drawn"
+            lines.append("\(indent)\(what) in red (\(tools)); see the crop")
         }
         if !annotation.nearbyText.isEmpty {
             lines.append("\(indent)Nearby text: " + annotation.nearbyText.map { "\"\($0)\"" }.joined(separator: ", "))

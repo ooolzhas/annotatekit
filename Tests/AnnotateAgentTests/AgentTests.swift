@@ -92,6 +92,19 @@ enum AgentFixtures {
         #expect(feed.resolve(old) == old)
     }
 
+    @Test func rejectsPathLikeSessionIDs() throws {
+        let output = try AgentFixtures.tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        let feed = SessionFeed(outputDirectory: output)
+        #expect(feed.resolve("../../etc") == nil)
+        #expect(feed.resolve("a/b") == nil)
+        #expect(feed.resolve(".hidden") == nil)
+        #expect(feed.resolve("20261028-141502-a1b2") == "20261028-141502-a1b2")
+        #expect(SessionInbox.isSafeRelativePath("crops/1.png"))
+        #expect(!SessionInbox.isSafeRelativePath("../secret.png"))
+        #expect(!SessionInbox.isSafeRelativePath("/etc/passwd"))
+    }
+
     @Test func claimingIsExclusiveAcrossConsumers() throws {
         let output = try AgentFixtures.tempDir()
         defer { try? FileManager.default.removeItem(at: output) }

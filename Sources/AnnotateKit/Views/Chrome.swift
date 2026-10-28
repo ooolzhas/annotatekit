@@ -85,6 +85,7 @@ struct OverlayToolbar: View {
                 .minimumScaleFactor(0.8)
                 .contentTransition(.opacity)
             Spacer(minLength: 4)
+            DrawToggle(controller: controller)
             SendButton(controller: controller)
             Button {
                 controller.stop()
@@ -106,6 +107,27 @@ struct OverlayToolbar: View {
         .offset(x: safe.left + 12, y: y)
         .animation(.snappy(duration: 0.25), value: controller.toolbarAtTop)
         .animation(.snappy(duration: 0.15), value: controller.hint)
+    }
+}
+
+/// Turns the whole frozen screen into a sketch canvas (and back, saving the drawing).
+private struct DrawToggle: View {
+    let controller: AnnotateController
+
+    var body: some View {
+        let isOn = controller.isDrawing
+        Button {
+            controller.toggleDrawing()
+        } label: {
+            Image(systemName: "scribble.variable")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isOn ? Color.white : AnnotateStyle.accent)
+                .frame(width: 32, height: 30)
+                .background(isOn ? AnnotateStyle.sketch : AnnotateStyle.accent.opacity(0.12), in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .animation(.snappy(duration: 0.15), value: isOn)
     }
 }
 

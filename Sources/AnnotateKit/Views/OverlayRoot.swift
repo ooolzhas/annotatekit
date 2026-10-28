@@ -59,7 +59,11 @@ private struct ActiveOverlay: View {
                 }
             }
 
-            if let draft = controller.draft, draft.annotation.kind != .region {
+            if controller.isDrawing, let draft = controller.draft {
+                DrawingCanvas(controller: controller, draft: draft)
+            }
+
+            if let draft = controller.draft, draft.annotation.kind == .element || draft.annotation.kind == .point {
                 SelectionHighlight(
                     annotation: draft.annotation,
                     title: controller.chipTitle(for: draft.annotation),
@@ -155,11 +159,13 @@ private struct SavedOutline: View {
                     .offset(x: annotation.anchor.x - 9, y: annotation.anchor.y - 9)
             } else {
                 ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .strokeBorder(
-                            AnnotateStyle.accent.opacity(0.55),
-                            style: StrokeStyle(lineWidth: 1.5, dash: annotation.kind == .region ? [5, 4] : [])
-                        )
+                    if annotation.kind != .sketch {
+                        RoundedRectangle(cornerRadius: 3)
+                            .strokeBorder(
+                                AnnotateStyle.accent.opacity(0.55),
+                                style: StrokeStyle(lineWidth: 1.5, dash: annotation.kind == .region ? [5, 4] : [])
+                            )
+                    }
                     if let sketch = annotation.sketch {
                         SketchStrokes(strokes: sketch.strokes)
                     }

@@ -203,7 +203,7 @@ public actor ChannelServer {
         let directory = feed.sessionDirectory(sessionID)
         let paths = session.screens.compactMap(\.annotatedImage)
             + session.annotations.sorted { $0.index < $1.index }.compactMap(\.crop)
-        for path in paths.prefix(maxImages) {
+        for path in paths.filter(SessionInbox.isSafeRelativePath).prefix(maxImages) {
             guard let data = try? Data(contentsOf: directory.appendingPathComponent(path)), data.count <= budget else { continue }
             budget -= data.count
             content.append(["type": "text", "text": path])

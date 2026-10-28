@@ -1,27 +1,56 @@
-# AnnotateKit
+<p align="center"><img src=".claude-plugin/icon.png" width="128" alt="AnnotateKit icon"></p>
 
-Cursor-style visual annotation for iOS apps, with send and forget.
+<h1 align="center">AnnotateKit</h1>
 
-1. In your running app, tap the pencil. The screen freezes.
-2. Tap anything and type a comment. You can also drag out a region and sketch in it, or retype a
-   label in place.
-3. Hit **Send**. Claude Code, already open on your Mac, starts working on it. The pencil shows it
-   happening: *Delivered → Claude picked it up → Done · Edited AlarmCard.swift*.
+<p align="center">
+Visual feedback for iOS apps that goes straight to your coding agent.<br>
+Tap, draw and comment on your running app. Hit Send. Your agent gets the screenshots, the exact coordinates and your notes.
+</p>
 
-You don't copy or paste anything, and you don't tag views. Every pixel is annotatable.
+<p align="center">
+<a href="https://github.com/ooolzhas/annotate-ios/actions/workflows/ci.yml"><img src="https://github.com/ooolzhas/annotate-ios/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://swiftpackageindex.com/ooolzhas/annotate-ios"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fooolzhas%2Fannotate-ios%2Fbadge%3Ftype%3Dswift-versions" alt="Swift versions"></a>
+<a href="https://swiftpackageindex.com/ooolzhas/annotate-ios"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fooolzhas%2Fannotate-ios%2Fbadge%3Ftype%3Dplatforms" alt="Platforms"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+</p>
 
-AnnotateKit runs **inside your DEBUG build** as an overlay window, the way Cursor's Annotate lives
-inside its browser. A small Mac CLI, `annotate`, hands each Send to Claude Code.
+---
 
-> Status: early. AnnotateCore and the `annotate` CLI are unit-tested on macOS and Linux; the
-> overlay is new and needs device mileage. Issues and PRs welcome.
+1. In your app in the Simulator, tap the pencil. The screen freezes.
+2. **Tap anything** to pin a comment: an element, or the exact spot. **Drag** a region and sketch
+   in it, or flip on **Draw** and scribble anywhere. Retype a label in place.
+3. Hit **Send**. Claude Code, already open on your Mac, starts working. The pencil narrates it:
+   *Delivered → Claude picked it up → Done · Edited AlarmCard.swift*.
 
-## Quick start
+No copy/paste and no tagging views: every pixel is annotatable. It works with SwiftUI and UIKit,
+and everything is compiled out of Release builds.
 
-### 1. Add the overlay to your app
+This is [Cursor's Annotate](https://cursor.com) for native iOS. It runs **inside your DEBUG build**
+the way Cursor's runs inside its browser, so it can read the real view and accessibility tree.
 
-Swift Package Manager: `https://github.com/ooolzhas/annotate-ios`, link **AnnotateKit** to your app
-target. Requires iOS 17+.
+## Install
+
+### Let your agent do it
+
+Tell Claude Code (or Cursor, Codex…):
+
+> Set up AnnotateKit from github.com/ooolzhas/annotate-ios in this app.
+
+The repo ships an [`annotate-setup` skill](skills/annotate-setup/SKILL.md) that walks an agent
+through every project shape (Xcode project, XcodeGen, Tuist, SwiftPM), the CLI and the connection.
+In Claude Code, installing the plugin gives you the skill, the MCP server and the CLI in one go:
+
+```
+/plugin install annotate --marketplace ooolzhas/annotate-ios
+```
+
+On Claude Code older than 2.1.275, run `/plugin marketplace add ooolzhas/annotate-ios`, then
+`/plugin install annotate@annotate-ios`. After that, ask: *"Set up AnnotateKit in this app."*
+
+### By hand
+
+**1. The overlay.** Add `https://github.com/ooolzhas/annotate-ios` with Swift Package Manager and
+link **AnnotateKit** to your app target (iOS 17+). Then:
 
 ```swift
 import AnnotateKit
@@ -29,96 +58,101 @@ import AnnotateKit
 @main
 struct MyApp: App {
     init() {
-        Annotate.install()   // compiled out of Release
+        Annotate.install()   // DEBUG-only; a no-op in Release
     }
     var body: some Scene { WindowGroup { ContentView() } }
 }
 ```
 
-### 2. Install the CLI on your Mac
+Add `.annotate/` to your `.gitignore`.
+
+**2. The CLI** (skip this if you use the Claude Code plugin):
 
 ```sh
-git clone https://github.com/ooolzhas/annotate-ios && cd annotate-ios
-swift build -c release --product annotate
-cp .build/release/annotate /usr/local/bin/
+brew install ooolzhas/tap/annotate      # or: mint install ooolzhas/annotate-ios
 ```
 
-### 3. Connect Claude Code (pick one)
+**3. Connect your agent.** Pick one:
 
-**A. Push into your open session (recommended).** This uses Claude Code
-[channels](https://code.claude.com/docs/en/channels), currently a research preview. Add the server
-to your project's `.mcp.json`:
+| Agent | How sends reach it |
+|---|---|
+| **Claude Code + channels** (recommended) | Pushed into your open session the moment you hit Send, even while Claude is idle. Start with `claude --dangerously-load-development-channels plugin:annotate@annotate-ios`, or `server:annotate` without the plugin. |
+| **Claude Code, no flags** | Run `/annotate-watch`. A watcher picks up each Send. |
+| **Unattended** | `annotate run` in the project root runs `claude -p` per Send (`--permission-mode acceptEdits`, resuming the conversation). |
+| **Cursor / Codex / VS Code / any MCP client** | Add the server (below), then say *"check my latest annotation"*. |
 
-```json
+[Channels](https://code.claude.com/docs/en/channels) are a Claude Code research preview. During the
+preview, a channel server that isn't on Anthropic's allowlist has to be named with
+`--dangerously-load-development-channels`. The flag lifts only that allowlist check for the server
+you name, and Claude Code asks you to confirm. Team and Enterprise orgs need an admin to enable
+channels.
+
+<details>
+<summary>MCP config for other agents</summary>
+
+The server is `annotate mcp` over stdio, run from the project root.
+
+```jsonc
+// Claude Code without the plugin: claude mcp add annotate --scope project -- annotate mcp
+// Cursor — .cursor/mcp.json
 { "mcpServers": { "annotate": { "command": "annotate", "args": ["mcp"] } } }
+
+// VS Code — .vscode/mcp.json
+{ "servers": { "annotate": { "type": "stdio", "command": "annotate", "args": ["mcp"] } } }
 ```
 
-Then start Claude Code in the project with the channel enabled:
-
-```sh
-claude --dangerously-load-development-channels server:annotate
+```toml
+# Codex — ~/.codex/config.toml
+[mcp_servers.annotate]
+command = "annotate"
+args = ["mcp"]
 ```
 
-During the preview, a custom channel server isn't on Claude Code's allowlist, so it has to be named
-with this flag. The flag only skips that allowlist check, and Claude Code asks you to confirm at
-launch. Each Send then arrives in the session as a message, even while Claude is idle. Claude loads
-the screenshots with `get_annotation_session`, makes the change, and reports back with
-`annotation_status`, which the app shows. Team and Enterprise orgs need channels enabled by an
-admin. If events don't arrive, set `MCP_PROTOCOL_NEGOTIATION=legacy`.
-
-**B. A watcher inside a normal session.** Copy `ClaudeCode/skills/annotations/` to your project's
-`.claude/skills/` and run `/annotations` in Claude Code. It arms a Monitor on `annotate watch` and
-handles each session as it lands.
-
-**C. Fully unattended.** Run `annotate run` in a terminal at the project root. Each Send becomes a
-`claude -p` run with `--permission-mode acceptEdits`, resuming the previous run's conversation so
-follow-ups keep their context. Extra flags pass through: `annotate run -- --model opus`.
-
-Without any of these, sessions still land in `.annotate/`, and the app tells you nothing picked
-them up. Ask Claude to "check my latest annotation" with the MCP tools, or set
-`AnnotateOptions(copiesPromptToClipboard: true)`.
+Tools: `get_annotation_session` (prompt plus annotated screens and crops as images),
+`annotation_status` (report back to the device), and `list_annotation_sessions`.
+</details>
 
 ## Use
 
 | Action | Gesture / key |
 |---|---|
 | Enter annotate mode (freezes the screen) | Pencil button, `Annotate.start()`, or launch with `ANNOTATE=1` |
-| Pin anything | Tap. It snaps to the element under your finger, or pins the exact spot if there's nothing distinct there |
+| Pin anything | Tap. It snaps to the element under your finger, or pins the exact spot when nothing distinct is there |
 | Walk spot → element → containers | `↑` / `↓` before saving |
 | Comment and save | Type, then `Return` |
 | Retype a label in place | Text-cursor button on the card |
-| Region with sketch | Drag, then draw with pen / ellipse / rectangle / arrow |
+| Region with a sketch inside | Drag, then draw with pen / ellipse / rectangle / arrow |
+| Draw anywhere on the screen | Scribble button in the toolbar. The drawing becomes one pin, attributed to the view under it |
 | Undo stroke (or last pin) | `⌘Z` or the undo button |
-| Back out | `Esc` (editing → selection → leave) |
+| Back out | `Esc` |
 | Send | **Send** or `⌘Return`. The chevron menu has *Send and keep annotating* and *Clear all* |
 
-To annotate another screen, leave annotate mode, navigate, and come back. Each entry captures a new
-screen, and one Send carries every screen that has pins.
+To annotate another screen, leave annotate mode, navigate, and come back. One Send carries every
+screen with pins on it.
 
 In the Simulator, `Return`, `Esc` and the arrow keys reach the app as long as the hardware keyboard
-is connected. ⌘-shortcuts go to the Simulator app unless you turn on *I/O → Keyboard → Send
-Keyboard Shortcuts to Device*. The on-screen buttons always work.
+is connected. ⌘-shortcuts go to the Simulator app unless *I/O → Keyboard → Send Keyboard
+Shortcuts to Device* is on. The on-screen buttons always work.
 
 ## Coordinates are the contract
 
 Agents find things by looking, so every pin is pinned down exactly:
 
 - All frames and points are **iOS points, origin top-left**, relative to the frozen screen.
-- Each screen ships as `screens/N.png` at **1x: one pixel per point**. A pin at `(84, 322)` is
-  pixel `(84, 322)` in that image. A 402×874 pt screen is a 402×874 image, small enough that
-  vision models see it unscaled.
-- `screens/N-annotated.png` is the same image with numbered blue markers, outlines and red
-  sketches. `screens/N@3x.png` and `crops/N.png` (native resolution, 32 pt of context) carry the
-  detail.
-- Every pin records its **anchor** (exactly where you tapped, or a region's center), its **frame**,
-  and percentages across and down, so the position survives any rescaling.
-- Every pin also records its **nearby text**, and each screen lists every visible label with its
-  frame. That's usually all an agent needs to grep its way to the right SwiftUI view.
+- `screens/N.png` is **1x: one pixel per point**. A pin at `(84, 322)` is pixel `(84, 322)`. A
+  402×874 pt screen is a 402×874 image, which vision models see unscaled.
+- `screens/N-annotated.png` adds numbered blue markers, outlines and red drawings.
+  `screens/N@3x.png` and `crops/N.png` (native resolution, 32 pt of context) carry the detail.
+- Each pin has an **anchor** (exactly where you tapped, or a drawing's center), a **frame**, and
+  percentages across and down.
+- Each pin lists its **nearby text**, and each screen lists every visible label with its frame.
+  That's usually enough for an agent to grep its way to the right SwiftUI view, with no tagging.
 
-The resulting prompt looks like this:
+<details>
+<summary>The prompt your agent receives</summary>
 
 ```
-UI annotations from the running app: 2 pins on 1 screen. Please make these changes in the code.
+UI annotations from the running app: 3 pins on 1 screen. Please make these changes in the code.
 
 Session: /Users/me/app/.annotate/sessions/20261028-141502-a1b2
 Device: iPhone 17 Pro · iOS 26.0 · 402×874 pt @3x · dark · Dynamic Type L
@@ -137,91 +171,63 @@ Screen 1 (402×874 pt) — annotated …/screens/1-annotated.png · clean …/sc
    Nearby text: "Halo Pendant", "2700K warm white"
    Crop: …/crops/2.png
 
+3. Sketch over Image "Halo Pendant" at (190, 520, 180×140) — center (280, 590), 70% across, 68% down
+   make this card a carousel
+   Drawn on the screen in red (arrow, arrow); see the crop
+   Crop: …/crops/3.png
+
 Full detail (all frames, visible text per screen, sketch vectors): …/session.json
 
 When you're done, finish with a one-line summary of what you changed.
 ```
+</details>
 
-## The bundle
+## The session bundle
 
 ```
-<project root>/.annotate/           .gitignore'd automatically
+<project root>/.annotate/           gitignored automatically
   latest                            "sessions/<id>"
   sessions/<id>/
     prompt.md                       the message above
     screens/1.png  1-annotated.png  1@3x.png
     crops/1.png …
-    session.json                    written last, so it marks the bundle as complete
+    session.json                    written last, so it marks the bundle complete (schema v1)
     status.json                     written by the receiver: delivered → received → working → done | failed
 ```
 
 Simulator apps can write to the Mac's file system. AnnotateKit finds your project root by walking up
 from the `#filePath` of `Annotate.install()` to the nearest `.git`, and it polls `status.json` to
-show progress on the pencil button. On a physical device, bundles go to the app's Documents folder.
+show progress on the pencil. On a physical device, bundles go to the app's Documents folder.
 
-### session.json (schema v1)
-
-```jsonc
-{
-  "schemaVersion": 1,
-  "id": "20261028-141502-a1b2",
-  "createdAt": "2026-10-28T14:15:02Z",
-  "app":    { "bundleID": "…", "name": "…", "version": "1.0", "build": "7" },
-  "device": { "model": "iPhone 17 Pro", "systemName": "iOS", "systemVersion": "26.0", "isSimulator": true,
-              "screen": { "width": 402, "height": 874 }, "scale": 3,
-              "colorScheme": "dark", "contentSize": "L", "orientation": "portrait" },
-  "screens": [{
-    "index": 1, "capturedAt": "…", "size": { "width": 402, "height": 874 },
-    "image": "screens/1.png", "annotatedImage": "screens/1-annotated.png", "hiResImage": "screens/1@3x.png",
-    "elements": [ { "role": "button", "label": "Get started", "frame": { "x": 24, "y": 300, "width": 120, "height": 44 } } ]
-  }],
-  "annotations": [{
-    "id": "UUID", "index": 1, "screen": 1,
-    "kind": "element",                       // "element" | "point" | "region"
-    "comment": "bigger, tighter",
-    "anchor": { "x": 84, "y": 322 },
-    "frame":  { "x": 24, "y": 300, "width": 120, "height": 44 },
-    "element": { "role": "button", "label": "Get started", "traits": ["button"], "breadcrumb": ["ScrollView"] },
-    "nearbyText": ["Light that follows your day"],
-    "source": null,                          // set only with the optional .annotatable()
-    "textEdit": null,                        // { "from": "…", "to": "…" } for in-place retypes
-    "sketch": null,                          // regions: { "size", "strokes": [{ "tool", "points" }] }
-    "crop": "crops/1.png"
-  }]
-}
-```
+The schema is defined in [`Session.swift`](Sources/AnnotateCore/Session.swift). `AnnotateCore` is
+Foundation-only, so viewers, bots and other tools can depend on it without UIKit.
 
 ## How selection works
 
-On tap, `ElementScanner` looks at the window that would receive the touch. It walks the hit view's
+On tap, AnnotateKit asks UIKit which view would receive the touch. It then walks that view's
 ancestors, its subtree, and the accessibility children of both, so views behind a sheet are skipped.
-SwiftUI `Text`, `Button` and `Image` exist at runtime only as accessibility nodes, so AnnotateKit
-turns on the in-process accessibility tree at install, the same switch XCUITest flips. You can opt
-out with `AnnotateOptions(enablesAccessibilityTree: false)`.
+SwiftUI `Text`, `Button` and `Image` exist at runtime only as accessibility nodes, so it turns on
+the in-process accessibility tree at install, the same switch XCUITest flips. You can opt out with
+`AnnotateOptions(enablesAccessibilityTree: false)`. Candidates are sorted smallest-first. If only a
+big container (more than 40% of the screen) is under your finger, the pin starts as a spot at the
+exact point.
 
-`SelectionStack` sorts what it finds smallest-first and merges duplicates. If the smallest thing
-under your finger is a big container (more than 40% of the screen), the pin starts as a **spot** at
-the exact point instead. `↑`/`↓` move along spot → element → containers.
+**Optional: exact source lines.** Add `.annotatable()` to a view and pins on or inside it carry its
+`file:line`. It's never required.
 
-### Optional: exact source lines
-
-Tagging is never required. If you want a pin to carry `file:line` instead of relying on a search,
-add `.annotatable()` to a view. It records `#filePath`/`#line`, and pins on or inside that view get
-a `Source:` line.
-
-## Layout
+## Repository layout
 
 ```
-Sources/AnnotateCore    Foundation-only: schema, SelectionStack, ScreenOutline, PromptRenderer,
-                        SessionWriter/SessionInbox (bundle + status), ProjectRoot, placement math
-Sources/AnnotateKit     DEBUG-only overlay: OverlayWindow, ElementScanner, AnnotateController,
-                        Snapshotter, SwiftUI chrome, optional .annotatable(), public Annotate API
-Sources/AnnotateAgent   Mac side: SessionFeed (discovery + atomic claims), ChannelServer (MCP),
-Sources/AnnotateCLI       HeadlessRunner (claude -p), Command (the `annotate` executable)
-ClaudeCode/skills       /annotations skill for the Monitor-based watcher
+Sources/AnnotateCore    schema, selection, screen outline, prompt, bundle + status I/O (Foundation only)
+Sources/AnnotateKit     the DEBUG-only overlay and the public `Annotate` API
+Sources/AnnotateAgent   Mac side: session discovery/claims, MCP channel server, headless runner
+Sources/AnnotateCLI     the `annotate` executable
+skills/                 annotate-setup and annotate-watch (Agent Skills format)
+.claude-plugin/         Claude Code plugin + marketplace; bin/annotate is the plugin's launcher
 ```
 
-`swift test` runs the AnnotateCore and AnnotateAgent suites on macOS and Linux.
+`swift test` runs the AnnotateCore and AnnotateAgent suites on macOS and Linux. See
+[CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
 
 ## Limitations
 
@@ -229,15 +235,16 @@ ClaudeCode/skills       /annotations skill for the Monitor-based watcher
   aren't handled.
 - The inline retype field estimates the font size from the label's height.
 - There's no hover highlight: the iPhone Simulator doesn't deliver pointer hover to apps.
-- Channels are a Claude Code research preview. Their flags and protocol may change.
+- Channels are a Claude Code research preview, so their flags and protocol may change.
 
 ## Roadmap
 
-- Device / Dynamic Type / appearance switcher from the toolbar, re-capturing the same screen
+- Device / Dynamic Type / appearance switcher that re-captures the same screen
 - Live style panel: nudge spacing, radius and color in place, then send the diff
-- Hot reload so edits show up on the frozen screen's successor without relaunching
+- Listing in the official MCP Registry
 - Sending sessions from a physical device
 
 ## License
 
-MIT
+[MIT](LICENSE). Contributions welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md).

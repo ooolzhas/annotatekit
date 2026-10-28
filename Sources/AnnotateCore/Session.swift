@@ -162,6 +162,9 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
         case point
         /// A dragged rectangle, optionally with a sketch inside.
         case region
+        /// A freehand drawing anywhere on the screen; `frame` is the drawing's bounds and
+        /// `element` the view it was drawn over, when one encloses it.
+        case sketch
     }
 
     public var id: UUID
@@ -286,7 +289,7 @@ public struct TextEdit: Codable, Sendable, Equatable {
 }
 
 public struct Sketch: Codable, Sendable, Equatable {
-    /// Region size; stroke points are in this local space.
+    /// Size of the annotation's frame; stroke points are in this local space (origin = frame origin).
     public var size: AnnotationSize
     public var strokes: [Stroke]
 
