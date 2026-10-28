@@ -51,6 +51,14 @@ import Testing
         #expect(chrome.canSend == expected)
     }
 
+    // MARK: OverlayChrome.clearTitle
+
+    @Test("trash confirmation names how many comments go",
+          arguments: [(1, "Delete 1 comment?"), (4, "Delete 4 comments?")])
+    func clearTitleCounts(count: Int, expected: String) {
+        #expect(OverlayChrome.clearTitle(count) == expected)
+    }
+
     // MARK: OverlayChrome.countTitle (pluralization is the contract)
 
     @Test("count title pluralizes: 1 is singular, more is plural",

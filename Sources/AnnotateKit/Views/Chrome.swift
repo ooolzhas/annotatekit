@@ -1,8 +1,9 @@
 // Shared overlay chrome for the redesigned annotate mode (Figma PVX9n74hzo5BWauvymG141, group
 // 9257:13754): the 44pt round icon button every surface uses, the shared chrome button style
-// (press feedback only, no disabled dimming), the glass helper, the white number
-// badge, white sketch strokes, and the review bar shown when no pin is open (9257:13549). Also
-// owns the floating launcher with its delivery ring and the toast, which predate the redesign.
+// (press feedback only, no disabled dimming), the glass helper, the white number badge, white
+// sketch strokes, and the review bar shown when no pin is open (9257:13549), whose trash asks for
+// confirmation first. Also owns the floating launcher with its delivery ring and the toast, which
+// predate the redesign.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -160,6 +161,7 @@ struct SketchStrokes: View {
 /// given; OverlayRoot positions it. State comes from `controller.chrome`, never from `annotations`.
 struct ReviewBar: View {
     let controller: AnnotateController
+    @State private var isConfirmingClear = false
 
     var body: some View {
         let chrome = controller.chrome
@@ -176,8 +178,14 @@ struct ReviewBar: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             HStack(spacing: 4) {
-                CircleIconButton(systemName: "trash", style: canSend ? .plain : .dimmed) { controller.clearAll() }
+                CircleIconButton(systemName: "trash", style: canSend ? .plain : .dimmed) { isConfirmingClear = true }
                     .disabled(!canSend)
+                    // Trash wipes every pin with no undo, so it asks first. Anchored to the button,
+                    // it shows as a popover from the trash icon on iOS 26
+                    .confirmationDialog(OverlayChrome.clearTitle(count), isPresented: $isConfirmingClear,
+                                        titleVisibility: .visible) {
+                        Button(OverlayChrome.clearAction, role: .destructive) { controller.clearAll() }
+                    }
                 Button {
                     controller.send(keepAnnotating: false)
                 } label: {

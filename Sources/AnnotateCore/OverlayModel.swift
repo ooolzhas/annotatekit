@@ -44,6 +44,14 @@ public enum OverlayChrome: Equatable, Sendable {
     /// Review title with no pins yet. No Figma frame: derived to name the three gestures that create a pin.
     public static let emptyHint = "Draw, tap or hold"
 
+    /// Trash confirmation title. No Figma frame: trash wipes every pin at once with no undo, so it
+    /// asks first and names what goes.
+    public static func clearTitle(_ count: Int) -> String {
+        count == 1 ? "Delete 1 comment?" : "Delete \(max(count, 0)) comments?"
+    }
+    /// Destructive button in the trash confirmation.
+    public static let clearAction = "Delete"
+
     /// Review bar title (Figma 9257:13556, sample "4 comments"): "4 comments", "1 comment",
     /// and `emptyHint` when there is nothing to count (0 or a negative input).
     /// Figma shows only the plural; the singular "1 comment" has no frame and is derived.
