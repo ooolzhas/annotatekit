@@ -12,7 +12,7 @@
       "name": "annotate",
       "source": "./",
       "description": "Annotate your running iOS app (tap, draw, comment) and send it to Claude with screenshots and exact coordinates. Includes the annotate MCP/channel server and the annotate-setup and annotate-watch skills.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "development",
       "keywords": ["ios", "swiftui", "annotation", "visual-feedback", "mcp"]
     }

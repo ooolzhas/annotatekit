@@ -8,7 +8,7 @@
 # All diagnostics go to stderr: stdout belongs to the MCP protocol.
 set -euo pipefail
 
-VERSION="0.1.0"
+VERSION="0.1.1"
 REPO="ooolzhas/annotate-ios"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 SELF="$ROOT/bin/annotate"

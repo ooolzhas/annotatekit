@@ -24,17 +24,17 @@ a `UIApplicationDelegate`.
 
 ## 2. Add the package
 
-Package URL `https://github.com/ooolzhas/annotate-ios`, product **AnnotateKit**, version `from: "0.1.0"`.
+Package URL `https://github.com/ooolzhas/annotate-ios`, product **AnnotateKit**, version `from: "0.1.1"`.
 Link it to the **app target only**, not widgets or extensions.
 
 ### 2a. Manifests
 
 - XcodeGen `project.yml`: under `packages:` add
-  `AnnotateKit: { url: https://github.com/ooolzhas/annotate-ios, from: 0.1.0 }`, and under the app
+  `AnnotateKit: { url: https://github.com/ooolzhas/annotate-ios, from: 0.1.1 }`, and under the app
   target's `dependencies:` add `- package: AnnotateKit`. Run `xcodegen`.
-- Tuist: add `.remote(url: "https://github.com/ooolzhas/annotate-ios", requirement: .upToNextMajor(from: "0.1.0"))`
+- Tuist: add `.remote(url: "https://github.com/ooolzhas/annotate-ios", requirement: .upToNextMajor(from: "0.1.1"))`
   and `.package(product: "AnnotateKit")` to the app target, then `tuist install && tuist generate`.
-- SwiftPM: `.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.1.0")` and
+- SwiftPM: `.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.1.1")` and
   `.product(name: "AnnotateKit", package: "annotate-ios")` on the app target.
 
 ### 2b. Plain .xcodeproj
@@ -62,7 +62,7 @@ edit `project.pbxproj` yourself, add four objects with fresh unique 24-character
 			repositoryURL = "https://github.com/ooolzhas/annotate-ios";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.1.0;
+				minimumVersion = 0.1.1;
 			};
 		};
 
