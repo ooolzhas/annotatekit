@@ -6,8 +6,11 @@
 // Drag → region with sketch tools. Draw mode → the whole frozen screen is a canvas; the drawing
 // becomes one pin framed by its bounds and attributed to the view it was drawn over.
 // Return saves, Esc backs out one level, ⌘Z undoes.
-// Send → renders 1x/annotated/hi-res images and crops per screen, writes the bundle, then polls
-// its status.json so the overlay can show the agent picking it up and finishing. No copy/paste.
+// Send → hands a SendJob to BundleRenderer off the main thread (1x/annotated images, crops, PNG
+// encoding, write, prune), then polls status.json so the overlay can show the agent picking it up
+// and finishing. No copy/paste.
+// Idle cost is near zero: the accessibility tree and `.annotatable()` frame tracking switch on
+// only while annotating, and the text outline is scanned on first use.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -36,7 +39,8 @@ final class AnnotateController {
         let index: Int
         let capturedAt: Date
         let image: UIImage
-        let elements: [ScreenElement]
+        /// Visible-text outline; nil until first needed (see `elements(for:)`).
+        var elements: [ScreenElement]?
     }
 
     /// Progress of the most recent Send, read back from the bundle's status.json.
@@ -109,6 +113,11 @@ final class AnnotateController {
 
     func start() {
         guard !isActive else { return }
+        // Paid only once someone actually annotates, not on every DEBUG launch
+        if options.enablesAccessibilityTree {
+            AccessibilityBootstrap.enable()
+        }
+        AnnotatableRegistry.shared.setCollecting(true)
         freezeScreen()
         isActive = true
         window?.activate()
@@ -121,6 +130,7 @@ final class AnnotateController {
         dragRect = nil
         isActive = false
         frozenImage = nil
+        AnnotatableRegistry.shared.setCollecting(false)
         window?.deactivate()
     }
 
@@ -179,7 +189,7 @@ final class AnnotateController {
             source: SourceResolver.resolve(frame: rect, in: AnnotatableRegistry.shared.visible(in: bounds)),
             sketch: Sketch(size: AnnotationSize(rect.size))
         )
-        region.nearbyText = ScreenOutline.nearbyText(for: rect, in: screens[currentScreen]?.elements ?? [])
+        region.nearbyText = ScreenOutline.nearbyText(for: rect, in: elements(for: currentScreen))
         draft = Draft(annotation: region, isNew: true)
     }
 
@@ -341,6 +351,8 @@ final class AnnotateController {
         screens = screens.filter { $0.key == currentScreen }
     }
 
+    /// Gathers what's needed on the main actor, clears the overlay at once, and renders, encodes
+    /// and writes the bundle off the main thread; the toast and delivery ring follow when it lands.
     func send(keepAnnotating: Bool) {
         finishDraft()
         guard !annotations.isEmpty else {
@@ -348,10 +360,7 @@ final class AnnotateController {
             return
         }
 
-        var images: [String: Data] = [:]
         var outgoing = annotations
-        var outgoingScreens: [Screen] = []
-
         if let root = projectRoot {
             for position in outgoing.indices {
                 if let file = outgoing[position].source?.file {
@@ -359,71 +368,48 @@ final class AnnotateController {
                 }
             }
         }
-
-        for (index, captured) in screens.sorted(by: { $0.key < $1.key }) {
-            let pinPositions = outgoing.indices.filter { outgoing[$0].screen == index }
-            guard !pinPositions.isEmpty else { continue }
-            let pins = pinPositions.map { outgoing[$0] }
-            let oneX = Snapshotter.rescaled(captured.image, to: 1)
-            let scale = Int(captured.image.scale.rounded())
-            var screen = Screen(index: index, capturedAt: captured.capturedAt, size: AnnotationSize(captured.image.size), elements: captured.elements)
-
-            if let data = oneX.pngData() {
-                screen.image = "screens/\(index).png"
-                images[screen.image!] = data
-            }
-            if let data = Snapshotter.annotatedScreenshot(oneX, annotations: pins).pngData() {
-                screen.annotatedImage = "screens/\(index)-annotated.png"
-                images[screen.annotatedImage!] = data
-            }
-            if scale > 1, let data = captured.image.pngData() {
-                screen.hiResImage = "screens/\(index)@\(scale)x.png"
-                images[screen.hiResImage!] = data
-            }
-            for position in pinPositions {
-                let pin = outgoing[position]
-                if let crop = Snapshotter.crop(pin, from: captured.image, padding: Self.cropPadding), let data = crop.pngData() {
-                    let path = "crops/\(pin.index).png"
-                    images[path] = data
-                    outgoing[position].crop = path
-                }
-            }
-            outgoingScreens.append(screen)
+        let pinnedScreens = Set(outgoing.map(\.screen))
+        let captures = screens.keys.sorted().filter(pinnedScreens.contains).compactMap { index -> SendJob.Capture? in
+            guard let captured = screens[index] else { return nil }
+            return SendJob.Capture(index: index, capturedAt: captured.capturedAt, image: captured.image, elements: elements(for: index))
         }
-
         let appWindow = ElementScanner.appWindows(excluding: window).first
-        let session = AnnotationSession(
-            id: SessionWriter.makeSessionID(),
-            createdAt: Date(),
+        let job = SendJob(
+            sessionID: SessionWriter.makeSessionID(),
             app: .current,
             device: .current(window: appWindow ?? window),
-            screens: outgoingScreens,
-            annotations: outgoing
+            captures: captures,
+            annotations: outgoing,
+            outputDirectory: outputDirectory(),
+            completionNote: options.completionNote,
+            includesHiRes: options.includesHiResScreens,
+            keepSessions: options.keepsSessions,
+            cropPadding: Self.cropPadding
         )
 
-        let output = outputDirectory()
-        let sessionDir = SessionInbox.sessionDirectory(session.id, in: output)
-        let prompt = PromptRenderer.render(session, sessionPath: sessionDir.path, completion: options.completionNote)
-        if options.copiesPromptToClipboard {
-            UIPasteboard.general.string = prompt
-        }
-
-        do {
-            try SessionWriter.write(SessionBundle(session: session, images: images), prompt: prompt, to: output)
-        } catch {
-            UIPasteboard.general.string = prompt
-            showToast("Couldn't write the session (\(error.localizedDescription)). Prompt copied instead.")
-            return
-        }
-
-        let count = outgoing.count
-        showToast("Sent \(count) \(count == 1 ? "pin" : "pins")")
-        trackDelivery(id: session.id, in: output)
-
-        if !keepAnnotating {
-            annotations.removeAll()
+        annotations.removeAll()
+        if keepAnnotating {
+            screens = screens.filter { $0.key == currentScreen }
+        } else {
             screens.removeAll()
             stop()
+        }
+        deliveryTask?.cancel()
+        delivery = .waiting
+
+        Task { [weak self] in
+            let outcome = await Task.detached(priority: .userInitiated) { BundleRenderer.write(job) }.value
+            guard let self else { return }
+            if self.options.copiesPromptToClipboard || outcome.error != nil {
+                UIPasteboard.general.string = outcome.prompt
+            }
+            if let error = outcome.error {
+                self.delivery = nil
+                self.showToast("Couldn't write the session (\(error)). Prompt copied instead.", duration: 5)
+                return
+            }
+            self.showToast("Sent \(outcome.pinCount) \(outcome.pinCount == 1 ? "pin" : "pins")")
+            self.trackDelivery(id: job.sessionID, in: job.outputDirectory)
         }
     }
 
@@ -513,12 +499,25 @@ final class AnnotateController {
             frozenImage = nil
             return
         }
-        let outline = ScreenOutline.normalized(ElementScanner.outline(excluding: window), in: bounds)
         let reuse = currentScreen > 0 && !annotations.contains { $0.screen == currentScreen }
         let index = reuse ? currentScreen : (screens.keys.max() ?? 0) + 1
-        screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image, elements: outline)
+        screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image)
         currentScreen = index
         frozenImage = image
+    }
+
+    /// The screen's visible-text outline, scanned on first use rather than at freeze time: entering
+    /// annotate mode stays a single capture, and the accessibility tree (switched on lazily in
+    /// `start`) has settled by the time the first pin needs nearby text.
+    private func elements(for index: Int) -> [ScreenElement] {
+        guard let captured = screens[index] else { return [] }
+        if let elements = captured.elements { return elements }
+        let bounds = CGRect(origin: .zero, size: captured.image.size)
+        let elements = index == currentScreen && isActive
+            ? ScreenOutline.normalized(ElementScanner.outline(excluding: window), in: bounds)
+            : []
+        screens[index]?.elements = elements
+        return elements
     }
 
     /// Builds or retargets an element/spot annotation from the selection, keeping the comment.
@@ -545,7 +544,7 @@ final class AnnotateController {
         result.source = stack.resolvedSource
         result.nearbyText = ScreenOutline.nearbyText(
             for: result.frame.cgRect,
-            in: screens[currentScreen]?.elements ?? [],
+            in: elements(for: currentScreen),
             excluding: result.element?.label
         )
         return result
@@ -594,7 +593,7 @@ final class AnnotateController {
             result.element = element
         }
         result.source = enclosing?.source ?? SourceResolver.resolve(frame: drawn, in: AnnotatableRegistry.shared.visible(in: bounds))
-        result.nearbyText = ScreenOutline.nearbyText(for: frame, in: screens[currentScreen]?.elements ?? [], excluding: result.element?.label)
+        result.nearbyText = ScreenOutline.nearbyText(for: frame, in: elements(for: currentScreen), excluding: result.element?.label)
         return result
     }
 

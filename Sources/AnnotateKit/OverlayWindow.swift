@@ -3,6 +3,7 @@
 // Idle: the window only accepts touches on the launcher; everything else falls through to the app.
 // Active: it takes every touch and becomes key so Return / Esc / ↑↓ / ⌘Z arrive as key commands.
 // OverlayInstaller attaches the window once a scene is active (`install` may run before that).
+// With the launcher hidden, no window exists until annotate mode first starts.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -22,9 +23,6 @@ final class OverlayInstaller {
         guard !isInstalled else { return }
         isInstalled = true
         controller.configure(options: options, callerFile: callerFile)
-        if options.enablesAccessibilityTree {
-            AccessibilityBootstrap.enable()
-        }
         observer = NotificationCenter.default.addObserver(
             forName: UIScene.didActivateNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -34,8 +32,15 @@ final class OverlayInstaller {
         Task { @MainActor in self.attachIfPossible() }
     }
 
-    private func attachIfPossible() {
+    /// Called by `Annotate.start()`: a hidden launcher means the window may not exist yet.
+    func ensureAttached() {
+        attachIfPossible(force: true)
+    }
+
+    private func attachIfPossible(force: Bool = false) {
         guard window == nil else { return }
+        let startsActive = ProcessInfo.processInfo.environment[controller.options.launchEnvironmentKey] == "1"
+        guard force || startsActive || controller.isActive || controller.options.showsLauncher else { return }
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) else { return }
 
@@ -52,7 +57,7 @@ final class OverlayInstaller {
             NotificationCenter.default.removeObserver(observer)
             self.observer = nil
         }
-        if ProcessInfo.processInfo.environment[controller.options.launchEnvironmentKey] == "1" {
+        if startsActive {
             controller.start()
         }
     }

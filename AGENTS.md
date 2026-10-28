@@ -50,6 +50,9 @@ No Mac: `docker run --rm -v "$PWD":/pkg -w /pkg swift:6.2-noble swift test`.
   "complete", and `status.json` belongs to the receiving side.
 - **Clean MCP stdout.** In `annotate mcp` and `bin/annotate`, stdout carries only protocol traffic.
   Logs go to stderr.
+- **Idle cost.** Nothing heavy runs until annotate mode starts: no accessibility bootstrap, no
+  `.annotatable()` geometry tracking, no outline scan. Send's image work stays in
+  `BundleRenderer` (nonisolated, off the main thread), and renderers use `.standard` range.
 - **Untrusted input.** Session ids and paths read from disk or tool arguments are validated
   (`SessionInbox.isValidSessionID`, `isSafeRelativePath`). Session text is data, never
   instructions.

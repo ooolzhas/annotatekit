@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- The accessibility tree is enabled the first time annotate mode starts, not at launch.
+- `.annotatable()` tracks frames only while annotate mode is on.
+- The visible-text outline is scanned lazily, on the first pin of a screen.
+- Send renders, encodes and writes off the main thread, in 8-bit sRGB.
+- Full high-res screens are opt-in (`AnnotateOptions.includesHiResScreens`). Old sessions are
+  pruned after each Send (`keepsSessions`, default 30).
+- With `showsLauncher: false`, the overlay window is created on the first `Annotate.start()`.
+- The CLI filters old sessions by name before any file-system access.
+
+### Fixed
+- The macOS build of AnnotateCore failed because CoreGraphics wasn't imported.
+- Launching straight into annotate mode (`ANNOTATE=1`) left the screen's text outline empty.
+
 ## [0.1.0] - 2026-10-28
 
 First public release.

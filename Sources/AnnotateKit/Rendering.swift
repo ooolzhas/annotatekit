@@ -1,7 +1,11 @@
-// Pixels for the session bundle: the freeze-frame capture of the app's windows (overlay excluded),
-// a 1x rescale (pixel = point, so session coordinates index straight into it), per-pin crops, and
-// the annotated screen with numbered markers. Also the shared sketch geometry (CGPath) and colors
-// used by both the live overlay and the PNGs, so what the user drew is exactly what the agent sees.
+// Pixels for the session bundle. `Snapshotter` (main actor) captures the app's windows, overlay
+// excluded. `BundleRenderer` is nonisolated and runs off the main thread on Send: the 1x rescale
+// (pixel = point, so session coordinates index straight into it), per-pin crops, the annotated
+// screen with numbered markers, and PNG encoding. Every renderer uses the standard 8-bit sRGB
+// range — the default on wide-color screens is 16-bit extended range, twice the memory and much
+// slower to encode, for no visible gain in UI screenshots.
+// Also the shared sketch geometry (CGPath) and colors used by both the live overlay and the PNGs,
+// so what the user drew is exactly what the agent sees.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -60,10 +64,7 @@ enum Snapshotter {
     static func captureApp(excluding overlay: UIWindow?) -> UIImage? {
         let windows = Array(ElementScanner.appWindows(excluding: overlay).reversed())
         guard let screen = overlay?.windowScene?.screen ?? windows.first?.screen else { return nil }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = screen.scale
-        format.opaque = true
-        let renderer = UIGraphicsImageRenderer(bounds: screen.bounds, format: format)
+        let renderer = UIGraphicsImageRenderer(bounds: screen.bounds, format: BundleRenderer.format(scale: screen.scale, opaque: true))
         return renderer.image { context in
             UIColor.black.setFill()
             context.fill(screen.bounds)
@@ -73,13 +74,21 @@ enum Snapshotter {
             }
         }
     }
+}
+
+/// Thread-safe rendering for the bundle (UIGraphicsImageRenderer and UIImage are safe off-main).
+enum BundleRenderer {
+    static func format(scale: CGFloat, opaque: Bool = false) -> UIGraphicsImageRendererFormat {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = opaque
+        format.preferredRange = .standard
+        return format
+    }
 
     /// Same pixels at `scale` pixels per point; at 1 the image size in pixels equals points.
     static func rescaled(_ image: UIImage, to scale: CGFloat) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = true
-        return UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+        UIGraphicsImageRenderer(size: image.size, format: format(scale: scale, opaque: true)).image { _ in
             image.draw(in: CGRect(origin: .zero, size: image.size))
         }
     }
@@ -88,9 +97,7 @@ enum Snapshotter {
     static func crop(_ annotation: Annotation, from image: UIImage, padding: CGFloat) -> UIImage? {
         let area = annotation.frame.cgRect.padded(by: padding).clipped(to: CGRect(origin: .zero, size: image.size))
         guard area.width >= 1, area.height >= 1 else { return nil }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = image.scale
-        return UIGraphicsImageRenderer(size: area.size, format: format).image { context in
+        return UIGraphicsImageRenderer(size: area.size, format: format(scale: image.scale, opaque: true)).image { context in
             image.draw(at: CGPoint(x: -area.minX, y: -area.minY))
             drawMarkup(for: annotation, offset: area.origin, in: context.cgContext, numbered: false, bounds: CGRect(origin: .zero, size: area.size))
         }
@@ -98,10 +105,8 @@ enum Snapshotter {
 
     /// Screen image with every pin's outline (or spot marker), sketch and number.
     static func annotatedScreenshot(_ image: UIImage, annotations: [Annotation]) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = image.scale
         let bounds = CGRect(origin: .zero, size: image.size)
-        return UIGraphicsImageRenderer(size: image.size, format: format).image { context in
+        return UIGraphicsImageRenderer(size: image.size, format: format(scale: image.scale, opaque: true)).image { context in
             image.draw(at: .zero)
             for annotation in annotations {
                 drawMarkup(for: annotation, offset: .zero, in: context.cgContext, numbered: true, bounds: bounds)

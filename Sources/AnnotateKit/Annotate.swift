@@ -10,8 +10,9 @@ public struct AnnotateOptions: Sendable {
     /// Where session bundles go. Default: `<project root>/.annotate` in the Simulator (found from the
     /// `install` call site), the app's Documents folder on a device.
     public var outputDirectory: URL?
-    /// Turns on the in-process accessibility tree so un-annotated SwiftUI text, buttons and images
-    /// are selectable. This is what XCUITest does; switch it off if it interferes with your app.
+    /// Turns on the in-process accessibility tree (the first time annotate mode starts, not at
+    /// launch) so un-annotated SwiftUI text, buttons and images are selectable. This is what
+    /// XCUITest does; switch it off if it interferes with your app.
     public var enablesAccessibilityTree: Bool
     /// Launch-environment key that starts the app in annotate mode when set to "1".
     public var launchEnvironmentKey: String
@@ -22,6 +23,11 @@ public struct AnnotateOptions: Sendable {
     public var completionNote: String?
     /// Seconds without any status.json before the overlay says nothing picked the session up.
     public var unclaimedAfter: Double
+    /// Also write each screen at native resolution (`screens/N@3x.png`). Off by default: per-pin
+    /// crops already carry native-resolution detail, and the full image is the heaviest file.
+    public var includesHiResScreens: Bool
+    /// Session folders kept in `.annotate/sessions`; older ones are deleted after each Send.
+    public var keepsSessions: Int
 
     public init(
         showsLauncher: Bool = true,
@@ -30,7 +36,9 @@ public struct AnnotateOptions: Sendable {
         launchEnvironmentKey: String = "ANNOTATE",
         copiesPromptToClipboard: Bool = false,
         completionNote: String? = "When you're done, finish with a one-line summary of what you changed.",
-        unclaimedAfter: Double = 10
+        unclaimedAfter: Double = 10,
+        includesHiResScreens: Bool = false,
+        keepsSessions: Int = 30
     ) {
         self.showsLauncher = showsLauncher
         self.outputDirectory = outputDirectory
@@ -39,6 +47,8 @@ public struct AnnotateOptions: Sendable {
         self.copiesPromptToClipboard = copiesPromptToClipboard
         self.completionNote = completionNote
         self.unclaimedAfter = unclaimedAfter
+        self.includesHiResScreens = includesHiResScreens
+        self.keepsSessions = keepsSessions
     }
 }
 
@@ -55,6 +65,7 @@ public enum Annotate {
     /// Enters annotate mode.
     public static func start() {
         #if DEBUG && canImport(UIKit)
+        OverlayInstaller.shared.ensureAttached()
         OverlayInstaller.shared.controller.start()
         #endif
     }

@@ -1,7 +1,7 @@
-// `.annotatable()` — opt-in source mapping. Each tagged view reports its screen frame and its
-// `#filePath`/`#line` to an in-process registry; a pin on (or inside) that view then carries the
-// file and line, so the agent edits the right place instead of grepping for on-screen text.
-// Outside DEBUG the modifier returns `self` and costs nothing.
+// `.annotatable()` — optional exact source mapping. While annotate mode is on, each tagged view
+// reports its screen frame and its `#filePath`/`#line` to an in-process registry; a pin on (or
+// inside) that view then carries the file and line. While it's off, tagged views do no geometry
+// work at all (one observed Bool), and outside DEBUG the modifier returns `self`.
 // Public: View.annotatable(_:file:line:)
 
 #if canImport(SwiftUI)
@@ -9,6 +9,7 @@ import SwiftUI
 #endif
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
+import Observation
 import UIKit
 #endif
 
@@ -27,12 +28,21 @@ extension View {
 #endif
 
 #if DEBUG && canImport(UIKit)
-/// Live `.annotatable()` registrations. Plain class, not observable: the overlay reads it on tap.
+/// Live `.annotatable()` registrations. Only `isCollecting` is observed (it switches frame
+/// tracking on in every tagged view); the registrations themselves are read on tap.
 @MainActor
+@Observable
 final class AnnotatableRegistry {
     static let shared = AnnotatableRegistry()
 
-    private var views: [UUID: RegisteredView] = [:]
+    private(set) var isCollecting = false
+    @ObservationIgnored private var views: [UUID: RegisteredView] = [:]
+
+    func setCollecting(_ collecting: Bool) {
+        guard collecting != isCollecting else { return }
+        isCollecting = collecting
+        if !collecting { views.removeAll() }
+    }
 
     func update(_ token: UUID, view: RegisteredView) {
         views[token] = view
@@ -56,11 +66,13 @@ private struct AnnotatableModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content.background {
-            GeometryReader { proxy in
-                Color.clear
-                    .onAppear { register(proxy.frame(in: .global)) }
-                    .onChange(of: proxy.frame(in: .global)) { _, frame in register(frame) }
-                    .onDisappear { AnnotatableRegistry.shared.remove(token) }
+            if AnnotatableRegistry.shared.isCollecting {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { register(proxy.frame(in: .global)) }
+                        .onChange(of: proxy.frame(in: .global)) { _, frame in register(frame) }
+                        .onDisappear { AnnotatableRegistry.shared.remove(token) }
+                }
             }
         }
     }

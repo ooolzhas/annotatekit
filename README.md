@@ -202,6 +202,23 @@ show progress on the pencil. On a physical device, bundles go to the app's Docum
 The schema is defined in [`Session.swift`](Sources/AnnotateCore/Session.swift). `AnnotateCore` is
 Foundation-only, so viewers, bots and other tools can depend on it without UIKit.
 
+## Lightweight by design
+
+- **Zero cost in Release.** Every overlay type is behind `#if DEBUG`. `Annotate.install()` and
+  `.annotatable()` compile to empty stubs, and the package has no dependencies.
+- **Near-zero cost in DEBUG until you annotate.** The accessibility tree is switched on the first
+  time you enter annotate mode, not at launch. `.annotatable()` views do no geometry work while
+  annotate mode is off. With the launcher hidden, no overlay window exists until
+  `Annotate.start()`.
+- **Instant enter, instant Send.** Entering annotate mode takes a single screen capture. The
+  visible-text outline is scanned only when the first pin needs it. Send dismisses immediately,
+  while rendering, PNG encoding and writing happen off the main thread, in 8-bit sRGB rather than
+  the 16-bit wide-color default.
+- **Small bundles.** A 1x screen (pixel = point), an annotated copy, and one native-resolution crop
+  per pin. Full high-res screens are opt-in (`includesHiResScreens`), and only the last 30 sessions
+  are kept (`keepsSessions`).
+- **Cheap watching.** The CLI skips sessions older than its start time without touching the disk.
+
 ## How selection works
 
 On tap, AnnotateKit asks UIKit which view would receive the touch. It then walks that view's

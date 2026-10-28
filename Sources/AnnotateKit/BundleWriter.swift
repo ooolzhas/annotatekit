@@ -1,0 +1,102 @@
+// The off-main half of Send. The controller snapshots everything into a SendJob on the main actor
+// (captures, pins, device info, destination); `BundleRenderer.write` then renders the 1x and
+// annotated screens and per-pin crops, PNG-encodes them, renders the prompt, writes the bundle
+// and prunes old sessions — all on a background task, so the overlay dismisses instantly.
+
+#if DEBUG && canImport(UIKit)
+import AnnotateCore
+import UIKit
+
+/// `@unchecked`: the only non-Sendable members are UIImages, which are immutable and documented
+/// safe to use from any thread.
+struct SendJob: @unchecked Sendable {
+    struct Capture {
+        let index: Int
+        let capturedAt: Date
+        let image: UIImage
+        let elements: [ScreenElement]
+    }
+
+    let sessionID: String
+    let app: AppInfo
+    let device: DeviceInfo
+    let captures: [Capture]
+    let annotations: [Annotation]
+    let outputDirectory: URL
+    let completionNote: String?
+    let includesHiRes: Bool
+    let keepSessions: Int
+    let cropPadding: CGFloat
+}
+
+struct SendOutcome: Sendable {
+    let prompt: String
+    let pinCount: Int
+    /// Set when the bundle couldn't be written; the prompt is still usable.
+    let error: String?
+}
+
+extension BundleRenderer {
+    static func write(_ job: SendJob) -> SendOutcome {
+        var images: [String: Data] = [:]
+        var annotations = job.annotations
+        var screens: [Screen] = []
+
+        for capture in job.captures {
+            let positions = annotations.indices.filter { annotations[$0].screen == capture.index }
+            guard !positions.isEmpty else { continue }
+            var screen = Screen(
+                index: capture.index,
+                capturedAt: capture.capturedAt,
+                size: AnnotationSize(capture.image.size),
+                elements: capture.elements
+            )
+
+            let oneX = rescaled(capture.image, to: 1)
+            if let data = oneX.pngData() {
+                let path = "screens/\(capture.index).png"
+                images[path] = data
+                screen.image = path
+            }
+            if let data = annotatedScreenshot(oneX, annotations: positions.map { annotations[$0] }).pngData() {
+                let path = "screens/\(capture.index)-annotated.png"
+                images[path] = data
+                screen.annotatedImage = path
+            }
+            let scale = Int(capture.image.scale.rounded())
+            if job.includesHiRes, scale > 1, let data = capture.image.pngData() {
+                let path = "screens/\(capture.index)@\(scale)x.png"
+                images[path] = data
+                screen.hiResImage = path
+            }
+            for position in positions {
+                let pin = annotations[position]
+                guard let crop = crop(pin, from: capture.image, padding: job.cropPadding), let data = crop.pngData() else { continue }
+                let path = "crops/\(pin.index).png"
+                images[path] = data
+                annotations[position].crop = path
+            }
+            screens.append(screen)
+        }
+
+        let session = AnnotationSession(
+            id: job.sessionID,
+            createdAt: Date(),
+            app: job.app,
+            device: job.device,
+            screens: screens,
+            annotations: annotations
+        )
+        let sessionDirectory = SessionInbox.sessionDirectory(session.id, in: job.outputDirectory)
+        let prompt = PromptRenderer.render(session, sessionPath: sessionDirectory.path, completion: job.completionNote)
+
+        do {
+            try SessionWriter.write(SessionBundle(session: session, images: images), prompt: prompt, to: job.outputDirectory)
+        } catch {
+            return SendOutcome(prompt: prompt, pinCount: annotations.count, error: error.localizedDescription)
+        }
+        SessionInbox.prune(keeping: max(job.keepSessions, 1), in: job.outputDirectory)
+        return SendOutcome(prompt: prompt, pinCount: annotations.count, error: nil)
+    }
+}
+#endif

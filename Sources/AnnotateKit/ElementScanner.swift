@@ -25,7 +25,7 @@ enum ElementScanner {
     }
 
     /// Labeled elements on the visible screen. Unfiltered; `ScreenOutline.normalized` cleans it up.
-    static func outline(excluding overlay: UIWindow?, limit: Int = 4_000) -> [ScreenElement] {
+    static func outline(excluding overlay: UIWindow?, limit: Int = 600) -> [ScreenElement] {
         guard let window = appWindows(excluding: overlay).first(where: { $0.windowLevel == .normal })
             ?? appWindows(excluding: overlay).first else { return [] }
         let space = window.screen.coordinateSpace
@@ -79,7 +79,8 @@ private final class OutlineCollector {
     init(screenSpace: UICoordinateSpace, limit: Int) {
         self.screenSpace = screenSpace
         self.limit = limit
-        self.budget = limit * 4
+        // Visited-node cap: SwiftUI trees have many unlabeled nodes per labeled one
+        self.budget = 8_000
     }
 
     func visit(_ view: UIView, depth: Int) {
