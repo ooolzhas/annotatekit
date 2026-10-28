@@ -1,6 +1,6 @@
 # AnnotateKit (annotate-ios)
 
-> Cursor-style visual annotation for iOS apps, for coding agents. A DEBUG-only Swift overlay lets a developer freeze their running app, tap any element or spot, drag regions, draw on the screen, and comment; Send writes a session bundle (1x screenshots where pixel = point, annotated screens, crops, exact coordinates, nearby visible text, prompt.md, session.json) and the `annotate` CLI delivers it to Claude Code (channels push, MCP tools, watcher skill, or headless `claude -p`) or any MCP client, with progress shown back on the device.
+> Cursor-style visual annotation for iOS apps, for coding agents. A DEBUG-only Swift overlay lets a developer freeze their running app, tap any element or spot, drag regions, draw on the screen, and comment; Send writes a session bundle (1x screenshots where pixel = point, annotated screens, crops, exact coordinates, nearby visible text, prompt.md, session.json) and the `annotate` CLI delivers it to Claude Code (channels push, MCP tools, watcher skill, or headless `claude -p`) or any MCP client, with progress shown back on the device. Works from the Simulator and from a paired physical device (bundles are copied over `devicectl`, no app setup); a dot on the launcher pill shows whether an agent is listening.
 
 Swift package: https://github.com/ooolzhas/annotate-ios (product `AnnotateKit`, iOS 17+). Claude Code plugin: `/plugin marketplace add ooolzhas/annotate-ios`, then `/plugin install annotate@annotate-ios`. MCP server: `annotate mcp` (stdio).
 

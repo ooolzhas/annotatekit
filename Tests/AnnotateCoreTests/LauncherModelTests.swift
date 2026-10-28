@@ -36,7 +36,7 @@ import Testing
 
     // MARK: DeliveryStage.isFinal
 
-    @Test("only done, failed and notSaved are final",
+    @Test("only done, failed, notSaved and noAgent are final",
           arguments: [
               (DeliveryStage.sent(count: 1), false),
               (.unclaimed, false),
@@ -48,7 +48,8 @@ import Testing
               (.done(message: "ok"), true),
               (.failed(message: nil), true),
               (.failed(message: "no"), true),
-              (.notSaved, true)
+              (.notSaved, true),
+              (.noAgent, true)
           ])
     func isFinal(stage: DeliveryStage, expected: Bool) {
         #expect(stage.isFinal == expected)

@@ -111,12 +111,18 @@ public struct AppInfo: Codable, Sendable, Equatable {
     public var name: String?
     public var version: String?
     public var build: String?
+    /// Path of the source file that called `Annotate.install()`, on the Mac that built the app.
+    /// A device can't see that path, but the Mac can: walking up from it finds the checkout the
+    /// build came from, so a device's Send reaches the agent working in that checkout. Optional,
+    /// so bundles from older builds still decode.
+    public var installFile: String?
 
-    public init(bundleID: String? = nil, name: String? = nil, version: String? = nil, build: String? = nil) {
+    public init(bundleID: String? = nil, name: String? = nil, version: String? = nil, build: String? = nil, installFile: String? = nil) {
         self.bundleID = bundleID
         self.name = name
         self.version = version
         self.build = build
+        self.installFile = installFile
     }
 }
 

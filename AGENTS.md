@@ -30,7 +30,9 @@ No Mac: `docker run --rm -v "$PWD":/pkg -w /pkg swift:6.2-noble swift test`.
   `ElementScanner` does hit-testing and the accessibility walk, `Rendering.swift` handles capture
   and markup, and `Views/` holds the SwiftUI chrome. `Annotate.swift` is the public API.
 - `Sources/AnnotateAgent`: `SessionFeed` (discovery and claims), `ChannelServer` (MCP),
-  `HeadlessRunner`, `Command`. `Sources/AnnotateCLI` is just `main`.
+  `HeadlessRunner`, `Command`, `AgentRuntime` (heartbeats, hub lease), `DeviceMirror` (copies Sends
+  off paired devices through `DeviceBridge`; `DeviceCtlBridge` is the macOS `devicectl` transport)
+  and `AgentIdentity`. `Sources/AnnotateCLI` is just `main`.
 - `skills/`: Agent Skills, also loaded by the Claude Code plugin. `.claude-plugin/` holds the
   plugin and marketplace manifests. `bin/annotate` is the plugin's launcher script.
 
@@ -47,7 +49,10 @@ No Mac: `docker run --rm -v "$PWD":/pkg -w /pkg swift:6.2-noble swift test`.
 - **Schema.** Changes to `session.json` types need a CHANGELOG note. Breaking ones bump
   `AnnotationSession.currentSchemaVersion`.
 - **Bundle completeness.** `session.json` is written last. Readers treat its presence as
-  "complete", and `status.json` belongs to the receiving side.
+  "complete", and `status.json` belongs to the receiving side. The device mirror copies a bundle
+  into a staging folder and renames it into `sessions/`, so consumers never see half a copy.
+- **No host-app setup for devices.** Device delivery rides the developer connection (`devicectl`);
+  never add networking that would need Local Network permission or Info.plist keys in the app.
 - **Clean MCP stdout.** In `annotate mcp` and `bin/annotate`, stdout carries only protocol traffic.
   Logs go to stderr.
 - **Idle cost.** Nothing heavy runs until annotate mode starts: no accessibility bootstrap, no

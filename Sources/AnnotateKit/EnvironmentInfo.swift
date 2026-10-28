@@ -1,18 +1,22 @@
-// App and device context recorded on every session: which build, which simulator, and the
-// appearance settings that change layout (screen size, color scheme, Dynamic Type).
+// App and device context recorded on every session: which build (and the checkout it was built
+// from), which device, and the appearance settings that change layout (screen size, color scheme,
+// Dynamic Type).
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
 import UIKit
 
 extension AppInfo {
-    static var current: AppInfo {
+    /// - Parameter installFile: the `Annotate.install()` call site, so the Mac can route a device's
+    ///   Send to the checkout this build came from.
+    static func current(installFile: String) -> AppInfo {
         let info = Bundle.main.infoDictionary ?? [:]
         return AppInfo(
             bundleID: Bundle.main.bundleIdentifier,
             name: (info["CFBundleDisplayName"] ?? info["CFBundleName"]) as? String,
             version: info["CFBundleShortVersionString"] as? String,
-            build: info["CFBundleVersion"] as? String
+            build: info["CFBundleVersion"] as? String,
+            installFile: installFile
         )
     }
 }

@@ -8,7 +8,8 @@ public struct AnnotateOptions: Sendable {
     /// Floating button that enters annotate mode. Turn off if you trigger it yourself.
     public var showsLauncher: Bool
     /// Where session bundles go. Default: `<project root>/.annotate` in the Simulator (found from the
-    /// `install` call site), the app's Documents folder on a device.
+    /// `install` call site), the app's Documents folder on a device, which `annotate` on the Mac
+    /// copies from over the developer connection (no network setup in the app).
     public var outputDirectory: URL?
     /// Turns on the in-process accessibility tree (the first time annotate mode starts, not at
     /// launch) so un-annotated SwiftUI text, buttons and images are selectable. This is what
