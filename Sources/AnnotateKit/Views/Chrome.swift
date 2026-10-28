@@ -96,11 +96,13 @@ struct ChromeButtonStyle: ButtonStyle {
 extension View {
     /// Liquid Glass on iOS 26 (Xcode 26 toolchain), regular material before.
     /// The compiler check keeps the package building on older Xcode, where `glassEffect` is unknown.
+    /// `interactive` makes the glass react to touch (the system's press shimmer and flex), for
+    /// surfaces people press on: the review bar and the comment card.
     @ViewBuilder
-    func annotateGlass<S: Shape>(in shape: S) -> some View {
+    func annotateGlass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular, in: shape)
+            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
         } else {
             self.background(.regularMaterial, in: shape)
         }
@@ -205,7 +207,7 @@ struct ReviewBar: View {
         }
         .padding(8)
         .frame(height: AnnotateController.barHeight)
-        .annotateGlass(in: Capsule())
+        .annotateGlass(in: Capsule(), interactive: true)
         // Glass alone isn't hit-testable; taps between the buttons must not reach the frozen screen
         .contentShape(Capsule())
         .onTapGesture {}
