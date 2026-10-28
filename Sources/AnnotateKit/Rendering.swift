@@ -1,7 +1,7 @@
-// Pixels for the session bundle: a capture of the app's windows (overlay excluded), markup for
-// per-pin crops (element outlined or sketch burned in), and a full annotated screenshot with numbered
-// pins. Also the shared sketch geometry (CGPath) and colors used by both the live overlay and
-// the PNGs, so what the user drew is exactly what the agent sees.
+// Pixels for the session bundle: the freeze-frame capture of the app's windows (overlay excluded),
+// a 1x rescale (pixel = point, so session coordinates index straight into it), per-pin crops, and
+// the annotated screen with numbered markers. Also the shared sketch geometry (CGPath) and colors
+// used by both the live overlay and the PNGs, so what the user drew is exactly what the agent sees.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -9,10 +9,11 @@ import SwiftUI
 import UIKit
 
 enum AnnotateStyle {
-    static let accentUI = UIColor(red: 0.16, green: 0.49, blue: 0.96, alpha: 1)
-    static let sketchUI = UIColor(red: 0.94, green: 0.23, blue: 0.21, alpha: 1)
-    static let accent = Color(uiColor: accentUI)
-    static let sketch = Color(uiColor: sketchUI)
+    // Computed rather than stored: no global-state isolation questions for the Canvas renderer
+    static var accentUI: UIColor { UIColor(red: 0.16, green: 0.49, blue: 0.96, alpha: 1) }
+    static var sketchUI: UIColor { UIColor(red: 0.94, green: 0.23, blue: 0.21, alpha: 1) }
+    static var accent: Color { Color(red: 0.16, green: 0.49, blue: 0.96) }
+    static var sketch: Color { Color(red: 0.94, green: 0.23, blue: 0.21) }
     static let pinRadius: CGFloat = 11
     static let sketchLineWidth: CGFloat = 2.5
 }
@@ -73,17 +74,29 @@ enum Snapshotter {
         }
     }
 
-    /// `annotation`'s outline or sketch drawn onto `image`; the frame must already be in image space.
-    static func markup(_ annotation: Annotation, onto image: UIImage) -> UIImage {
+    /// Same pixels at `scale` pixels per point; at 1 the image size in pixels equals points.
+    static func rescaled(_ image: UIImage, to scale: CGFloat) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
-        format.scale = image.scale
-        return UIGraphicsImageRenderer(size: image.size, format: format).image { context in
-            image.draw(at: .zero)
-            drawMarkup(for: annotation, frame: annotation.frame.cgRect, in: context.cgContext, number: false)
+        format.scale = scale
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
         }
     }
 
-    /// Full capture with every annotation's outline, sketch and numbered pin.
+    /// Native-resolution crop around one pin with `padding` points of context, markup drawn in.
+    static func crop(_ annotation: Annotation, from image: UIImage, padding: CGFloat) -> UIImage? {
+        let area = annotation.frame.cgRect.padded(by: padding).clipped(to: CGRect(origin: .zero, size: image.size))
+        guard area.width >= 1, area.height >= 1 else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        return UIGraphicsImageRenderer(size: area.size, format: format).image { context in
+            image.draw(at: CGPoint(x: -area.minX, y: -area.minY))
+            drawMarkup(for: annotation, offset: area.origin, in: context.cgContext, numbered: false, bounds: CGRect(origin: .zero, size: area.size))
+        }
+    }
+
+    /// Screen image with every pin's outline (or spot marker), sketch and number.
     static func annotatedScreenshot(_ image: UIImage, annotations: [Annotation]) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = image.scale
@@ -91,22 +104,35 @@ enum Snapshotter {
         return UIGraphicsImageRenderer(size: image.size, format: format).image { context in
             image.draw(at: .zero)
             for annotation in annotations {
-                drawMarkup(for: annotation, frame: annotation.frame.cgRect, in: context.cgContext, number: true, bounds: bounds)
+                drawMarkup(for: annotation, offset: .zero, in: context.cgContext, numbered: true, bounds: bounds)
             }
         }
     }
 
-    private static func drawMarkup(for annotation: Annotation, frame: CGRect, in cg: CGContext, number: Bool, bounds: CGRect = .zero) {
+    /// Draws one pin's markup; `offset` is subtracted from its screen coordinates (crop origin).
+    private static func drawMarkup(for annotation: Annotation, offset: CGPoint, in cg: CGContext, numbered: Bool, bounds: CGRect) {
         cg.saveGState()
         defer { cg.restoreGState() }
 
+        let frame = annotation.frame.cgRect.offsetBy(dx: -offset.x, dy: -offset.y)
+        let anchor = CGPoint(x: annotation.anchor.x - offset.x, y: annotation.anchor.y - offset.y)
         cg.setStrokeColor(AnnotateStyle.accentUI.cgColor)
         cg.setLineWidth(2)
-        if annotation.kind == .region {
+
+        switch annotation.kind {
+        case .element:
+            cg.stroke(frame.insetBy(dx: -1, dy: -1))
+        case .region:
             cg.setLineDash(phase: 0, lengths: [6, 4])
+            cg.stroke(frame.insetBy(dx: -1, dy: -1))
+            cg.setLineDash(phase: 0, lengths: [])
+        case .point:
+            // Crosshair ring: the exact spot matters more than any box
+            let ring = CGRect(x: anchor.x - 9, y: anchor.y - 9, width: 18, height: 18)
+            cg.strokeEllipse(in: ring)
+            cg.setFillColor(AnnotateStyle.accentUI.cgColor)
+            cg.fillEllipse(in: CGRect(x: anchor.x - 2, y: anchor.y - 2, width: 4, height: 4))
         }
-        cg.stroke(frame.insetBy(dx: -1, dy: -1))
-        cg.setLineDash(phase: 0, lengths: [])
 
         if let sketch = annotation.sketch {
             cg.setStrokeColor(AnnotateStyle.sketchUI.cgColor)
@@ -119,9 +145,10 @@ enum Snapshotter {
             }
         }
 
-        guard number else { return }
+        guard numbered else { return }
         let radius = AnnotateStyle.pinRadius
-        let center = OverlayPlacement.pinCenter(for: frame, radius: radius, in: bounds)
+        let pinFrame = annotation.kind == .point ? CGRect(x: anchor.x + 6, y: anchor.y - 6, width: 0, height: 0) : frame
+        let center = OverlayPlacement.pinCenter(for: pinFrame, radius: radius, in: bounds)
         let circle = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
         cg.setFillColor(AnnotateStyle.accentUI.cgColor)
         cg.fillEllipse(in: circle)

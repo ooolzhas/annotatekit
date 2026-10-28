@@ -1,62 +1,71 @@
-// Renders a session as a paste-ready prompt (prompt.md and the clipboard on Send).
-// Kept terse: one numbered item per pin with the element, its source location, and the request.
-// Frames, accessibility details and sketch vectors stay in session.json, which the prompt points to.
+// Renders a session as the message the agent receives (prompt.md, and what gets delivered on Send).
+// Leads with how to read coordinates, then one block per screen with its images, then one item
+// per pin: what it's on, where exactly (frame, anchor, percentages), the request, and grep hints.
+// Full frames, the visible-text outline and sketch vectors stay in session.json.
 
 import Foundation
 
 public enum PromptRenderer {
-    /// - Parameter sessionPath: absolute session directory when known, so the agent can open the
-    ///   PNGs directly; otherwise the prompt refers to paths relative to it.
-    public static func render(_ session: AnnotationSession, sessionPath: String?) -> String {
+    /// - Parameters:
+    ///   - sessionPath: absolute session directory, so image paths can be opened directly.
+    ///   - completion: appended as the last paragraph, e.g. how to report back when done.
+    public static func render(_ session: AnnotationSession, sessionPath: String?, completion: String? = nil) -> String {
         let base = sessionPath.map { $0.hasSuffix("/") ? $0 : $0 + "/" } ?? ""
         var lines: [String] = []
 
-        let count = session.annotations.count
-        lines.append("I annotated the running app (\(count) \(count == 1 ? "annotation" : "annotations")). Please make these UI changes.")
+        let pins = session.annotations.count
+        let screens = session.screens.filter { !session.annotations(on: $0).isEmpty }
+        lines.append(
+            "UI annotations from the running app: \(pins) \(plural(pins, "pin")) on \(screens.count) \(plural(screens.count, "screen")). "
+                + "Please make these changes in the code."
+        )
         lines.append("")
         lines.append("Session: \(sessionPath ?? session.id)")
-        lines.append("Screen: \(screenLine(session))")
-        if let annotated = session.annotatedScreenshot {
-            lines.append("Screenshot with numbered pins: \(base)\(annotated)")
-        }
-        lines.append("")
+        lines.append("Device: \(deviceLine(session))")
+        lines.append(
+            "Coordinates are iOS points, origin top-left. Screen images are 1x, so pixel = point. "
+                + "Open the annotated image first: each pin is a numbered blue marker there. Crops show detail."
+        )
 
-        for annotation in session.annotations.sorted(by: { $0.index < $1.index }) {
-            lines.append(contentsOf: item(annotation, base: base))
+        for screen in screens {
+            lines.append("")
+            var images: [String] = []
+            if let annotated = screen.annotatedImage { images.append("annotated \(base)\(annotated)") }
+            if let image = screen.image { images.append("clean \(base)\(image)") }
+            if let hiRes = screen.hiResImage { images.append("hi-res \(base)\(hiRes)") }
+            let size = "\(Int(screen.size.width))×\(Int(screen.size.height)) pt"
+            lines.append("Screen \(screen.index) (\(size))" + (images.isEmpty ? "" : " — " + images.joined(separator: " · ")))
+            for annotation in session.annotations(on: screen) {
+                lines.append("")
+                lines.append(contentsOf: item(annotation, screenSize: screen.size, base: base))
+            }
         }
 
         lines.append("")
-        lines.append("Full details (frames, accessibility info, sketch vectors): \(base)session.json")
+        lines.append("Full detail (all frames, visible text per screen, sketch vectors): \(base)session.json")
+        if let completion, !completion.isEmpty {
+            lines.append("")
+            lines.append(completion)
+        }
         return lines.joined(separator: "\n") + "\n"
     }
 
-    static func screenLine(_ session: AnnotationSession) -> String {
-        let device = session.device
-        let size = "\(Int(device.screen.width))×\(Int(device.screen.height)) pt @\(formatScale(device.scale))x"
-        var parts = [device.model, "\(device.systemName) \(device.systemVersion)", size, device.colorScheme]
-        parts.append("Dynamic Type \(device.contentSize)")
-        if device.orientation != "portrait" { parts.append(device.orientation) }
-        return parts.joined(separator: " · ")
-    }
-
-    static func item(_ annotation: Annotation, base: String) -> [String] {
+    static func item(_ annotation: Annotation, screenSize: AnnotationSize, base: String) -> [String] {
         var lines: [String] = []
         let indent = "   "
+        let f = annotation.frame
 
-        var heading = "\(annotation.index). "
+        let subject: String
         switch annotation.kind {
-        case .element:
-            heading += annotation.element?.displayName() ?? "Element"
-        case .region:
-            let f = annotation.frame
-            heading += "Region \(Int(f.width))×\(Int(f.height)) at (\(Int(f.x)), \(Int(f.y)))"
+        case .element: subject = annotation.element?.displayName() ?? "Element"
+        case .point: subject = "Spot"
+        case .region: subject = "Region"
         }
-        if let source = annotation.source {
-            heading += " — " + sourceDescription(source)
-        } else if annotation.kind == .element {
-            heading += " — no source mapping; search for its text or label"
-        }
-        lines.append(heading)
+        let box = "(\(num(f.x)), \(num(f.y)), \(num(f.width))×\(num(f.height)))"
+        let anchor = annotation.anchor
+        let across = percent(anchor.x, of: screenSize.width), down = percent(anchor.y, of: screenSize.height)
+        let verb = annotation.kind == .region ? "center" : "tapped"
+        lines.append("\(annotation.index). \(subject) at \(box) — \(verb) (\(num(anchor.x)), \(num(anchor.y))), \(across) across, \(down) down")
 
         if let edit = annotation.textEdit {
             lines.append("\(indent)Change the copy from \"\(edit.from)\" to \"\(edit.to)\"")
@@ -69,12 +78,27 @@ public enum PromptRenderer {
         }
         if let sketch = annotation.sketch, !sketch.strokes.isEmpty {
             let tools = sketch.strokes.map(\.tool.rawValue).joined(separator: ", ")
-            lines.append("\(indent)Sketch of the desired layout (\(tools))")
+            lines.append("\(indent)Sketch of the desired layout drawn in red (\(tools))")
+        }
+        if !annotation.nearbyText.isEmpty {
+            lines.append("\(indent)Nearby text: " + annotation.nearbyText.map { "\"\($0)\"" }.joined(separator: ", "))
+        }
+        if let source = annotation.source {
+            lines.append("\(indent)Source: \(sourceDescription(source))")
         }
         if let crop = annotation.crop {
             lines.append("\(indent)Crop: \(base)\(crop)")
         }
         return lines
+    }
+
+    static func deviceLine(_ session: AnnotationSession) -> String {
+        let device = session.device
+        let size = "\(Int(device.screen.width))×\(Int(device.screen.height)) pt @\(num(device.scale))x"
+        var parts = [device.model, "\(device.systemName) \(device.systemVersion)", size, device.colorScheme]
+        parts.append("Dynamic Type \(device.contentSize)")
+        if device.orientation != "portrait" { parts.append(device.orientation) }
+        return parts.joined(separator: " · ")
     }
 
     static func sourceDescription(_ source: SourceLocation) -> String {
@@ -88,7 +112,18 @@ public enum PromptRenderer {
         }
     }
 
-    static func formatScale(_ scale: Double) -> String {
-        scale == scale.rounded() ? String(Int(scale)) : String(scale)
+    /// Whole numbers without ".0", one decimal otherwise.
+    static func num(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        return rounded == rounded.rounded() ? String(Int(rounded)) : String(rounded)
+    }
+
+    static func percent(_ value: Double, of total: Double) -> String {
+        guard total > 0 else { return "?" }
+        return "\(Int((value / total * 100).rounded()))%"
+    }
+
+    static func plural(_ count: Int, _ word: String) -> String {
+        count == 1 ? word : word + "s"
     }
 }

@@ -15,17 +15,30 @@ public struct AnnotateOptions: Sendable {
     public var enablesAccessibilityTree: Bool
     /// Launch-environment key that starts the app in annotate mode when set to "1".
     public var launchEnvironmentKey: String
+    /// Also put the prompt on the clipboard on Send. Off by default: the `annotate` CLI on the Mac
+    /// delivers sessions to Claude Code; turn this on to paste into other tools.
+    public var copiesPromptToClipboard: Bool
+    /// Last paragraph of every prompt.
+    public var completionNote: String?
+    /// Seconds without any status.json before the overlay says nothing picked the session up.
+    public var unclaimedAfter: Double
 
     public init(
         showsLauncher: Bool = true,
         outputDirectory: URL? = nil,
         enablesAccessibilityTree: Bool = true,
-        launchEnvironmentKey: String = "ANNOTATE"
+        launchEnvironmentKey: String = "ANNOTATE",
+        copiesPromptToClipboard: Bool = false,
+        completionNote: String? = "When you're done, finish with a one-line summary of what you changed.",
+        unclaimedAfter: Double = 10
     ) {
         self.showsLauncher = showsLauncher
         self.outputDirectory = outputDirectory
         self.enablesAccessibilityTree = enablesAccessibilityTree
         self.launchEnvironmentKey = launchEnvironmentKey
+        self.copiesPromptToClipboard = copiesPromptToClipboard
+        self.completionNote = completionNote
+        self.unclaimedAfter = unclaimedAfter
     }
 }
 

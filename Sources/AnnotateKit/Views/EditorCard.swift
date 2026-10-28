@@ -16,12 +16,13 @@ struct EditorCard: View {
     private let width: CGFloat = 288
 
     var body: some View {
+        @Bindable var controller = controller
         let frame = OverlayPlacement.cardFrame(size: size, anchoredTo: draft.annotation.frame.cgRect, in: placementBounds)
 
         VStack(alignment: .leading, spacing: 10) {
             header
 
-            TextField("Describe the change", text: commentBinding)
+            TextField("Describe the change", text: $controller.commentText)
                 .font(.system(size: 15))
                 .textFieldStyle(.plain)
                 .submitLabel(.done)
@@ -86,15 +87,9 @@ struct EditorCard: View {
         let frame = draft.annotation.frame
         switch draft.annotation.kind {
         case .element: return draft.annotation.element?.title ?? "Element"
+        case .point: return "Spot \(Int(draft.annotation.anchor.x)), \(Int(draft.annotation.anchor.y))"
         case .region: return "Region \(Int(frame.width)) × \(Int(frame.height))"
         }
-    }
-
-    private var commentBinding: Binding<String> {
-        Binding(
-            get: { controller.draft?.annotation.comment ?? "" },
-            set: { controller.setComment($0) }
-        )
     }
 
     /// Safe bounds minus the strip the toolbar occupies.
@@ -200,12 +195,13 @@ struct InlineTextEditor: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
+        @Bindable var controller = controller
         let fontSize = min(max(frame.height * 0.72, 12), 28)
         let safe = controller.safeBounds
         let width = min(max(frame.width + 8, 180), safe.width)
         let x = min(max(frame.minX - 4, safe.minX), safe.maxX - width)
 
-        TextField("", text: textBinding)
+        TextField("", text: $controller.replacementText)
             .font(.system(size: fontSize))
             .textFieldStyle(.plain)
             .submitLabel(.done)
@@ -219,13 +215,6 @@ struct InlineTextEditor: View {
             .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
             .offset(x: x, y: frame.minY)
             .onAppear { isFocused = true }
-    }
-
-    private var textBinding: Binding<String> {
-        Binding(
-            get: { controller.draft?.replacementText ?? "" },
-            set: { controller.setReplacementText($0) }
-        )
     }
 }
 

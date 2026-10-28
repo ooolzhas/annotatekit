@@ -1,9 +1,11 @@
 // Annotate-mode state machine, observed by the overlay views.
-// Tap → SelectionStack of everything under the finger (↑↓ walks it) → draft pin with comment.
-// Drag → region draft with sketch tools. Return saves, Esc backs out one level, ⌘Z undoes.
-// Send → captures the screen, renders crops, writes the bundle (SessionWriter), copies the prompt.
-// Each pin keeps only a padded crop of the screen as it looked when the pin was made; markup is
-// drawn onto it at Send, so later edits to a sketch or comment still land in the PNG.
+// Start → freeze-frame: the app is captured (pixels + visible-text outline) and the overlay shows
+// that still image, so what you annotate is exactly what gets sent and coordinates can't drift.
+// Tap → SelectionStack of everything under the finger; a tap on nothing distinct pins the spot
+// itself, so every pixel is annotatable. ↑↓ walks spot → element → containers.
+// Drag → region with sketch tools. Return saves, Esc backs out one level, ⌘Z undoes.
+// Send → renders 1x/annotated/hi-res images and crops per screen, writes the bundle, then polls
+// its status.json so the overlay can show the agent picking it up and finishing. No copy/paste.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -27,11 +29,32 @@ final class AnnotateController {
         let message: String
     }
 
-    /// Screen region under a pin at the moment it was made, without markup.
-    struct CropBase {
+    /// One freeze-frame. Pixels stay out of observation; views read `frozenImage`.
+    struct CapturedScreen {
+        let index: Int
+        let capturedAt: Date
         let image: UIImage
-        /// Where `image` sits in screen points.
-        let origin: CGPoint
+        let elements: [ScreenElement]
+    }
+
+    /// Progress of the most recent Send, read back from the bundle's status.json.
+    enum Delivery: Equatable {
+        /// Written; no agent has picked it up yet.
+        case waiting
+        /// Still nobody after a while: no watcher is running.
+        case unclaimed
+        /// Handed to Claude Code, not opened yet (Claude may be busy with another turn).
+        case delivered
+        case received
+        case working(String?)
+        case done(String?)
+        case failed(String?)
+
+        var isFinal: Bool {
+            if case .done = self { return true }
+            if case .failed = self { return true }
+            return false
+        }
     }
 
     // MARK: Configuration
@@ -51,17 +74,22 @@ final class AnnotateController {
     private(set) var isActive = false
     private(set) var annotations: [Annotation] = []
     private(set) var selection: SelectionStack?
-    var draft: Draft?
+    private(set) var draft: Draft?
     private(set) var dragRect: CGRect?
     private(set) var toast: Toast?
     private(set) var launcherCenter: CGPoint?
+    /// The still image shown under the overlay while annotating.
+    private(set) var frozenImage: UIImage?
+    private(set) var currentScreen = 0
+    private(set) var delivery: Delivery?
 
-    @ObservationIgnored private var cropBases: [UUID: CropBase] = [:]
-    @ObservationIgnored private var draftCropBase: CropBase?
+    @ObservationIgnored private var screens: [Int: CapturedScreen] = [:]
+    @ObservationIgnored private var deliveryTask: Task<Void, Never>?
 
-    static let cropPadding: CGFloat = 24
+    static let cropPadding: CGFloat = 32
     static let minimumRegionSide: CGFloat = 16
     static let dragThreshold: CGFloat = 6
+    static let spotSize: CGFloat = 44
 
     func configure(options: AnnotateOptions, callerFile: String) {
         self.options = options
@@ -77,6 +105,7 @@ final class AnnotateController {
 
     func start() {
         guard !isActive else { return }
+        freezeScreen()
         isActive = true
         window?.activate()
     }
@@ -87,7 +116,13 @@ final class AnnotateController {
         selection = nil
         dragRect = nil
         isActive = false
+        frozenImage = nil
         window?.deactivate()
+    }
+
+    /// Pins on the frozen screen currently shown.
+    var visibleAnnotations: [Annotation] {
+        annotations.filter { $0.screen == currentScreen }
     }
 
     // MARK: Pointer
@@ -115,67 +150,47 @@ final class AnnotateController {
         finishDraft()
         let candidates = ElementScanner.candidates(at: point, excluding: window)
             + AnnotatableRegistry.shared.visible(in: bounds).map(\.candidate)
-        let stack = SelectionStack(candidates: candidates, at: point)
-        guard let current = stack.current else {
-            selection = nil
-            return
-        }
+        let stack = SelectionStack(candidates: candidates, at: point, screenArea: bounds.area)
         selection = stack
-        let screenshot = Snapshotter.captureApp(excluding: window)
-        draftCropBase = screenshot.flatMap { Self.cropBase(of: $0, around: current.frame) }
-        draft = Draft(
-            annotation: Annotation(
-                index: 0,
-                kind: .element,
-                frame: AnnotationRect(current.frame),
-                element: stack.currentInfo,
-                source: stack.resolvedSource
-            ),
-            isNew: true
-        )
+        draft = Draft(annotation: annotation(for: stack, updating: nil), isNew: true)
     }
 
-    /// ↑ (`expand`) / ↓ — retarget the unsaved pin at the next larger or smaller element.
+    /// ↑ (`expand`) / ↓ — retarget the unsaved pin: spot → element → enclosing containers.
     func adjustSelection(expand: Bool) {
         guard var stack = selection, var current = draft, current.isNew, !current.isEditingText else { return }
-        let moved = expand ? stack.expand() : stack.narrow()
-        guard moved, let candidate = stack.current else { return }
+        guard expand ? stack.expand() : stack.narrow() else { return }
         selection = stack
-        current.annotation.frame = AnnotationRect(candidate.frame)
-        current.annotation.element = stack.currentInfo
-        current.annotation.source = stack.resolvedSource
+        current.annotation = annotation(for: stack, updating: current.annotation)
         draft = current
-        // Re-crop from the full capture only when the new box escapes the stored crop
-        if let base = draftCropBase {
-            let stored = CGRect(origin: base.origin, size: base.image.size)
-            if !stored.encloses(candidate.frame.padded(by: Self.cropPadding), tolerance: 0.5),
-               let screenshot = Snapshotter.captureApp(excluding: window) {
-                draftCropBase = Self.cropBase(of: screenshot, around: candidate.frame)
-            }
-        }
     }
 
     func beginRegion(_ rect: CGRect) {
         finishDraft()
         selection = nil
-        let screenshot = Snapshotter.captureApp(excluding: window)
-        draftCropBase = screenshot.flatMap { Self.cropBase(of: $0, around: rect) }
-        draft = Draft(
-            annotation: Annotation(
-                index: 0,
-                kind: .region,
-                frame: AnnotationRect(rect),
-                source: SourceResolver.resolve(frame: rect, in: AnnotatableRegistry.shared.visible(in: bounds)),
-                sketch: Sketch(size: AnnotationSize(rect.size))
-            ),
-            isNew: true
+        var region = Annotation(
+            index: 0,
+            screen: currentScreen,
+            kind: .region,
+            frame: AnnotationRect(rect),
+            source: SourceResolver.resolve(frame: rect, in: AnnotatableRegistry.shared.visible(in: bounds)),
+            sketch: Sketch(size: AnnotationSize(rect.size))
         )
+        region.nearbyText = ScreenOutline.nearbyText(for: rect, in: screens[currentScreen]?.elements ?? [])
+        draft = Draft(annotation: region, isNew: true)
     }
 
     // MARK: Draft editing
 
-    func setComment(_ comment: String) {
-        draft?.annotation.comment = comment
+    /// Bindable text of the open draft's comment.
+    var commentText: String {
+        get { draft?.annotation.comment ?? "" }
+        set { draft?.annotation.comment = newValue }
+    }
+
+    /// Bindable text of the in-place retype field.
+    var replacementText: String {
+        get { draft?.replacementText ?? "" }
+        set { draft?.replacementText = newValue }
     }
 
     func selectTool(_ tool: Stroke.Tool) {
@@ -198,10 +213,6 @@ final class AnnotateController {
         draft = current
     }
 
-    func setReplacementText(_ text: String) {
-        draft?.replacementText = text
-    }
-
     /// Saves the draft as a pin, or drops it when there is nothing to act on.
     func saveDraft() {
         guard var current = draft else { return }
@@ -219,7 +230,6 @@ final class AnnotateController {
         if current.isNew {
             current.annotation.index = annotations.count + 1
             annotations.append(current.annotation)
-            if let base = draftCropBase { cropBases[current.annotation.id] = base }
         } else if let position = annotations.firstIndex(where: { $0.id == current.annotation.id }) {
             annotations[position] = current.annotation
         }
@@ -259,7 +269,7 @@ final class AnnotateController {
     func undo() {
         if let strokes = draft?.annotation.sketch?.strokes, !strokes.isEmpty {
             draft?.annotation.sketch?.strokes.removeLast()
-        } else if draft == nil, let last = annotations.last {
+        } else if draft == nil, let last = visibleAnnotations.last {
             removeAnnotation(id: last.id)
             showToast("Removed pin \(last.index)")
         }
@@ -270,7 +280,7 @@ final class AnnotateController {
     func clearAll() {
         clearDraft()
         annotations.removeAll()
-        cropBases.removeAll()
+        screens = screens.filter { $0.key == currentScreen }
     }
 
     func send(keepAnnotating: Bool) {
@@ -282,23 +292,45 @@ final class AnnotateController {
 
         var images: [String: Data] = [:]
         var outgoing = annotations
-        for position in outgoing.indices {
-            let annotation = outgoing[position]
-            if let base = cropBases[annotation.id], let crop = Self.renderCrop(base, annotation: annotation), let data = crop.pngData() {
-                let path = "crops/\(annotation.index).png"
-                images[path] = data
-                outgoing[position].crop = path
-            }
-            if let root = projectRoot, let file = annotation.source?.file {
-                outgoing[position].source?.file = ProjectRoot.relativePath(of: file, to: root)
+        var outgoingScreens: [Screen] = []
+
+        if let root = projectRoot {
+            for position in outgoing.indices {
+                if let file = outgoing[position].source?.file {
+                    outgoing[position].source?.file = ProjectRoot.relativePath(of: file, to: root)
+                }
             }
         }
 
-        let screenshot = Snapshotter.captureApp(excluding: window)
-        if let screenshot, let clean = screenshot.pngData(),
-           let annotated = Snapshotter.annotatedScreenshot(screenshot, annotations: outgoing).pngData() {
-            images["screenshot.png"] = clean
-            images["annotated.png"] = annotated
+        for (index, captured) in screens.sorted(by: { $0.key < $1.key }) {
+            let pinPositions = outgoing.indices.filter { outgoing[$0].screen == index }
+            guard !pinPositions.isEmpty else { continue }
+            let pins = pinPositions.map { outgoing[$0] }
+            let oneX = Snapshotter.rescaled(captured.image, to: 1)
+            let scale = Int(captured.image.scale.rounded())
+            var screen = Screen(index: index, capturedAt: captured.capturedAt, size: AnnotationSize(captured.image.size), elements: captured.elements)
+
+            if let data = oneX.pngData() {
+                screen.image = "screens/\(index).png"
+                images[screen.image!] = data
+            }
+            if let data = Snapshotter.annotatedScreenshot(oneX, annotations: pins).pngData() {
+                screen.annotatedImage = "screens/\(index)-annotated.png"
+                images[screen.annotatedImage!] = data
+            }
+            if scale > 1, let data = captured.image.pngData() {
+                screen.hiResImage = "screens/\(index)@\(scale)x.png"
+                images[screen.hiResImage!] = data
+            }
+            for position in pinPositions {
+                let pin = outgoing[position]
+                if let crop = Snapshotter.crop(pin, from: captured.image, padding: Self.cropPadding), let data = crop.pngData() {
+                    let path = "crops/\(pin.index).png"
+                    images[path] = data
+                    outgoing[position].crop = path
+                }
+            }
+            outgoingScreens.append(screen)
         }
 
         let appWindow = ElementScanner.appWindows(excluding: window).first
@@ -307,29 +339,32 @@ final class AnnotateController {
             createdAt: Date(),
             app: .current,
             device: .current(window: appWindow ?? window),
-            screenshot: images["screenshot.png"] == nil ? nil : "screenshot.png",
-            annotatedScreenshot: images["annotated.png"] == nil ? nil : "annotated.png",
+            screens: outgoingScreens,
             annotations: outgoing
         )
 
         let output = outputDirectory()
-        let sessionDir = output
-            .appendingPathComponent(SessionWriter.sessionsFolder, isDirectory: true)
-            .appendingPathComponent(session.id, isDirectory: true)
-        let prompt = PromptRenderer.render(session, sessionPath: sessionDir.path)
-        UIPasteboard.general.string = prompt
+        let sessionDir = SessionInbox.sessionDirectory(session.id, in: output)
+        let prompt = PromptRenderer.render(session, sessionPath: sessionDir.path, completion: options.completionNote)
+        if options.copiesPromptToClipboard {
+            UIPasteboard.general.string = prompt
+        }
 
         do {
             try SessionWriter.write(SessionBundle(session: session, images: images), prompt: prompt, to: output)
-            let count = outgoing.count
-            showToast("Sent \(count) \(count == 1 ? "annotation" : "annotations") · prompt copied")
         } catch {
-            showToast("Prompt copied, but writing the session failed: \(error.localizedDescription)")
+            UIPasteboard.general.string = prompt
+            showToast("Couldn't write the session (\(error.localizedDescription)). Prompt copied instead.")
             return
         }
 
+        let count = outgoing.count
+        showToast("Sent \(count) \(count == 1 ? "pin" : "pins")")
+        trackDelivery(id: session.id, in: output)
+
         if !keepAnnotating {
-            clearAll()
+            annotations.removeAll()
+            screens.removeAll()
             stop()
         }
     }
@@ -342,7 +377,19 @@ final class AnnotateController {
             if draft.annotation.kind == .region { return "Draw to sketch · ⌘Z undo · Esc cancel" }
             return draft.isNew ? "Return to save · ↑↓ to adjust" : "Return to save · Esc to close"
         }
-        return "Tap to select · Drag for an area"
+        return "Tap anything · Drag for an area"
+    }
+
+    /// Short title for the selection chip: the element, or the spot's coordinates.
+    func chipTitle(for annotation: Annotation) -> String {
+        let name: String
+        switch annotation.kind {
+        case .element: name = annotation.element?.displayName(maxLabelLength: 22) ?? "Element"
+        case .point: name = "Spot \(Int(annotation.anchor.x)), \(Int(annotation.anchor.y))"
+        case .region: name = "Region \(Int(annotation.frame.width)) × \(Int(annotation.frame.height))"
+        }
+        guard let source = annotation.source else { return name }
+        return "\(name) · \(source.shortDescription)"
     }
 
     /// Bounds inside the safe area with a small margin; cards and chips stay within it.
@@ -357,7 +404,7 @@ final class AnnotateController {
 
     /// The toolbar moves to the top while the user works in the lower part of the screen.
     var toolbarAtTop: Bool {
-        let focus = dragRect ?? draft?.annotation.frame.cgRect ?? selection?.current?.frame
+        let focus = dragRect ?? draft?.annotation.frame.cgRect
         guard let focus, bounds.height > 0 else { return false }
         return focus.maxY > bounds.height * 0.6
     }
@@ -388,16 +435,61 @@ final class AnnotateController {
         launcherCenter = CGPoint(x: x, y: y)
     }
 
-    func showToast(_ message: String) {
+    func showToast(_ message: String, duration: Double = 2.6) {
         let toast = Toast(message: message)
         self.toast = toast
         Task {
-            try? await Task.sleep(for: .seconds(2.4))
+            try? await Task.sleep(for: .seconds(duration))
             if self.toast == toast { self.toast = nil }
         }
     }
 
     // MARK: Private
+
+    /// Captures the app as it looks right now. A previous screen with no pins is replaced, so
+    /// opening and closing annotate mode doesn't pile up empty screens.
+    private func freezeScreen() {
+        guard let image = Snapshotter.captureApp(excluding: window) else {
+            frozenImage = nil
+            return
+        }
+        let outline = ScreenOutline.normalized(ElementScanner.outline(excluding: window), in: bounds)
+        let reuse = currentScreen > 0 && !annotations.contains { $0.screen == currentScreen }
+        let index = reuse ? currentScreen : (screens.keys.max() ?? 0) + 1
+        screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image, elements: outline)
+        currentScreen = index
+        frozenImage = image
+    }
+
+    /// Builds or retargets an element/spot annotation from the selection, keeping the comment.
+    private func annotation(for stack: SelectionStack, updating existing: Annotation?) -> Annotation {
+        var result = existing ?? Annotation(
+            index: 0,
+            screen: currentScreen,
+            kind: .point,
+            anchor: AnnotationPoint(stack.point),
+            frame: AnnotationRect(x: 0, y: 0, width: 0, height: 0)
+        )
+        if let current = stack.current {
+            result.kind = .element
+            result.frame = AnnotationRect(current.frame)
+            result.element = stack.currentInfo
+        } else {
+            let side = Self.spotSize
+            let spot = CGRect(x: stack.point.x - side / 2, y: stack.point.y - side / 2, width: side, height: side)
+            result.kind = .point
+            result.frame = AnnotationRect(spot.clipped(to: bounds))
+            result.element = nil
+            result.textEdit = nil
+        }
+        result.source = stack.resolvedSource
+        result.nearbyText = ScreenOutline.nearbyText(
+            for: result.frame.cgRect,
+            in: screens[currentScreen]?.elements ?? [],
+            excluding: result.element?.label
+        )
+        return result
+    }
 
     /// Commits a draft with content, drops an empty one. Called before any new interaction.
     private func finishDraft() {
@@ -412,14 +504,59 @@ final class AnnotateController {
     private func clearDraft() {
         draft = nil
         selection = nil
-        draftCropBase = nil
     }
 
     private func removeAnnotation(id: UUID) {
         annotations.removeAll { $0.id == id }
-        cropBases[id] = nil
         for position in annotations.indices {
             annotations[position].index = position + 1
+        }
+    }
+
+    /// Polls status.json written by the receiving agent and narrates the transitions.
+    private func trackDelivery(id: String, in output: URL) {
+        deliveryTask?.cancel()
+        delivery = .waiting
+        deliveryTask = Task { [weak self] in
+            let started = Date()
+            var last: SessionStatus.State?
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self else { return }
+                let elapsed = Date().timeIntervalSince(started)
+                guard let status = SessionInbox.readStatus(id: id, in: output) else {
+                    if elapsed > self.options.unclaimedAfter, self.delivery == .waiting {
+                        self.delivery = .unclaimed
+                        self.showToast("Saved, but nothing picked it up. Is the Claude Code watcher running?", duration: 4)
+                    }
+                    if elapsed > 3600 { return }
+                    continue
+                }
+                guard status.state != last else { continue }
+                last = status.state
+                switch status.state {
+                case .delivered:
+                    self.delivery = .delivered
+                    self.showToast("Delivered to Claude Code")
+                case .received:
+                    self.delivery = .received
+                    self.showToast("Claude picked it up")
+                case .working:
+                    self.delivery = .working(status.message)
+                    if let message = status.message { self.showToast(message) }
+                case .done:
+                    self.delivery = .done(status.message)
+                    self.showToast(status.message.map { "Done · \($0)" } ?? "Done", duration: 4)
+                case .failed:
+                    self.delivery = .failed(status.message)
+                    self.showToast(status.message.map { "Claude couldn't finish · \($0)" } ?? "Claude couldn't finish", duration: 5)
+                }
+                if status.isFinal {
+                    try? await Task.sleep(for: .seconds(6))
+                    if self.delivery?.isFinal == true { self.delivery = nil }
+                    return
+                }
+            }
         }
     }
 
@@ -438,23 +575,6 @@ final class AnnotateController {
         }
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return documents.appendingPathComponent(".annotate", isDirectory: true)
-    }
-
-    private static func cropBase(of screenshot: UIImage, around frame: CGRect) -> CropBase? {
-        let area = frame.padded(by: cropPadding).clipped(to: CGRect(origin: .zero, size: screenshot.size))
-        guard area.width >= 1, area.height >= 1 else { return nil }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = screenshot.scale
-        let image = UIGraphicsImageRenderer(size: area.size, format: format).image { _ in
-            screenshot.draw(at: CGPoint(x: -area.minX, y: -area.minY))
-        }
-        return CropBase(image: image, origin: area.origin)
-    }
-
-    private static func renderCrop(_ base: CropBase, annotation: Annotation) -> UIImage? {
-        var shifted = annotation
-        shifted.frame = AnnotationRect(annotation.frame.cgRect.offsetBy(dx: -base.origin.x, dy: -base.origin.y))
-        return Snapshotter.markup(shifted, onto: base.image)
     }
 }
 #endif

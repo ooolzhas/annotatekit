@@ -1,6 +1,7 @@
-// The on-disk session schema (session.json). Everything an agent needs to act on a batch of
-// annotations: what was pinned, where it is on screen, which source file it likely lives in, and
-// relative paths to the PNG crops written next to the JSON.
+// The on-disk session schema (session.json). Coordinates are the contract: every frame and point is
+// in screen points, origin top-left, and each screen's `image` is rendered at 1x so its pixels ARE
+// points — an agent can look at the PNG and the numbers line up exactly. Hi-res captures and crops
+// are there for detail. Element info and nearby text are hints for finding the source, not required.
 // Bump `AnnotationSession.currentSchemaVersion` on any breaking change to these types.
 
 import Foundation
@@ -13,10 +14,8 @@ public struct AnnotationSession: Codable, Sendable, Equatable {
     public var createdAt: Date
     public var app: AppInfo
     public var device: DeviceInfo
-    /// Clean full-screen capture, relative to the session directory.
-    public var screenshot: String?
-    /// Same capture with every annotation's outline, number and sketch burned in.
-    public var annotatedScreenshot: String?
+    /// One entry per freeze-frame captured while annotating (entering annotate mode captures one).
+    public var screens: [Screen]
     public var annotations: [Annotation]
 
     public init(
@@ -24,8 +23,7 @@ public struct AnnotationSession: Codable, Sendable, Equatable {
         createdAt: Date,
         app: AppInfo,
         device: DeviceInfo,
-        screenshot: String? = nil,
-        annotatedScreenshot: String? = nil,
+        screens: [Screen],
         annotations: [Annotation]
     ) {
         self.schemaVersion = Self.currentSchemaVersion
@@ -33,9 +31,12 @@ public struct AnnotationSession: Codable, Sendable, Equatable {
         self.createdAt = createdAt
         self.app = app
         self.device = device
-        self.screenshot = screenshot
-        self.annotatedScreenshot = annotatedScreenshot
+        self.screens = screens
         self.annotations = annotations
+    }
+
+    public func annotations(on screen: Screen) -> [Annotation] {
+        annotations.filter { $0.screen == screen.index }.sorted { $0.index < $1.index }
     }
 
     public static var encoder: JSONEncoder {
@@ -49,6 +50,55 @@ public struct AnnotationSession: Codable, Sendable, Equatable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
+    }
+}
+
+/// A freeze-frame of the app, captured automatically when annotate mode starts.
+public struct Screen: Codable, Sendable, Equatable, Identifiable {
+    /// 1-based; annotations refer to it via `Annotation.screen`.
+    public var index: Int
+    public var capturedAt: Date
+    /// Screen size in points.
+    public var size: AnnotationSize
+    /// 1x PNG: one pixel per point, so annotation coordinates are pixel coordinates in it.
+    public var image: String?
+    /// Same image with every pin's marker, outline and sketch drawn on, also 1x.
+    public var annotatedImage: String?
+    /// Native-resolution capture for detail.
+    public var hiResImage: String?
+    /// Visible text and controls, for grepping the source. Not exhaustive.
+    public var elements: [ScreenElement]
+
+    public var id: Int { index }
+
+    public init(
+        index: Int,
+        capturedAt: Date,
+        size: AnnotationSize,
+        image: String? = nil,
+        annotatedImage: String? = nil,
+        hiResImage: String? = nil,
+        elements: [ScreenElement] = []
+    ) {
+        self.index = index
+        self.capturedAt = capturedAt
+        self.size = size
+        self.image = image
+        self.annotatedImage = annotatedImage
+        self.hiResImage = hiResImage
+        self.elements = elements
+    }
+}
+
+public struct ScreenElement: Codable, Sendable, Equatable {
+    public var role: String
+    public var label: String
+    public var frame: AnnotationRect
+
+    public init(role: String, label: String, frame: AnnotationRect) {
+        self.role = role
+        self.label = label
+        self.frame = frame
     }
 }
 
@@ -108,6 +158,8 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
     public enum Kind: String, Codable, Sendable {
         /// Pinned to a view picked by tapping.
         case element
+        /// Pinned to a spot: the tap didn't land on a distinct element, or the user stepped below one.
+        case point
         /// A dragged rectangle, optionally with a sketch inside.
         case region
     }
@@ -115,38 +167,50 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
     public var id: UUID
     /// 1-based number shown on the pin. Contiguous after deletes.
     public var index: Int
+    /// `Screen.index` this pin was placed on.
+    public var screen: Int
     public var kind: Kind
     public var comment: String
-    /// Screen points, origin top-left.
+    /// Exactly where the user pointed (the tap, or a region's center). Screen points.
+    public var anchor: AnnotationPoint
+    /// The box the comment is about. Screen points, origin top-left.
     public var frame: AnnotationRect
     public var element: ElementInfo?
     public var source: SourceLocation?
     public var textEdit: TextEdit?
     public var sketch: Sketch?
+    /// Visible text around the frame, nearest first — grep hints for finding the view.
+    public var nearbyText: [String]
     /// PNG crop with context padding, relative to the session directory.
     public var crop: String?
 
     public init(
         id: UUID = UUID(),
         index: Int,
+        screen: Int = 1,
         kind: Kind,
         comment: String = "",
+        anchor: AnnotationPoint? = nil,
         frame: AnnotationRect,
         element: ElementInfo? = nil,
         source: SourceLocation? = nil,
         textEdit: TextEdit? = nil,
         sketch: Sketch? = nil,
+        nearbyText: [String] = [],
         crop: String? = nil
     ) {
         self.id = id
         self.index = index
+        self.screen = screen
         self.kind = kind
         self.comment = comment
+        self.anchor = anchor ?? AnnotationPoint(x: frame.x + frame.width / 2, y: frame.y + frame.height / 2)
         self.frame = frame
         self.element = element
         self.source = source
         self.textEdit = textEdit
         self.sketch = sketch
+        self.nearbyText = nearbyText
         self.crop = crop
     }
 

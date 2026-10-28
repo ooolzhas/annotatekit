@@ -3,6 +3,8 @@
 // ancestor chain (as containers), its subtree, and the accessibility children of both. That keeps
 // views hidden behind a sheet out of the results. SwiftUI content arrives as accessibility nodes
 // (see AccessibilityBootstrap); UIKit content arrives as UIViews.
+// `outline` lists every visible labeled element on the current screen (top presented controller,
+// plus its presenter when a sheet doesn't cover it) for the session's grep hints.
 // All frames are screen points.
 
 #if DEBUG && canImport(UIKit)
@@ -22,6 +24,33 @@ enum ElementScanner {
         return []
     }
 
+    /// Labeled elements on the visible screen. Unfiltered; `ScreenOutline.normalized` cleans it up.
+    static func outline(excluding overlay: UIWindow?, limit: Int = 4_000) -> [ScreenElement] {
+        guard let window = appWindows(excluding: overlay).first(where: { $0.windowLevel == .normal })
+            ?? appWindows(excluding: overlay).first else { return [] }
+        let space = window.screen.coordinateSpace
+
+        var roots: [UIView] = []
+        var top = window.rootViewController
+        while let presented = top?.presentedViewController { top = presented }
+        if let topView = top?.view {
+            roots.append(topView)
+            // A partial sheet leaves its presenter visible around it
+            let covered = topView.convert(topView.bounds, to: space)
+            if !covered.encloses(window.bounds, tolerance: 1), let presenter = top?.presentingViewController?.view {
+                roots.append(presenter)
+            }
+        } else {
+            roots.append(window)
+        }
+
+        let collector = OutlineCollector(screenSpace: space, limit: limit)
+        for root in roots {
+            collector.visit(root, depth: 0)
+        }
+        return collector.results
+    }
+
     /// Visible app windows, topmost first.
     static func appWindows(excluding overlay: UIWindow?) -> [UIWindow] {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
@@ -36,6 +65,57 @@ enum ElementScanner {
                     : lhs.element.windowLevel.rawValue > rhs.element.windowLevel.rawValue
             }
             .map(\.element)
+    }
+}
+
+@MainActor
+private final class OutlineCollector {
+    let screenSpace: UICoordinateSpace
+    let limit: Int
+    private(set) var results: [ScreenElement] = []
+    private var visited = Set<ObjectIdentifier>()
+    private var budget: Int
+
+    init(screenSpace: UICoordinateSpace, limit: Int) {
+        self.screenSpace = screenSpace
+        self.limit = limit
+        self.budget = limit * 4
+    }
+
+    func visit(_ view: UIView, depth: Int) {
+        guard depth < 150, budget > 0, results.count < limit, !view.isHidden, view.alpha > 0.01,
+              visited.insert(ObjectIdentifier(view)).inserted else { return }
+        budget -= 1
+        record(view, frame: view.convert(view.bounds, to: screenSpace), view: view)
+        visitAccessibilityChildren(of: view, depth: depth + 1)
+        for subview in view.subviews {
+            visit(subview, depth: depth + 1)
+        }
+    }
+
+    private func visitAccessibilityChildren(of object: NSObject, depth: Int) {
+        guard depth < 150 else { return }
+        for child in Walker.accessibilityChildren(of: object) {
+            guard budget > 0, results.count < limit else { return }
+            if let view = child as? UIView {
+                visit(view, depth: depth + 1)
+                continue
+            }
+            guard visited.insert(ObjectIdentifier(child)).inserted else { continue }
+            budget -= 1
+            record(child, frame: child.accessibilityFrame, view: nil)
+            visitAccessibilityChildren(of: child, depth: depth + 1)
+        }
+    }
+
+    private func record(_ object: NSObject, frame: CGRect, view: UIView?) {
+        guard frame.area > 0 else { return }
+        var label = object.accessibilityLabel ?? ""
+        if label.isEmpty, let text = (view as? UILabel)?.text { label = text }
+        if label.isEmpty, let value = object.accessibilityValue, view == nil || object.isAccessibilityElement { label = value }
+        guard !label.isEmpty else { return }
+        let role = Walker.role(traits: object.accessibilityTraits, view: view)
+        results.append(ScreenElement(role: role, label: label, frame: AnnotationRect(frame)))
     }
 }
 

@@ -1,8 +1,9 @@
 // Tap → element selection, independent of UIKit.
 // The overlay collects every element whose frame contains the tap (accessibility nodes, UIViews and
-// `.annotatable()` registrations) as `ElementCandidate`s. `SelectionStack` sorts them smallest-first,
-// merges candidates that describe the same box (an AX node and the `.annotatable()` view around it),
-// and walks the stack with ↑ (larger, toward the parent) and ↓ (smaller).
+// optional `.annotatable()` registrations) as `ElementCandidate`s. `SelectionStack` sorts them
+// smallest-first, merges candidates that describe the same box, and walks the stack with ↑ (larger,
+// toward the parent) and ↓ (smaller). Below the smallest element sits the tapped point itself: a
+// tap on nothing distinct (only big containers under it) starts there, so anything is pinnable.
 // `SourceResolver` maps any frame to the nearest `.annotatable()` registration that encloses it.
 
 import Foundation
@@ -47,8 +48,20 @@ public struct SelectionStack: Sendable, Equatable {
     /// Smallest first; every frame contains the tapped point.
     public private(set) var candidates: [ElementCandidate]
     public private(set) var index: Int
+    /// The pin marks the tapped spot rather than an element.
+    public private(set) var isAtPoint: Bool
+    public let point: CGPoint
 
-    public init(candidates: [ElementCandidate], at point: CGPoint, tolerance: CGFloat = 1) {
+    /// - Parameters:
+    ///   - screenArea: when given, a tap whose smallest candidate covers more than
+    ///     `containerFraction` of the screen starts at the point instead of that container.
+    public init(
+        candidates: [ElementCandidate],
+        at point: CGPoint,
+        screenArea: CGFloat? = nil,
+        containerFraction: CGFloat = 0.4,
+        tolerance: CGFloat = 1
+    ) {
         let hits = candidates.enumerated()
             .filter { $0.element.frame.area > 0 && $0.element.frame.containsPoint(point) }
             // Stable smallest-first: ties keep discovery order (deeper views are discovered later,
@@ -68,43 +81,67 @@ public struct SelectionStack: Sendable, Equatable {
         }
         self.candidates = merged
         self.index = 0
+        self.point = point
+        if let first = merged.first, let screenArea, screenArea > 0 {
+            self.isAtPoint = first.frame.area > screenArea * containerFraction
+        } else {
+            self.isAtPoint = merged.isEmpty
+        }
     }
 
     public var isEmpty: Bool { candidates.isEmpty }
 
+    /// The selected element; nil while the selection is the tapped point.
     public var current: ElementCandidate? {
-        candidates.indices.contains(index) ? candidates[index] : nil
+        guard !isAtPoint, candidates.indices.contains(index) else { return nil }
+        return candidates[index]
     }
 
-    /// ↑ — select the next larger enclosing element. Returns false at the top.
+    /// ↑ — select the next larger enclosing element (from the point: the smallest element).
+    /// Returns false at the top.
     @discardableResult
     public mutating func expand() -> Bool {
+        if isAtPoint {
+            guard !candidates.isEmpty else { return false }
+            isAtPoint = false
+            index = 0
+            return true
+        }
         guard index + 1 < candidates.count else { return false }
         index += 1
         return true
     }
 
-    /// ↓ — select the next smaller element under the tap. Returns false at the bottom.
+    /// ↓ — select the next smaller element under the tap, then the point itself.
+    /// Returns false once at the point.
     @discardableResult
     public mutating func narrow() -> Bool {
-        guard index > 0 else { return false }
-        index -= 1
+        guard !isAtPoint else { return false }
+        if index > 0 {
+            index -= 1
+        } else {
+            isAtPoint = true
+        }
         return true
+    }
+
+    /// Candidates larger than the selection, nearest first.
+    private var enclosing: ArraySlice<ElementCandidate> {
+        let start = isAtPoint ? 0 : index + 1
+        return start < candidates.count ? candidates[start...] : []
     }
 
     /// Titles of the enclosing candidates, nearest first.
     public func breadcrumb(limit: Int = 4) -> [String] {
-        guard index + 1 < candidates.count else { return [] }
-        return candidates[(index + 1)...].prefix(limit).map(\.info.title)
+        enclosing.prefix(limit).map(\.info.title)
     }
 
     /// The current candidate's own registration, else the nearest enclosing one.
     public var resolvedSource: SourceLocation? {
-        guard let current else { return nil }
-        if let source = current.source { return source }
-        guard index + 1 < candidates.count else { return nil }
-        for candidate in candidates[(index + 1)...] {
-            if var source = candidate.source, candidate.frame.encloses(current.frame) {
+        if let source = current?.source { return source }
+        let target = current?.frame ?? CGRect(x: point.x, y: point.y, width: 0, height: 0)
+        for candidate in enclosing {
+            if var source = candidate.source, candidate.frame.encloses(target) {
                 source.match = .enclosing
                 return source
             }

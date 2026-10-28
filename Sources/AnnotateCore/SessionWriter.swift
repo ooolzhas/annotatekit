@@ -1,10 +1,12 @@
-// Writes a session bundle to disk and finds where it should go.
+// Writes a session bundle to disk, finds where it should go, and tracks delivery status.
 // Layout under the output directory (default `<project root>/.annotate`):
 //   .gitignore                 "*" — sessions never get committed
-//   latest                     "sessions/<id>" — `cat .annotate/latest` finds the newest bundle
-//   sessions/<id>/session.json
-//   sessions/<id>/prompt.md
-//   sessions/<id>/screenshot.png, annotated.png, crops/<n>.png
+//   latest                     "sessions/<id>" — the newest bundle
+//   sessions/<id>/prompt.md    the message for the agent
+//   sessions/<id>/screens/<n>.png, <n>-annotated.png, <n>@3x.png, crops/<n>.png
+//   sessions/<id>/session.json written LAST: its presence means the bundle is complete
+//   sessions/<id>/status.json  written by the receiving side (received → working → done/failed);
+//                              the app polls it to show progress. Absent = not picked up yet.
 // Simulator apps can write to the host file system, so the overlay locates the project root by
 // walking up from the `#filePath` of the `Annotate.install()` call site.
 
@@ -43,9 +45,10 @@ public enum SessionWriter {
             try data.write(to: url, options: .atomic)
         }
 
+        try Data(prompt.utf8).write(to: sessionDir.appendingPathComponent(SessionInbox.promptFile), options: .atomic)
+        // Last, atomically: watchers treat session.json as "bundle complete"
         let json = try AnnotationSession.encoder.encode(bundle.session)
-        try json.write(to: sessionDir.appendingPathComponent("session.json"), options: .atomic)
-        try Data(prompt.utf8).write(to: sessionDir.appendingPathComponent("prompt.md"), options: .atomic)
+        try json.write(to: sessionDir.appendingPathComponent(SessionInbox.sessionFile), options: .atomic)
 
         let latest = "\(sessionsFolder)/\(bundle.session.id)\n"
         try Data(latest.utf8).write(to: outputDirectory.appendingPathComponent("latest"), options: .atomic)
@@ -59,6 +62,104 @@ public enum SessionWriter {
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return "\(formatter.string(from: date))-\(suffix)"
+    }
+}
+
+public struct SessionStatus: Codable, Sendable, Equatable {
+    public enum State: String, Codable, Sendable, CaseIterable {
+        /// Handed to Claude Code (channel event, watcher line, or headless run queued) but not yet
+        /// opened by the agent.
+        case delivered
+        /// The agent opened the session; nothing changed yet.
+        case received
+        case working
+        case done
+        case failed
+    }
+
+    public var state: State
+    /// Short human summary shown in the app, e.g. "Edited HomeView.swift, AlarmCard.swift".
+    public var message: String?
+    public var updatedAt: Date
+
+    public init(state: State, message: String? = nil, updatedAt: Date = Date()) {
+        self.state = state
+        self.message = message
+        self.updatedAt = updatedAt
+    }
+
+    public var isFinal: Bool { state == .done || state == .failed }
+}
+
+/// The receiving side of the bundle directory: what's new, and reporting progress back.
+public enum SessionInbox {
+    public static let sessionFile = "session.json"
+    public static let promptFile = "prompt.md"
+    public static let statusFile = "status.json"
+    static let claimMarker = ".claimed"
+
+    public static func sessionDirectory(_ id: String, in outputDirectory: URL) -> URL {
+        outputDirectory
+            .appendingPathComponent(SessionWriter.sessionsFolder, isDirectory: true)
+            .appendingPathComponent(id, isDirectory: true)
+    }
+
+    /// Complete sessions (session.json present), oldest first.
+    public static func sessionIDs(in outputDirectory: URL, fileManager: FileManager = .default) -> [String] {
+        let sessions = outputDirectory.appendingPathComponent(SessionWriter.sessionsFolder, isDirectory: true)
+        let entries = (try? fileManager.contentsOfDirectory(atPath: sessions.path)) ?? []
+        return entries
+            .filter { fileManager.fileExists(atPath: sessions.appendingPathComponent($0).appendingPathComponent(sessionFile).path) }
+            .sorted()
+    }
+
+    /// Complete sessions nobody has picked up yet (no status.json), oldest first.
+    public static func pendingSessionIDs(in outputDirectory: URL, fileManager: FileManager = .default) -> [String] {
+        sessionIDs(in: outputDirectory, fileManager: fileManager).filter { id in
+            let claimed = sessionDirectory(id, in: outputDirectory).appendingPathComponent(claimMarker).path
+            return !fileManager.fileExists(atPath: claimed) && readStatus(id: id, in: outputDirectory) == nil
+        }
+    }
+
+    public static func readStatus(id: String, in outputDirectory: URL) -> SessionStatus? {
+        let url = sessionDirectory(id, in: outputDirectory).appendingPathComponent(statusFile)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? AnnotationSession.decoder.decode(SessionStatus.self, from: data)
+    }
+
+    public static func writeStatus(_ status: SessionStatus, id: String, in outputDirectory: URL) throws {
+        let url = sessionDirectory(id, in: outputDirectory).appendingPathComponent(statusFile)
+        try AnnotationSession.encoder.encode(status).write(to: url, options: .atomic)
+    }
+
+    /// Atomically claims a pending session for one consumer. Returns false if another consumer
+    /// (a second watcher) already claimed it.
+    public static func claim(
+        id: String,
+        in outputDirectory: URL,
+        as state: SessionStatus.State = .received,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        let dir = sessionDirectory(id, in: outputDirectory)
+        let lock = dir.appendingPathComponent(claimMarker)
+        // Directory creation is atomic and fails when it already exists, so exactly one consumer wins
+        do {
+            try fileManager.createDirectory(at: lock, withIntermediateDirectories: false)
+        } catch {
+            return false
+        }
+        try? writeStatus(SessionStatus(state: state), id: id, in: outputDirectory)
+        return true
+    }
+
+    public static func loadSession(id: String, in outputDirectory: URL) throws -> AnnotationSession {
+        let url = sessionDirectory(id, in: outputDirectory).appendingPathComponent(sessionFile)
+        return try AnnotationSession.decoder.decode(AnnotationSession.self, from: Data(contentsOf: url))
+    }
+
+    public static func loadPrompt(id: String, in outputDirectory: URL) throws -> String {
+        let url = sessionDirectory(id, in: outputDirectory).appendingPathComponent(promptFile)
+        return try String(contentsOf: url, encoding: .utf8)
     }
 }
 

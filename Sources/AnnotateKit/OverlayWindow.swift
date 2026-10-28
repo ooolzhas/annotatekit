@@ -43,6 +43,10 @@ final class OverlayInstaller {
         window.isHidden = false
         self.window = window
         controller.window = window
+        // `Annotate.start()` may have run before the window existed; finish activating now
+        if controller.isActive {
+            window.activate()
+        }
 
         if let observer {
             NotificationCenter.default.removeObserver(observer)
@@ -142,7 +146,10 @@ final class OverlayHostingController: UIHostingController<OverlayRoot> {
     // MARK: Status bar — defer to the app so the overlay window doesn't restyle it
 
     private var appTopController: UIViewController? {
-        var top = ElementScanner.appWindows(excluding: view.window).first?.rootViewController
+        // Skip ourselves explicitly: before `view.window` is set the overlay isn't excluded,
+        // and asking our own preferredStatusBarStyle would recurse forever
+        var top = ElementScanner.appWindows(excluding: view.window)
+            .first { $0.rootViewController !== self }?.rootViewController
         while let presented = top?.presentedViewController { top = presented }
         return top
     }

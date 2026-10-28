@@ -2,6 +2,8 @@
 // window (= screen) points, which is the space every frame from ElementScanner and the registry
 // uses. Elements are placed by top-left offset inside a full-screen top-leading ZStack.
 // Safe-area-aware chrome reads insets from the controller instead.
+// While active, the freeze-frame captured on start sits at the bottom of the stack: the app looks
+// paused, and every coordinate refers to exactly that image.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -20,7 +22,7 @@ struct OverlayRoot: View {
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
 
-            // Outside the active layer so "Sent · prompt copied" survives leaving annotate mode
+            // Outside the active layer so delivery progress survives leaving annotate mode
             if let toast = controller.toast {
                 ToastView(message: toast.message, controller: controller)
                     .id(toast.id)
@@ -39,21 +41,28 @@ private struct ActiveOverlay: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            if let frozen = controller.frozenImage {
+                Image(uiImage: frozen)
+                    .resizable()
+                    .frame(width: controller.bounds.width, height: controller.bounds.height)
+                    .allowsHitTesting(false)
+            }
+
             captureLayer
 
             ScreenEdgeGlow()
                 .allowsHitTesting(false)
 
-            ForEach(controller.annotations) { annotation in
+            ForEach(controller.visibleAnnotations) { annotation in
                 if controller.draft?.annotation.id != annotation.id {
                     SavedOutline(annotation: annotation)
                 }
             }
 
-            if let draft = controller.draft, draft.annotation.kind == .element {
+            if let draft = controller.draft, draft.annotation.kind != .region {
                 SelectionHighlight(
-                    frame: draft.annotation.frame.cgRect,
-                    title: chipTitle(for: draft.annotation),
+                    annotation: draft.annotation,
+                    title: controller.chipTitle(for: draft.annotation),
                     safeBounds: controller.safeBounds
                 )
             }
@@ -66,7 +75,7 @@ private struct ActiveOverlay: View {
                 RegionEditor(controller: controller, draft: draft)
             }
 
-            ForEach(controller.annotations) { annotation in
+            ForEach(controller.visibleAnnotations) { annotation in
                 PinBadge(
                     number: annotation.index,
                     isActive: controller.draft?.annotation.id == annotation.id
@@ -74,7 +83,7 @@ private struct ActiveOverlay: View {
                     controller.openExisting(annotation.id)
                 }
                 .position(OverlayPlacement.pinCenter(
-                    for: annotation.frame.cgRect,
+                    for: annotation.pinAnchorFrame,
                     radius: AnnotateStyle.pinRadius,
                     in: controller.bounds
                 ))
@@ -105,11 +114,24 @@ private struct ActiveOverlay: View {
                     .onEnded { controller.dragEnded(from: $0.startLocation, to: $0.location) }
             )
     }
+}
 
-    private func chipTitle(for annotation: Annotation) -> String {
-        let name = annotation.element?.displayName(maxLabelLength: 22) ?? "Element"
-        guard let source = annotation.source else { return name }
-        return "\(name) · \(source.shortDescription)"
+extension Annotation {
+    /// Where the numbered pin attaches: a box's top-trailing corner, or just beside a spot.
+    var pinAnchorFrame: CGRect {
+        kind == .point ? CGRect(x: anchor.x + 6, y: anchor.y - 6, width: 0, height: 0) : frame.cgRect
+    }
+}
+
+/// Crosshair ring marking an exact spot (point pins).
+struct SpotMarker: View {
+    var body: some View {
+        ZStack {
+            Circle().strokeBorder(AnnotateStyle.accent, lineWidth: 2)
+            Circle().fill(AnnotateStyle.accent).frame(width: 4, height: 4)
+        }
+        .frame(width: 18, height: 18)
+        .shadow(color: .black.opacity(0.25), radius: 2)
     }
 }
 
@@ -127,41 +149,54 @@ private struct SavedOutline: View {
 
     var body: some View {
         let frame = annotation.frame.cgRect
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 3)
-                .strokeBorder(
-                    AnnotateStyle.accent.opacity(0.55),
-                    style: StrokeStyle(lineWidth: 1.5, dash: annotation.kind == .region ? [5, 4] : [])
-                )
-            if let sketch = annotation.sketch {
-                SketchStrokes(strokes: sketch.strokes)
+        Group {
+            if annotation.kind == .point {
+                SpotMarker()
+                    .offset(x: annotation.anchor.x - 9, y: annotation.anchor.y - 9)
+            } else {
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(
+                            AnnotateStyle.accent.opacity(0.55),
+                            style: StrokeStyle(lineWidth: 1.5, dash: annotation.kind == .region ? [5, 4] : [])
+                        )
+                    if let sketch = annotation.sketch {
+                        SketchStrokes(strokes: sketch.strokes)
+                    }
+                }
+                .frame(width: frame.width, height: frame.height)
+                .offset(x: frame.minX, y: frame.minY)
             }
         }
-        .frame(width: frame.width, height: frame.height)
-        .offset(x: frame.minX, y: frame.minY)
         .allowsHitTesting(false)
     }
 }
 
 private struct SelectionHighlight: View {
-    let frame: CGRect
+    let annotation: Annotation
     let title: String
     let safeBounds: CGRect
 
     private let chipHeight: CGFloat = 20
 
     var body: some View {
+        let frame = annotation.frame.cgRect
         // Chip sits above the box, or inside its top edge when there's no room above
         let chipAbove = frame.minY - chipHeight - 4 >= safeBounds.minY
         let chipY = chipAbove ? frame.minY - chipHeight - 4 : frame.minY + 4
         let chipX = min(max(frame.minX, safeBounds.minX), safeBounds.maxX - 120)
 
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 3)
-                .fill(AnnotateStyle.accent.opacity(0.08))
-                .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(AnnotateStyle.accent, lineWidth: 1.5))
-                .frame(width: frame.width, height: frame.height)
-                .offset(x: frame.minX, y: frame.minY)
+            if annotation.kind == .point {
+                SpotMarker()
+                    .offset(x: annotation.anchor.x - 9, y: annotation.anchor.y - 9)
+            } else {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(AnnotateStyle.accent.opacity(0.08))
+                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(AnnotateStyle.accent, lineWidth: 1.5))
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: frame.minY)
+            }
 
             ElementChip(title: title, height: chipHeight)
                 .frame(maxWidth: max(safeBounds.maxX - chipX, 60), alignment: .leading)

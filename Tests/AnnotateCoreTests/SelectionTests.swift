@@ -18,8 +18,6 @@ import Testing
 
     @Test func expandAndNarrowWalkTheStackAndStopAtEnds() {
         var stack = SelectionStack(candidates: [screen, card.candidate, button], at: CGPoint(x: 60, y: 320))
-        let atBottom = stack.narrow()
-        #expect(atBottom == false)
         let toCard = stack.expand()
         #expect(toCard)
         #expect(stack.current?.info.title == "HeroCard")
@@ -31,6 +29,40 @@ import Testing
         let back = stack.narrow()
         #expect(back)
         #expect(stack.current?.info.title == "HeroCard")
+    }
+
+    @Test func narrowingPastTheSmallestElementSelectsThePoint() {
+        var stack = SelectionStack(candidates: [screen, button], at: CGPoint(x: 60, y: 320))
+        #expect(!stack.isAtPoint)
+        let toPoint = stack.narrow()
+        #expect(toPoint)
+        #expect(stack.isAtPoint)
+        #expect(stack.current == nil)
+        #expect(stack.breadcrumb() == ["Button", "UIWindow"])
+        let further = stack.narrow()
+        #expect(further == false)
+        let back = stack.expand()
+        #expect(back)
+        #expect(stack.current?.info.role == "button")
+    }
+
+    @Test func tapOnOnlyLargeContainersStartsAtThePoint() {
+        // 400×800 screen; the smallest thing under (200, 600) is the card-less window
+        let stack = SelectionStack(candidates: [screen, card.candidate], at: CGPoint(x: 200, y: 600), screenArea: 400 * 800)
+        #expect(stack.isAtPoint)
+        let onCard = SelectionStack(candidates: [screen, card.candidate, button], at: CGPoint(x: 60, y: 320), screenArea: 400 * 800)
+        #expect(!onCard.isAtPoint)
+        #expect(onCard.current?.info.role == "button")
+    }
+
+    @Test func pointResolvesEnclosingSource() {
+        let stack = SelectionStack(candidates: [screen, card.candidate], at: CGPoint(x: 300, y: 200), screenArea: 400 * 800)
+        // Card is 360×300 = 34% of the screen, under the 40% container threshold
+        #expect(!stack.isAtPoint)
+        var atPoint = stack
+        atPoint.narrow()
+        #expect(atPoint.resolvedSource?.name == "HeroCard")
+        #expect(atPoint.resolvedSource?.match == .enclosing)
     }
 
     @Test func mergesNearlyEqualFramesKeepingRoleLabelAndSource() {
@@ -69,6 +101,7 @@ import Testing
     @Test func emptyWhenNothingContainsThePoint() {
         let stack = SelectionStack(candidates: [button], at: CGPoint(x: 390, y: 790))
         #expect(stack.isEmpty)
+        #expect(stack.isAtPoint)
         #expect(stack.current == nil)
         #expect(stack.resolvedSource == nil)
     }

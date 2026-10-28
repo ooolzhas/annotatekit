@@ -1,4 +1,5 @@
-// Session schema round-trip, prompt rendering, bundle layout on disk and project-root discovery.
+// Session schema round-trip, prompt rendering, screen outline hints, bundle layout on disk,
+// delivery status/claiming, and project-root discovery.
 
 import Foundation
 import Testing
@@ -11,23 +12,34 @@ enum Fixtures {
         contentSize: "L", orientation: "portrait"
     )
 
-    static func session(annotations: [Annotation]) -> AnnotationSession {
+    static let screen = Screen(
+        index: 1,
+        capturedAt: Date(timeIntervalSince1970: 1_793_196_900),
+        size: AnnotationSize(width: 402, height: 874),
+        image: "screens/1.png",
+        annotatedImage: "screens/1-annotated.png",
+        hiResImage: "screens/1@3x.png",
+        elements: [ScreenElement(role: "button", label: "Get started", frame: AnnotationRect(x: 24, y: 300, width: 120, height: 44))]
+    )
+
+    static func session(annotations: [Annotation], screens: [Screen] = [screen]) -> AnnotationSession {
         AnnotationSession(
             id: "20261028-141502-a1b2",
             createdAt: Date(timeIntervalSince1970: 1_793_196_902),
             app: AppInfo(bundleID: "com.example.app", name: "Example", version: "1.0", build: "7"),
             device: device,
-            screenshot: "screenshot.png",
-            annotatedScreenshot: "annotated.png",
+            screens: screens,
             annotations: annotations
         )
     }
 
     static let element = Annotation(
         index: 1, kind: .element, comment: "bigger, tighter",
+        anchor: AnnotationPoint(x: 84, y: 322),
         frame: AnnotationRect(x: 24, y: 300, width: 120, height: 44),
         element: ElementInfo(role: "button", label: "Get started", traits: ["button"], breadcrumb: ["HeroCard"]),
         source: SourceLocation(name: "HeroCard", file: "App/HomeView.swift", line: 42, match: .enclosing),
+        nearbyText: ["Light that follows your day"],
         crop: "crops/1.png"
     )
 
@@ -39,21 +51,26 @@ enum Fixtures {
         crop: "crops/2.png"
     )
 
+    static let spot = Annotation(
+        index: 3, kind: .point, comment: "too much empty space here",
+        anchor: AnnotationPoint(x: 201, y: 700),
+        frame: AnnotationRect(x: 179, y: 678, width: 44, height: 44)
+    )
+
     static let region = Annotation(
-        index: 3, kind: .region, comment: "add a signup card here",
+        index: 4, kind: .region, comment: "add a signup card here",
         frame: AnnotationRect(x: 16, y: 420, width: 352, height: 166),
-        source: SourceLocation(name: "HomeView", file: "App/HomeView.swift", line: 12, match: .enclosing),
         sketch: Sketch(size: AnnotationSize(width: 352, height: 166), strokes: [
             Stroke(tool: .rectangle, points: [AnnotationPoint(x: 4, y: 4), AnnotationPoint(x: 340, y: 150)]),
             Stroke(tool: .arrow, points: [AnnotationPoint(x: 200, y: -20), AnnotationPoint(x: 220, y: 10)])
         ]),
-        crop: "crops/3.png"
+        crop: "crops/4.png"
     )
 }
 
 @Suite struct SessionCodableTests {
     @Test func roundTripsThroughJSON() throws {
-        let session = Fixtures.session(annotations: [Fixtures.element, Fixtures.copyEdit, Fixtures.region])
+        let session = Fixtures.session(annotations: [Fixtures.element, Fixtures.copyEdit, Fixtures.spot, Fixtures.region])
         let data = try AnnotationSession.encoder.encode(session)
         let decoded = try AnnotationSession.decoder.decode(AnnotationSession.self, from: data)
         #expect(decoded == session)
@@ -64,6 +81,11 @@ enum Fixtures {
         let json = String(decoding: data, as: UTF8.self)
         #expect(json.contains("\"x\" : 24"))
         #expect(json.contains("\"width\" : 120"))
+    }
+
+    @Test func anchorDefaultsToFrameCenter() {
+        #expect(Fixtures.region.anchor == AnnotationPoint(x: 192, y: 503))
+        #expect(Fixtures.element.anchor == AnnotationPoint(x: 84, y: 322))
     }
 
     @Test func rectRoundsToTenthOfAPoint() {
@@ -78,48 +100,109 @@ enum Fixtures {
         #expect(!Fixtures.copyEdit.isEmpty)
         #expect(!Fixtures.region.isEmpty)
     }
+
+    @Test func annotationsAreGroupedByScreen() {
+        var second = Fixtures.spot
+        second.screen = 2
+        let session = Fixtures.session(annotations: [Fixtures.region, second, Fixtures.element])
+        #expect(session.annotations(on: Fixtures.screen).map(\.index) == [1, 4])
+    }
 }
 
 @Suite struct PromptRendererTests {
-    let prompt = PromptRenderer.render(
-        Fixtures.session(annotations: [Fixtures.region, Fixtures.element, Fixtures.copyEdit]),
-        sessionPath: "/Users/me/app/.annotate/sessions/20261028-141502-a1b2"
-    )
+    let path = "/Users/me/app/.annotate/sessions/20261028-141502-a1b2"
+    var prompt: String {
+        PromptRenderer.render(
+            Fixtures.session(annotations: [Fixtures.region, Fixtures.element, Fixtures.copyEdit, Fixtures.spot]),
+            sessionPath: path,
+            completion: "When you're done, report back."
+        )
+    }
 
-    @Test func headerDescribesScreen() {
-        #expect(prompt.hasPrefix("I annotated the running app (3 annotations)."))
-        #expect(prompt.contains("Screen: iPhone 17 Pro · iOS 26.0 · 402×874 pt @3x · dark · Dynamic Type L"))
-        #expect(prompt.contains("Screenshot with numbered pins: /Users/me/app/.annotate/sessions/20261028-141502-a1b2/annotated.png"))
+    @Test func headerExplainsCoordinates() {
+        #expect(prompt.hasPrefix("UI annotations from the running app: 4 pins on 1 screen."))
+        #expect(prompt.contains("Device: iPhone 17 Pro · iOS 26.0 · 402×874 pt @3x · dark · Dynamic Type L"))
+        #expect(prompt.contains("Coordinates are iOS points, origin top-left. Screen images are 1x, so pixel = point."))
+    }
+
+    @Test func screenLineListsImages() {
+        #expect(prompt.contains("Screen 1 (402×874 pt) — annotated \(path)/screens/1-annotated.png · clean \(path)/screens/1.png · hi-res \(path)/screens/1@3x.png"))
     }
 
     @Test func itemsAreOrderedByIndex() throws {
         let one = try #require(prompt.range(of: "1. Button"))
         let two = try #require(prompt.range(of: "2. Text"))
-        let three = try #require(prompt.range(of: "3. Region"))
-        #expect(one.lowerBound < two.lowerBound && two.lowerBound < three.lowerBound)
+        let three = try #require(prompt.range(of: "3. Spot"))
+        let four = try #require(prompt.range(of: "4. Region"))
+        #expect(one.lowerBound < two.lowerBound && two.lowerBound < three.lowerBound && three.lowerBound < four.lowerBound)
     }
 
-    @Test func elementItemCarriesSourceCommentAndCrop() {
-        #expect(prompt.contains("1. Button \"Get started\" — inside `HeroCard` at App/HomeView.swift:42"))
+    @Test func elementItemCarriesCoordinatesHintsAndSource() {
+        #expect(prompt.contains("1. Button \"Get started\" at (24, 300, 120×44) — tapped (84, 322), 21% across, 37% down"))
         #expect(prompt.contains("   bigger, tighter"))
-        #expect(prompt.contains("   Crop: /Users/me/app/.annotate/sessions/20261028-141502-a1b2/crops/1.png"))
+        #expect(prompt.contains("   Nearby text: \"Light that follows your day\""))
+        #expect(prompt.contains("   Source: inside `HeroCard` at App/HomeView.swift:42"))
+        #expect(prompt.contains("   Crop: \(path)/crops/1.png"))
     }
 
-    @Test func unmappedElementAsksAgentToSearch() {
-        #expect(prompt.contains("2. Text \"Adaptive lamps for every room\" — no source mapping; search for its text or label"))
+    @Test func copyEditAndSpot() {
         #expect(prompt.contains("   Change the copy from \"Adaptive lamps for every room\" to \"Smart light that sets itself\""))
+        #expect(prompt.contains("3. Spot at (179, 678, 44×44) — tapped (201, 700), 50% across, 80% down"))
     }
 
-    @Test func regionItemDescribesSketch() {
-        #expect(prompt.contains("3. Region 352×166 at (16, 420) — inside `HomeView` at App/HomeView.swift:12"))
-        #expect(prompt.contains("   Sketch of the desired layout (rectangle, arrow)"))
+    @Test func regionUsesCenterAndDescribesSketch() {
+        #expect(prompt.contains("4. Region at (16, 420, 352×166) — center (192, 503), 48% across, 58% down"))
+        #expect(prompt.contains("   Sketch of the desired layout drawn in red (rectangle, arrow)"))
     }
 
-    @Test func singularAndRelativePathsWithoutSessionPath() {
-        let single = PromptRenderer.render(Fixtures.session(annotations: [Fixtures.element]), sessionPath: nil)
-        #expect(single.hasPrefix("I annotated the running app (1 annotation)."))
-        #expect(single.contains("   Crop: crops/1.png"))
-        #expect(single.contains("Session: 20261028-141502-a1b2"))
+    @Test func completionIsLast() {
+        #expect(prompt.hasSuffix("When you're done, report back.\n"))
+    }
+
+    @Test func screensWithoutPinsAreSkipped() {
+        let empty = Screen(index: 2, capturedAt: Date(), size: AnnotationSize(width: 402, height: 874))
+        let text = PromptRenderer.render(Fixtures.session(annotations: [Fixtures.element], screens: [Fixtures.screen, empty]), sessionPath: nil)
+        #expect(text.hasPrefix("UI annotations from the running app: 1 pin on 1 screen."))
+        #expect(!text.contains("Screen 2"))
+        #expect(text.contains("   Crop: crops/1.png"))
+    }
+}
+
+@Suite struct ScreenOutlineTests {
+    let bounds = CGRect(x: 0, y: 0, width: 400, height: 800)
+
+    func element(_ label: String, _ x: Double, _ y: Double, _ w: Double = 100, _ h: Double = 20) -> ScreenElement {
+        ScreenElement(role: "text", label: label, frame: AnnotationRect(x: x, y: y, width: w, height: h))
+    }
+
+    @Test func normalizedSortsDedupesAndDropsOffscreen() {
+        let elements = [
+            element("Below", 10, 300),
+            element("Title", 10, 100),
+            element("Title", 11, 101),       // same text through another layer
+            element("  ", 10, 200),
+            element("Offscreen", 10, 900),
+            element("Multi\nline", 10, 150)
+        ]
+        let result = ScreenOutline.normalized(elements, in: bounds)
+        #expect(result.map(\.label) == ["Title", "Multi line", "Below"])
+    }
+
+    @Test func normalizedRespectsLimit() {
+        let many = (0..<10).map { element("Row \($0)", 0, Double($0) * 30) }
+        #expect(ScreenOutline.normalized(many, in: bounds, limit: 3).count == 3)
+    }
+
+    @Test func nearbyTextIsNearestFirstAndExcludesOwnLabel() {
+        let elements = [
+            element("Far", 10, 600),
+            element("Below button", 20, 360),
+            element("Get started", 24, 300, 120, 44),
+            element("Above", 20, 270)
+        ]
+        let frame = CGRect(x: 24, y: 300, width: 120, height: 44)
+        let near = ScreenOutline.nearbyText(for: frame, in: elements, excluding: "Get started")
+        #expect(near == ["Above", "Below button"])
     }
 }
 
@@ -130,25 +213,59 @@ enum Fixtures {
         return url
     }
 
+    func write(_ session: AnnotationSession, to output: URL) throws -> URL {
+        let bundle = SessionBundle(session: session, images: ["screens/1.png": Data([1, 2]), "crops/1.png": Data([3])])
+        return try SessionWriter.write(bundle, prompt: "hello\n", to: output)
+    }
+
     @Test func writesBundleLayout() throws {
         let root = try tempDir()
         defer { try? FileManager.default.removeItem(at: root) }
         let output = root.appendingPathComponent(".annotate")
         let session = Fixtures.session(annotations: [Fixtures.element])
-        let bundle = SessionBundle(session: session, images: ["screenshot.png": Data([1, 2]), "crops/1.png": Data([3])])
 
-        let dir = try SessionWriter.write(bundle, prompt: "hello\n", to: output)
+        let dir = try write(session, to: output)
 
         #expect(dir.lastPathComponent == session.id)
-        let fm = FileManager.default
-        #expect(fm.fileExists(atPath: dir.appendingPathComponent("session.json").path))
         #expect(try String(contentsOf: dir.appendingPathComponent("prompt.md"), encoding: .utf8) == "hello\n")
         #expect(try Data(contentsOf: dir.appendingPathComponent("crops/1.png")) == Data([3]))
+        #expect(try Data(contentsOf: dir.appendingPathComponent("screens/1.png")) == Data([1, 2]))
         #expect(try String(contentsOf: output.appendingPathComponent(".gitignore"), encoding: .utf8) == "*\n")
         #expect(try String(contentsOf: output.appendingPathComponent("latest"), encoding: .utf8) == "sessions/\(session.id)\n")
+        #expect(try SessionInbox.loadSession(id: session.id, in: output) == session)
+        #expect(try SessionInbox.loadPrompt(id: session.id, in: output) == "hello\n")
+    }
 
-        let decoded = try AnnotationSession.decoder.decode(AnnotationSession.self, from: Data(contentsOf: dir.appendingPathComponent("session.json")))
-        #expect(decoded == session)
+    @Test func pendingClaimAndStatusLifecycle() throws {
+        let output = try tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        var first = Fixtures.session(annotations: [Fixtures.element])
+        first.id = "20261028-100000-aaaa"
+        var second = first
+        second.id = "20261028-100500-bbbb"
+        _ = try write(second, to: output)
+        _ = try write(first, to: output)
+
+        #expect(SessionInbox.pendingSessionIDs(in: output) == [first.id, second.id])
+
+        #expect(SessionInbox.claim(id: first.id, in: output))
+        #expect(SessionInbox.claim(id: first.id, in: output) == false)
+        #expect(SessionInbox.readStatus(id: first.id, in: output)?.state == .received)
+        #expect(SessionInbox.pendingSessionIDs(in: output) == [second.id])
+
+        try SessionInbox.writeStatus(SessionStatus(state: .done, message: "Edited HomeView.swift"), id: first.id, in: output)
+        let status = try #require(SessionInbox.readStatus(id: first.id, in: output))
+        #expect(status.isFinal)
+        #expect(status.message == "Edited HomeView.swift")
+    }
+
+    @Test func incompleteBundlesAreNotListed() throws {
+        let output = try tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        let partial = SessionInbox.sessionDirectory("20261028-000000-cccc", in: output)
+        try FileManager.default.createDirectory(at: partial, withIntermediateDirectories: true)
+        try Data("prompt".utf8).write(to: partial.appendingPathComponent("prompt.md"))
+        #expect(SessionInbox.sessionIDs(in: output).isEmpty)
     }
 
     @Test func sessionIDIsSortableUTC() {

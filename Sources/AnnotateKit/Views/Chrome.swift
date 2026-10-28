@@ -172,6 +172,7 @@ struct LauncherButton: View {
                         .offset(x: 3, y: -3)
                 }
             }
+            .overlay { DeliveryRing(delivery: controller.delivery) }
             .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
             .contentShape(Circle())
             .onTapGesture { controller.start() }
@@ -184,6 +185,38 @@ struct LauncherButton: View {
             )
             .position(x: center.x + dragOffset.width, y: center.y + dragOffset.height)
             .animation(.snappy(duration: 0.3), value: center)
+    }
+}
+
+/// Ring around the launcher narrating the last Send: dashed while waiting, spinning while Claude
+/// works, green when done, red on failure.
+private struct DeliveryRing: View {
+    let delivery: AnnotateController.Delivery?
+    @State private var spin = false
+
+    var body: some View {
+        Group {
+            switch delivery {
+            case .none:
+                EmptyView()
+            case .waiting?, .unclaimed?, .delivered?:
+                Circle()
+                    .strokeBorder(AnnotateStyle.accent.opacity(delivery == .unclaimed ? 0.35 : 0.8), style: StrokeStyle(lineWidth: 2, dash: [3, 4]))
+            case .received?, .working?:
+                Circle()
+                    .trim(from: 0, to: 0.7)
+                    .stroke(AnnotateStyle.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(spin ? 360 : 0))
+                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spin)
+                    .onAppear { spin = true }
+                    .padding(1)
+            case .done?:
+                Circle().strokeBorder(Color.green, lineWidth: 2.5)
+            case .failed?:
+                Circle().strokeBorder(Color.red, lineWidth: 2.5)
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 
