@@ -128,11 +128,14 @@ struct ComposerCard: View {
 
     /// 9257:13393 — items-end, justify-between, pb 8, px 8; right group gap 6 (9257:13396).
     private var buttonRow: some View {
-        HStack(alignment: .bottom, spacing: 0) {
+        // PhotosPicker's label closure is Sendable: read main-actor state before it
+        let remaining = remaining
+        let paperclipStyle: CircleIcon.Style = remaining == 0 ? .dimmed : .plain
+        return HStack(alignment: .bottom, spacing: 0) {
             // 9257:13394/13395
             PhotosPicker(selection: $pickerItems, maxSelectionCount: max(remaining, 1), matching: .images) {
                 // At the attachment cap the picker is disabled; dim it like ↑ so it reads disabled
-                CircleIcon(systemName: "paperclip", style: remaining == 0 ? .dimmed : .plain)
+                CircleIcon(systemName: "paperclip", style: paperclipStyle)
             }
             .buttonStyle(ChromeButtonStyle())
             .disabled(remaining == 0)
