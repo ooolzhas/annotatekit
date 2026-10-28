@@ -1,7 +1,8 @@
 // The off-main half of Send. The controller snapshots everything into a SendJob on the main actor
 // (captures, pins, device info, destination); `BundleRenderer.write` then renders the 1x and
-// annotated screens and per-pin crops, PNG-encodes them, renders the prompt, writes the bundle
-// and prunes old sessions — all on a background task, so the overlay dismisses instantly.
+// annotated screens and per-pin crops, PNG-encodes them, JPEG-encodes each pin's reference-image
+// attachments into `attachments/`, renders the prompt, writes the bundle and prunes old sessions —
+// all on a background task, so the overlay dismisses instantly.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -27,6 +28,8 @@ struct SendJob: @unchecked Sendable {
     let includesHiRes: Bool
     let keepSessions: Int
     let cropPadding: CGFloat
+    /// Reference images per pin id, in the order picked.
+    let attachments: [UUID: [UIImage]]
 }
 
 struct SendOutcome: Sendable {
@@ -37,7 +40,11 @@ struct SendOutcome: Sendable {
 }
 
 extension BundleRenderer {
+    /// JPEG quality for reference-image attachments (plan value): photos stay small, detail stays legible.
+    private static let attachmentQuality: CGFloat = 0.85
+
     static func write(_ job: SendJob) -> SendOutcome {
+        /// Bundle-relative path → encoded file. PNGs for screens/crops, JPEGs for attachments.
         var images: [String: Data] = [:]
         var annotations = job.annotations
         var screens: [Screen] = []
@@ -79,6 +86,8 @@ extension BundleRenderer {
             screens.append(screen)
         }
 
+        writeAttachments(job.attachments, into: &images, annotations: &annotations)
+
         let session = AnnotationSession(
             id: job.sessionID,
             createdAt: Date(),
@@ -97,6 +106,28 @@ extension BundleRenderer {
         }
         SessionInbox.prune(keeping: max(job.keepSessions, 1), in: job.outputDirectory)
         return SendOutcome(prompt: prompt, pinCount: annotations.count, error: nil)
+    }
+
+    /// JPEG-encodes each pin's picked images to `attachments/<pin.index>-<n>.jpg` (n from 1, in pick
+    /// order) and records the written paths on the pin. Images that fail to encode are skipped; a pin
+    /// with nothing written keeps `attachments == nil`.
+    private static func writeAttachments(
+        _ attachments: [UUID: [UIImage]],
+        into images: inout [String: Data],
+        annotations: inout [Annotation]
+    ) {
+        for position in annotations.indices {
+            let pin = annotations[position]
+            guard let picked = attachments[pin.id], !picked.isEmpty else { continue }
+            var paths: [String] = []
+            for (offset, image) in picked.enumerated() {
+                guard let data = image.jpegData(compressionQuality: attachmentQuality) else { continue }
+                let path = "attachments/\(pin.index)-\(offset + 1).jpg"
+                images[path] = data
+                paths.append(path)
+            }
+            if !paths.isEmpty { annotations[position].attachments = paths }
+        }
     }
 }
 #endif

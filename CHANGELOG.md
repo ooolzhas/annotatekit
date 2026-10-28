@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- Redesigned overlay (Figma SUNSET 9257:13754). Annotate mode dims the frozen screen 50% and draws
+  a blue inset glow along the screen edge (62pt radius).
+  - **Drawing is the default:** a stroke is a white 4pt pen line, and further strokes join the open
+    pin for as long as its comment card is up.
+  - **Tap and hold:** a tap selects the whole element under the finger, outlined in white with no
+    label chip. Holding still for 0.5s drops a spot.
+  - **Comment card:** it always docks to the keyboard, never to the marker. It has the comment, a
+    paperclip, × and ↑ (Return also submits).
+  - **Review bar:** with no pin open, the bottom bar shows ×, "N comments", trash and Send. Pins are
+    white with white number badges.
+  - **Removed:** the toolbar and hint, the draw toggle, region dragging, the shape tools, in-place text
+    retyping, the selection chip and "Send and keep annotating". The keyboard shortcuts stay.
+- The annotated screenshot and crops keep their blue and red markers for contrast. Their strokes are
+  now 4pt, and a crop covers the pin's drawing as well as its frame.
+
+### Added
+- Reference images: the paperclip opens the photo picker (up to 4 images per pin). Send writes them
+  to `attachments/<pin>-<n>.jpg`, and `prompt.md` lists them.
+- **Schema (additive, still v1):** `Annotation.attachments: [String]?`. Pins of any kind can now
+  carry `sketch` strokes, whose points may extend outside the pin's frame.
+
+### Fixed
+- Card placement no longer goes stale after the photo picker. It follows UIKit's keyboard layout
+  guide, because keyboard notifications can end on a frame without the suggestion bar.
+
 ## [0.1.1] - 2026-10-28
 
 ### Fixed

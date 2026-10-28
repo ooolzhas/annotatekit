@@ -1,6 +1,7 @@
 // Renders a session as the message the agent receives (prompt.md, and what gets delivered on Send).
 // Leads with how to read coordinates, then one block per screen with its images, then one item
-// per pin: what it's on, where exactly (frame, anchor, percentages), the request, and grep hints.
+// per pin: what it's on, where exactly (frame, anchor, percentages), the request, attached
+// reference images, any drawing, and grep hints.
 // Full frames, the visible-text outline and sketch vectors stay in session.json.
 
 import Foundation
@@ -76,6 +77,9 @@ public enum PromptRenderer {
             for line in comment.split(separator: "\n", omittingEmptySubsequences: false) {
                 lines.append("\(indent)\(line)")
             }
+        }
+        if let attachments = annotation.attachments, !attachments.isEmpty {
+            lines.append("\(indent)Attached \(plural(attachments.count, "image")): " + attachments.map { base + $0 }.joined(separator: ", "))
         }
         if let sketch = annotation.sketch, !sketch.strokes.isEmpty {
             let tools = sketch.strokes.map(\.tool.rawValue).joined(separator: ", ")

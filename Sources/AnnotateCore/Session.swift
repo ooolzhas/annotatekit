@@ -190,6 +190,8 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
     public var nearbyText: [String]
     /// PNG crop with context padding, relative to the session directory.
     public var crop: String?
+    /// Attached reference images, relative to the session directory ("attachments/1-1.jpg"); nil when none.
+    public var attachments: [String]?
 
     public init(
         id: UUID = UUID(),
@@ -204,7 +206,8 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
         textEdit: TextEdit? = nil,
         sketch: Sketch? = nil,
         nearbyText: [String] = [],
-        crop: String? = nil
+        crop: String? = nil,
+        attachments: [String]? = nil
     ) {
         self.id = id
         self.index = index
@@ -219,6 +222,7 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
         self.sketch = sketch
         self.nearbyText = nearbyText
         self.crop = crop
+        self.attachments = attachments
     }
 
     /// True when there is nothing for an agent to act on.
@@ -226,6 +230,20 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
         comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && textEdit == nil
             && (sketch?.strokes.isEmpty ?? true)
+            && (attachments?.isEmpty ?? true)
+    }
+}
+
+extension Annotation {
+    /// `sketch` strokes moved from frame-local to screen points (empty without a sketch).
+    public var sketchInScreenPoints: [Stroke] {
+        guard let sketch else { return [] }
+        return sketch.strokes.map { stroke in
+            Stroke(
+                tool: stroke.tool,
+                points: stroke.points.map { AnnotationPoint(x: $0.x + frame.x, y: $0.y + frame.y) }
+            )
+        }
     }
 }
 
@@ -293,7 +311,9 @@ public struct TextEdit: Codable, Sendable, Equatable {
 }
 
 public struct Sketch: Codable, Sendable, Equatable {
-    /// Size of the annotation's frame; stroke points are in this local space (origin = frame origin).
+    /// Size of the annotation's frame. Stroke points are in the frame's local space (origin = frame
+    /// origin); on element and spot pins a drawing can reach outside the frame, so points may be
+    /// negative or beyond `size`. `Annotation.sketchInScreenPoints` converts them back to screen points.
     public var size: AnnotationSize
     public var strokes: [Stroke]
 
