@@ -8,7 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 - Redesigned overlay (Figma SUNSET 9257:13754). Annotate mode dims the frozen screen 50% and draws
-  a blue inset glow along the screen edge (62pt radius).
+  a blue inset glow along the screen edge (62pt radius) that pulses slowly while annotate mode is on
+  (static with Reduce Motion).
   - **Drawing is the default:** a stroke is a white 4pt pen line, and further strokes join the open
     pin for as long as its comment card is up.
   - **Tap and hold:** a tap selects the whole element under the finger, outlined in white with no

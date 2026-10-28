@@ -1,5 +1,5 @@
 // Root of the overlay window: the launcher while idle, and while annotating the frozen screen
-// dimmed with a blue edge glow, the touch catcher that feeds the controller (draw / tap / hold),
+// dimmed with a pulsing blue edge glow, the touch catcher that feeds the controller (draw / tap / hold),
 // every pin's white markers and number badges, and the bottom chrome (comment card while a pin is
 // open, review bar otherwise) docked to the keyboard or the home indicator.
 // The whole tree ignores the safe area so SwiftUI coordinates equal window (= screen) points, which
@@ -228,15 +228,36 @@ private struct SpotMarker: View {
 /// `rounded-[62px]`, `shadow-[inset_0_0_62px_0_rgba(0,136,255,0.5)]`). SwiftUI has no inset
 /// shadow, so a wide stroke is blurred and masked back inside the same shape.
 private struct ScreenGlow: View {
+    /// Trough of the pulse, as a fraction of the Figma glow (which is the peak). Low enough to read
+    /// as breathing, high enough that the edge never goes dark while annotating.
+    private static let pulseFloor: Double = 0.4
+    /// One half of the pulse (bright → dim). A slow breath, so it signals the mode without
+    /// pulling the eye away from what's being drawn.
+    private static let pulseHalfPeriod: Double = 1.2
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: AnnotateStyle.screenCornerRadius, style: .continuous)
         // CSS `inset 0 0 62px`: the area just outside the edge, blurred inward (σ ≈ blur / 2) and
         // clipped to the screen, so the edge itself sits at half strength and it fades within ~40pt
-        shape
+        let glow = shape
             .inset(by: -AnnotateStyle.glowBlur / 2)
             .stroke(AnnotateStyle.glow, lineWidth: AnnotateStyle.glowBlur)
             .blur(radius: AnnotateStyle.glowBlur / 2)
             .mask(shape)
+
+        // Pulses while annotate mode is on (not in Figma, which has no motion). Only opacity
+        // animates, so the blur is rasterized once. Reduce Motion keeps the static Figma glow.
+        if reduceMotion {
+            glow
+        } else {
+            glow.phaseAnimator([false, true]) { content, isDim in
+                content.opacity(isDim ? Self.pulseFloor : 1)
+            } animation: { _ in
+                .easeInOut(duration: Self.pulseHalfPeriod)
+            }
+        }
     }
 }
 #endif
