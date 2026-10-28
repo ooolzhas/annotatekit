@@ -17,7 +17,7 @@ All notable changes to this project are documented here. The format is based on
   - **Comment card:** it always docks to the keyboard, never to the marker. It has the comment, a
     paperclip, × and ↑ (Return also submits).
   - **Review bar:** with no pin open, the bottom bar shows ×, "N comments", trash and Send. Pins are
-    white with white number badges.
+    white with white number badges. Trash asks before deleting ("Delete 4 comments?").
   - **Removed:** the toolbar and hint, the draw toggle, region dragging, the shape tools, in-place text
     retyping, the selection chip and "Send and keep annotating". The keyboard shortcuts stay.
 - The annotated screenshot and crops keep their blue and red markers for contrast. Their strokes are
@@ -30,6 +30,11 @@ All notable changes to this project are documented here. The format is based on
   carry `sketch` strokes, whose points may extend outside the pin's frame.
 
 ### Fixed
+- Pins disappeared after leaving annotate mode and coming back, while the count still included them:
+  each start took a new freeze-frame. Starting again on a screen that has pins (same look within a
+  small tolerance) now brings back its freeze-frame and pins.
+- Return in the comment only closed the keyboard on iOS 26, which delivers it as a submit rather than
+  a newline; it now saves the pin.
 - Card placement no longer goes stale after the photo picker. It follows UIKit's keyboard layout
   guide, because keyboard notifications can end on a frame without the suggestion bar.
 

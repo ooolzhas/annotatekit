@@ -63,6 +63,8 @@ final class AnnotateController {
         let index: Int
         let capturedAt: Date
         let image: UIImage
+        /// Tiny grayscale sample, to recognize this screen when annotate mode starts on it again.
+        let thumbnail: [UInt8]?
         /// Visible-text outline; nil until first needed (see `elements(for:)`).
         var elements: [ScreenElement]?
     }
@@ -653,16 +655,26 @@ final class AnnotateController {
 
     // MARK: Private
 
-    /// Captures the app as it looks right now. A previous screen with no pins is replaced, so
-    /// opening and closing annotate mode doesn't pile up empty screens.
+    /// Captures the app as it looks right now. Back on a screen that already has pins, that screen's
+    /// freeze-frame comes back instead, so its pins show again exactly where they were drawn.
+    /// Otherwise it's a new screen; screens with no pins are dropped, so opening and closing
+    /// annotate mode doesn't pile up empty ones.
     private func freezeScreen() {
         guard let image = Snapshotter.captureApp(excluding: window) else {
             frozenImage = nil
             return
         }
-        let reuse = currentScreen > 0 && !annotations.contains { $0.screen == currentScreen }
-        let index = reuse ? currentScreen : (screens.keys.max() ?? 0) + 1
-        screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image)
+        let thumbnail = Snapshotter.grayThumbnail(of: image)
+        let pinned = Set(annotations.map(\.screen))
+        screens = screens.filter { pinned.contains($0.key) }
+        let candidates = screens.values.compactMap { screen in screen.thumbnail.map { (index: screen.index, pixels: $0) } }
+        if let thumbnail, let index = ScreenMatch.match(thumbnail, among: candidates), let revisited = screens[index] {
+            currentScreen = index
+            frozenImage = revisited.image
+            return
+        }
+        let index = (screens.keys.max() ?? 0) + 1
+        screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image, thumbnail: thumbnail)
         currentScreen = index
         frozenImage = image
     }

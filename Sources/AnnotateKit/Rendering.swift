@@ -131,15 +131,23 @@ enum Snapshotter {
     static func grayThumbnail(excluding overlay: UIWindow?, width: Int = 40) -> [UInt8]? {
         let pointWidth = overlay?.windowScene?.screen.bounds.width ?? 0
         guard pointWidth > 0,
-              let image = captureApp(excluding: overlay, scale: CGFloat(width) / pointWidth)?.cgImage else { return nil }
-        let pixelWidth = image.width, pixelHeight = image.height
+              let image = captureApp(excluding: overlay, scale: CGFloat(width) / pointWidth) else { return nil }
+        return grayThumbnail(of: image, width: width)
+    }
+
+    /// `image` drawn `width` gray pixels across (height to aspect), for "is this the same screen" checks.
+    static func grayThumbnail(of image: UIImage, width: Int = 40) -> [UInt8]? {
+        guard let cgImage = image.cgImage, cgImage.width > 0 else { return nil }
+        let pixelWidth = width
+        let pixelHeight = max(1, Int((Double(cgImage.height) * Double(width) / Double(cgImage.width)).rounded()))
         var pixels = [UInt8](repeating: 0, count: pixelWidth * pixelHeight)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
             guard let context = CGContext(
                 data: buffer.baseAddress, width: pixelWidth, height: pixelHeight, bitsPerComponent: 8,
                 bytesPerRow: pixelWidth, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
             ) else { return false }
-            context.draw(image, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+            context.interpolationQuality = .medium
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
             return true
         }
         return drawn ? pixels : nil
