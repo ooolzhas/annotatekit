@@ -1,6 +1,10 @@
 // Session schema round-trip, prompt rendering, screen outline hints, bundle layout on disk,
 // delivery status/claiming, and project-root discovery.
 
+#if canImport(CoreGraphics)
+// CGRect's initializers and Equatable conformance live in the CoreGraphics overlay on Apple platforms
+import CoreGraphics
+#endif
 import Foundation
 import Testing
 @testable import AnnotateCore
@@ -271,6 +275,32 @@ enum Fixtures {
         let status = try #require(SessionInbox.readStatus(id: first.id, in: output))
         #expect(status.isFinal)
         #expect(status.message == "Edited HomeView.swift")
+    }
+
+    @Test func sinceSkipsOlderSessions() throws {
+        let output = try tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        for id in ["20261028-100000-aaaa", "20261028-110000-bbbb", "20261028-120000-cccc"] {
+            var session = Fixtures.session(annotations: [Fixtures.element])
+            session.id = id
+            _ = try write(session, to: output)
+        }
+        #expect(SessionInbox.sessionIDs(in: output, since: "20261028-110000-") == ["20261028-110000-bbbb", "20261028-120000-cccc"])
+        #expect(SessionInbox.pendingSessionIDs(in: output, since: "20261028-115959-") == ["20261028-120000-cccc"])
+    }
+
+    @Test func pruneKeepsNewest() throws {
+        let output = try tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        let ids = ["20261028-100000-aaaa", "20261028-110000-bbbb", "20261028-120000-cccc"]
+        for id in ids {
+            var session = Fixtures.session(annotations: [Fixtures.element])
+            session.id = id
+            _ = try write(session, to: output)
+        }
+        #expect(SessionInbox.prune(keeping: 2, in: output) == ["20261028-100000-aaaa"])
+        #expect(SessionInbox.sessionIDs(in: output) == Array(ids.dropFirst()))
+        #expect(SessionInbox.prune(keeping: 5, in: output).isEmpty)
     }
 
     @Test func incompleteBundlesAreNotListed() throws {

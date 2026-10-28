@@ -118,18 +118,21 @@ public enum SessionInbox {
     }
 
     /// Complete sessions (session.json present), oldest first.
-    public static func sessionIDs(in outputDirectory: URL, fileManager: FileManager = .default) -> [String] {
+    /// - Parameter since: skip ids sorting before this one without touching the disk for them;
+    ///   ids are UTC timestamps, so this is "sent at or after".
+    public static func sessionIDs(in outputDirectory: URL, since: String? = nil, fileManager: FileManager = .default) -> [String] {
         let sessions = outputDirectory.appendingPathComponent(SessionWriter.sessionsFolder, isDirectory: true)
         let entries = (try? fileManager.contentsOfDirectory(atPath: sessions.path)) ?? []
         return entries
+            .filter { id in since.map { id >= $0 } ?? true }
             .filter(isValidSessionID)
             .filter { fileManager.fileExists(atPath: sessions.appendingPathComponent($0).appendingPathComponent(sessionFile).path) }
             .sorted()
     }
 
     /// Complete sessions nobody has picked up yet (no status.json), oldest first.
-    public static func pendingSessionIDs(in outputDirectory: URL, fileManager: FileManager = .default) -> [String] {
-        sessionIDs(in: outputDirectory, fileManager: fileManager).filter { id in
+    public static func pendingSessionIDs(in outputDirectory: URL, since: String? = nil, fileManager: FileManager = .default) -> [String] {
+        sessionIDs(in: outputDirectory, since: since, fileManager: fileManager).filter { id in
             let claimed = sessionDirectory(id, in: outputDirectory).appendingPathComponent(claimMarker).path
             return !fileManager.fileExists(atPath: claimed) && readStatus(id: id, in: outputDirectory) == nil
         }
@@ -164,6 +167,20 @@ public enum SessionInbox {
         }
         try? writeStatus(SessionStatus(state: state), id: id, in: outputDirectory)
         return true
+    }
+
+    /// Deletes the oldest session folders beyond the newest `keeping`, so `.annotate/` stays small.
+    /// Incomplete folders count too (a crashed write shouldn't linger). Returns the removed ids.
+    @discardableResult
+    public static func prune(keeping: Int, in outputDirectory: URL, fileManager: FileManager = .default) -> [String] {
+        guard keeping >= 0 else { return [] }
+        let sessions = outputDirectory.appendingPathComponent(SessionWriter.sessionsFolder, isDirectory: true)
+        let ids = ((try? fileManager.contentsOfDirectory(atPath: sessions.path)) ?? []).filter(isValidSessionID).sorted()
+        let doomed = ids.dropLast(keeping)
+        for id in doomed {
+            try? fileManager.removeItem(at: sessions.appendingPathComponent(id, isDirectory: true))
+        }
+        return Array(doomed)
     }
 
     public static func loadSession(id: String, in outputDirectory: URL) throws -> AnnotationSession {

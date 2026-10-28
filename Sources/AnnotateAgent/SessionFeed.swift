@@ -18,7 +18,7 @@ public struct SessionFeed: Sendable {
 
     /// New, complete, unclaimed sessions, oldest first.
     public func pending() -> [String] {
-        SessionInbox.pendingSessionIDs(in: outputDirectory).filter { $0 >= cutoffID }
+        SessionInbox.pendingSessionIDs(in: outputDirectory, since: cutoffID)
     }
 
     /// Claims every pending session as `state`; returns the ones this consumer won.
