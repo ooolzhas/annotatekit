@@ -33,6 +33,16 @@ struct ComposerCard: View {
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
                 .submitLabel(.return)
+                // iOS 26 delivers Return in a vertical field as a submit (no newline, keyboard
+                // dismissed); earlier versions insert "\n", which `commentBinding` handles
+                .onSubmit {
+                    if case .composing(canSubmit: true) = controller.chrome {
+                        controller.submitDraft()
+                    } else {
+                        // Nothing to save yet: keep the keyboard up so the card stays docked
+                        isFocused = true
+                    }
+                }
                 .focused($isFocused)
                 .accessibilityLabel("Comment")
                 // The drawn placeholder is hidden from VoiceOver; announce it as the hint instead
@@ -88,10 +98,10 @@ struct ComposerCard: View {
         }
     }
 
-    /// A vertical-axis TextField inserts a newline on Return instead of firing onSubmit. A Return
-    /// keypress is the old text plus exactly one "\n" at the caret (anywhere, not only the end):
-    /// that submits the old text. Any other newline (pasted multi-line text) becomes a space and
-    /// is kept.
+    /// Before iOS 26 a vertical-axis TextField inserts a newline on Return instead of firing
+    /// onSubmit. A Return keypress is the old text plus exactly one "\n" at the caret (anywhere, not
+    /// only the end): that submits the old text. Any other newline (pasted multi-line text) becomes
+    /// a space and is kept.
     private var commentBinding: Binding<String> {
         Binding(
             get: { controller.commentText },
