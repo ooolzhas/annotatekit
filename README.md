@@ -142,7 +142,8 @@ Agents find things by looking, so every pin is pinned down exactly:
 - `screens/N.png` is **1x: one pixel per point**. A pin at `(84, 322)` is pixel `(84, 322)`. A
   402×874 pt screen is a 402×874 image, which vision models see unscaled.
 - `screens/N-annotated.png` adds numbered blue markers, outlines and red drawings.
-  `screens/N@3x.png` and `crops/N.png` (native resolution, 32 pt of context) carry the detail.
+  `crops/N.png` (native resolution, 32 pt of context) carries the detail. A full native-resolution
+  screen is opt-in.
 - Each pin has an **anchor** (exactly where you tapped, or a drawing's center), a **frame**, and
   percentages across and down.
 - Each pin lists its **nearby text**, and each screen lists every visible label with its frame.
@@ -159,7 +160,7 @@ Device: iPhone 17 Pro · iOS 26.0 · 402×874 pt @3x · dark · Dynamic Type L
 Coordinates are iOS points, origin top-left. Screen images are 1x, so pixel = point. Open the
 annotated image first: each pin is a numbered blue marker there. Crops show detail.
 
-Screen 1 (402×874 pt) — annotated …/screens/1-annotated.png · clean …/screens/1.png · hi-res …/screens/1@3x.png
+Screen 1 (402×874 pt) — annotated …/screens/1-annotated.png · clean …/screens/1.png
 
 1. Button "Get started" at (24, 300, 120×44) — tapped (84, 322), 21% across, 37% down
    bigger, tighter
@@ -189,7 +190,7 @@ When you're done, finish with a one-line summary of what you changed.
   latest                            "sessions/<id>"
   sessions/<id>/
     prompt.md                       the message above
-    screens/1.png  1-annotated.png  1@3x.png
+    screens/1.png  1-annotated.png  (1@3x.png with includesHiResScreens)
     crops/1.png …
     session.json                    written last, so it marks the bundle complete (schema v1)
     status.json                     written by the receiver: delivered → received → working → done | failed
