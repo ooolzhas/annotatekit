@@ -1,11 +1,21 @@
 name: Release
 
+# Two ways in: push a `vX.Y.Z` tag, or run this workflow by hand with a version, which creates
+# the tag at the selected commit (for environments that can push branches but not tags).
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v (e.g. 0.1.0); the tag is created at the selected commit"
+        required: true
 
 permissions:
   contents: write
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
 
 jobs:
   cli:
@@ -13,31 +23,40 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
+      - name: Versions match the tag
+        run: |
+          VERSION="${TAG#v}"
+          grep -q "^VERSION=\"$VERSION\"$" bin/annotate || { echo "bin/annotate VERSION != $VERSION"; exit 1; }
+          grep -q "\"version\": \"$VERSION\"" .claude-plugin/plugin.json || { echo "plugin.json version != $VERSION"; exit 1; }
+          grep -q "static let version = \"$VERSION\"" Sources/AnnotateAgent/ChannelServer.swift || { echo "ChannelServer.version != $VERSION"; exit 1; }
+          grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG has no $VERSION section"; exit 1; }
       - name: Build (arm64 + x86_64)
         run: swift build -c release --product annotate --arch arm64 --arch x86_64
       - name: Package
         id: package
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${TAG#v}"
           ARCHIVE="annotate-${VERSION}-macos-universal.tar.gz"
           cp .build/apple/Products/Release/annotate annotate
+          ./annotate help > /dev/null
           tar -czf "$ARCHIVE" annotate LICENSE README.md
           shasum -a 256 "$ARCHIVE" | tee "$ARCHIVE.sha256"
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
           echo "sha256=$(cut -d' ' -f1 "$ARCHIVE.sha256")" >> "$GITHUB_OUTPUT"
       - name: Release notes from CHANGELOG
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${TAG#v}"
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on' CHANGELOG.md > notes.md
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+        # --target only matters when the tag doesn't exist yet (manual runs): it is created there
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$TAG" \
             "${{ steps.package.outputs.archive }}" "${{ steps.package.outputs.archive }}.sha256" \
-            --title "$GITHUB_REF_NAME" --notes-file notes.md
+            --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md
       - name: Homebrew values
         run: |
           echo "### Homebrew formula" >> "$GITHUB_STEP_SUMMARY"
-          echo "url \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.package.outputs.archive }}\"" >> "$GITHUB_STEP_SUMMARY"
+          echo "url \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${{ steps.package.outputs.archive }}\"" >> "$GITHUB_STEP_SUMMARY"
           echo "sha256 \"${{ steps.package.outputs.sha256 }}\"" >> "$GITHUB_STEP_SUMMARY"
