@@ -32,7 +32,8 @@ public actor ChannelServer {
         for the SwiftUI view; \
         (3) call annotation_status with state "done" and a one-line summary of what you changed, \
         or "failed" with the reason. For long work, send state "working" with a short progress note \
-        first. The user sees these statuses on the device.
+        first; before rebuilding and reinstalling the app, send "working" with "Changes applied, \
+        reinstalling". The user sees these statuses on the device.
         """
 
     let feed: SessionFeed

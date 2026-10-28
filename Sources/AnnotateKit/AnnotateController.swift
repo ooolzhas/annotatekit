@@ -21,6 +21,8 @@
 // The launcher is a pill centered horizontally above the home indicator, or above the keyboard
 // while one is up, whether docked or dragged (Figma 9265:14439); a drag moves it vertically only,
 // so it can get out of the way of an app's own bottom bar.
+// The line above the review bar (`reviewHint`) names the agent briefly after annotate mode opens or
+// the connection changes (`isConnectionNews`), then yields to the gestures hint; offline stays.
 // Live scans (taps, sketch attribution) wait until they match the frozen image: SwiftUI's
 // accessibility tree is built right after the bootstrap, and while the comment keyboard is up the
 // app's labeled elements must still sit where they froze (an app may re-lay out for any keyboard;
@@ -113,8 +115,13 @@ final class AnnotateController {
     /// Progress of the most recent Send, read back from the bundle's status.json; nil once the
     /// launcher has gone back to idle.
     private(set) var delivery: DeliveryStage?
+    /// When the narrated Send went out; the hint line's elapsed seconds count from it.
+    private(set) var deliveryStartedAt: Date?
     /// The agent listening for Sends, from `agent.json`; nil when none is (the pill's dot).
     private(set) var agent: AgentPresence?
+    /// True for `ReviewHint.connectionNewsHold` after annotate mode starts and after `agent` changes
+    /// while active, so the hint line says who's connected before yielding to the gestures hint.
+    private(set) var isConnectionNews = false
     /// Top of the software keyboard (or hardware-keyboard bar) in overlay points while it's up.
     private(set) var keyboardTop: CGFloat?
 
@@ -132,6 +139,8 @@ final class AnnotateController {
     /// The latest Send's write completion; a newer Send cancels it so a stale outcome is dropped.
     @ObservationIgnored private var deliveryWrite: Task<Void, Never>?
     @ObservationIgnored private var presenceTask: Task<Void, Never>?
+    /// Clears `isConnectionNews` after the hold; a newer flash cancels it so the hold restarts.
+    @ObservationIgnored private var connectionNewsTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var launchStart: Task<Void, Never>?
     @ObservationIgnored private var accessibilityWarmUp: Task<Void, Never>?
@@ -185,6 +194,7 @@ final class AnnotateController {
         AnnotatableRegistry.shared.setCollecting(true)
         freezeScreen()
         isActive = true
+        flashConnectionNews()
         observeKeyboard()
         window?.activate()
         warmUpAccessibility()
@@ -199,6 +209,9 @@ final class AnnotateController {
         touch = nil
         liveStroke = nil
         isActive = false
+        connectionNewsTask?.cancel()
+        connectionNewsTask = nil
+        isConnectionNews = false
         frozenImage = nil
         accessibilityWarmUp?.cancel()
         pendingAttributions.forEach { $0.cancel() }
@@ -590,6 +603,7 @@ final class AnnotateController {
         deliveryHold = nil
         // Set before the write so the pill answers the tap immediately (Figma 9265:14691)
         delivery = .sent(count: outgoing.count)
+        deliveryStartedAt = Date()
 
         deliveryWrite = Task { [weak self] in
             // The detached write isn't cancelled with this task, so the bundle still lands
@@ -651,6 +665,14 @@ final class AnnotateController {
     /// the pins kept from earlier (saved but not sent).
     var launcherStatus: LauncherStatus {
         .resolve(.init(delivery: delivery, pendingCount: annotations.count))
+    }
+
+    /// The line above the review bar: it narrates the Send while a delivery shows (Figma 9273:17925 /
+    /// 18020 / 18115), which takes precedence over the other hints. Otherwise the gestures hint
+    /// (9272:17041), "<agent> connected" while the connection is news (9272:17134), or offline
+    /// whenever no agent listens (9272:17228).
+    var reviewHint: ReviewHint {
+        .resolve(.init(agent: agent, isConnectionNews: isConnectionNews, delivery: delivery))
     }
 
     /// The pill in overlay points: centered horizontally, docked 8pt above `chromeBottom` (so it
@@ -1009,15 +1031,17 @@ final class AnnotateController {
     private func resumeDelivery() {
         let output = outputDirectory()
         Task { [weak self] in
-            let resumable = await Task.detached(priority: .utility) { () -> String? in
+            let resumable = await Task.detached(priority: .utility) { () -> (id: String, createdAt: Date)? in
                 guard let id = SessionInbox.sessionIDs(in: output).last,
                       let session = try? SessionInbox.loadSession(id: id, in: output),
                       Date().timeIntervalSince(session.createdAt) < Self.deliveryTrackingLimit else { return nil }
-                guard let status = SessionInbox.readStatus(id: id, in: output), status.isFinal else { return id }
-                return Date().timeIntervalSince(status.updatedAt) < Self.resumeFinalWindow ? id : nil
+                let resumed = (id: id, createdAt: session.createdAt)
+                guard let status = SessionInbox.readStatus(id: id, in: output), status.isFinal else { return resumed }
+                return Date().timeIntervalSince(status.updatedAt) < Self.resumeFinalWindow ? resumed : nil
             }.value
             guard let self, let resumable, self.deliveryTask == nil, self.delivery == nil else { return }
-            self.trackDelivery(id: resumable, in: output)
+            self.deliveryStartedAt = resumable.createdAt
+            self.trackDelivery(id: resumable.id, in: output)
         }
     }
 
@@ -1063,9 +1087,26 @@ final class AnnotateController {
                     return AgentPresenceFile.read(in: output)
                 }.value
                 guard let self, !Task.isCancelled else { return }
-                if self.agent != presence { self.agent = presence }
+                if self.agent != presence {
+                    // Only who listens and how is news; `updatedAt` / `project` move on every heartbeat
+                    let isNews = self.agent?.agent != presence?.agent || self.agent?.mode != presence?.mode
+                    self.agent = presence
+                    if isNews, self.isActive { self.flashConnectionNews() }
+                }
                 try? await Task.sleep(for: .seconds(AgentPresenceFile.interval))
             }
+        }
+    }
+
+    /// Shows the connection line for `ReviewHint.connectionNewsHold`, restarting the hold if one is running.
+    private func flashConnectionNews() {
+        isConnectionNews = true
+        connectionNewsTask?.cancel()
+        connectionNewsTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(ReviewHint.connectionNewsHold))
+            guard let self, !Task.isCancelled else { return }
+            self.isConnectionNews = false
+            self.connectionNewsTask = nil
         }
     }
 

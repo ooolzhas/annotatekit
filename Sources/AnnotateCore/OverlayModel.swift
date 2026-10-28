@@ -1,18 +1,22 @@
-// Pure state model for the annotate overlay (Figma PVX9n74hzo5BWauvymG141, group 9257:13754).
+// Pure state model for the annotate overlay (Figma PVX9n74hzo5BWauvymG141, group 9272:17592).
 // `OverlayChrome` decides which bottom chrome shows (the review bar or the comment card) and the copy it
-// carries; `PointerIntent` classifies a touch on the frozen screen as a pen stroke, a hold or a tap.
+// carries; `ReviewHint` decides the line above the review bar (gestures, agent connected, offline, or
+// the last Send's delivery narration with its elapsed time) and whether the bar's action reads Send or
+// Save; `PointerIntent` classifies a touch on the frozen screen as a pen stroke, a hold or a tap.
 // Views and the controller switch on these instead of re-deriving the conditions, so the rules live
 // in one place and stay testable on Linux.
 
 import Foundation
 
 public enum OverlayChrome: Equatable, Sendable {
-    /// No pin open: the review bar (×, count title, trash, Send). Figma 9257:13484 shows `count: 4`.
-    /// `count: 0` has no frame: it is derived, showing `emptyHint` with trash and Send disabled.
+    /// No pin open: the review bar (back chevron, count title, trash, Send). Figma 9272:17041 shows
+    /// `count: 4`. The gestures text now lives on the hint line above the bar (`ReviewHint.gestures`).
+    /// `count: 0` has no frame: it is derived, showing `emptyTitle` with trash and Send disabled.
     case review(count: Int)
     /// A pin is open: the comment card docked above the keyboard.
-    /// `canSubmit: false` is Figma 9257:13322 (empty comment, ↑ dimmed);
-    /// `canSubmit: true` is Figma 9257:13403 (comment typed, ↑ filled blue).
+    /// `canSubmit: false` is Figma 9257:13322, also Figma 9272:16785 (empty comment, ↑ dimmed);
+    /// `canSubmit: true` is Figma 9257:13403 (comment typed, ↑ filled blue), also Figma 9272:16867
+    /// (typed) / 9272:16949 (typed, with 3 attached images; images come from the draft, not this state).
     case composing(canSubmit: Bool)
 
     public struct Inputs: Equatable, Sendable {
@@ -37,27 +41,31 @@ public enum OverlayChrome: Equatable, Sendable {
         return .review(count: max(inputs.pinCount, 0))
     }
 
-    /// Comment field placeholder (Figma 9257:13392).
+    /// Comment field placeholder (Figma 9257:13392 / 9272:16856).
     public static let placeholder = "Describe the change"
-    /// Send capsule title (Figma 9257:13561).
+    /// Action capsule title while an agent is listening (Figma 9272:17119).
     public static let sendTitle = "Send"
-    /// Review title with no pins yet. No Figma frame: derived to name the three gestures that create a pin.
-    public static let emptyHint = "Draw, tap or hold"
+    /// Action capsule title while no agent is listening (Figma 9272:17306): the notes are written
+    /// either way, but nobody picks them up yet, so "Send" would overpromise.
+    public static let saveTitle = "Save"
+    /// Review title with no notes yet. No Figma frame: derived. The gestures text that used to sit
+    /// here moved to the hint line above the bar, so the title just says there is nothing to count.
+    public static let emptyTitle = "No notes yet"
 
     /// Trash confirmation title. No Figma frame: trash wipes every pin at once with no undo, so it
     /// asks first and names what goes.
     public static func clearTitle(_ count: Int) -> String {
-        count == 1 ? "Delete 1 comment?" : "Delete \(max(count, 0)) comments?"
+        count == 1 ? "Delete 1 note?" : "Delete \(max(count, 0)) notes?"
     }
     /// Destructive button in the trash confirmation.
     public static let clearAction = "Delete"
 
-    /// Review bar title (Figma 9257:13556, sample "4 comments"): "4 comments", "1 comment",
-    /// and `emptyHint` when there is nothing to count (0 or a negative input).
-    /// Figma shows only the plural; the singular "1 comment" has no frame and is derived.
+    /// Review bar title (Figma 9272:17114, sample "4 notes"; the 4 is sample data): "4 notes", "1 note",
+    /// and `emptyTitle` when there is nothing to count (0 or a negative input).
+    /// Figma shows only the plural; the singular "1 note" has no frame and is derived.
     public static func countTitle(_ count: Int) -> String {
-        guard count > 0 else { return emptyHint }
-        return count == 1 ? "1 comment" : "\(count) comments"
+        guard count > 0 else { return emptyTitle }
+        return count == 1 ? "1 note" : "\(count) notes"
     }
 
     /// Send (and trash) are live only on the review bar with at least one pin; while composing,
@@ -67,6 +75,192 @@ public enum OverlayChrome: Equatable, Sendable {
         case .review(let count): count > 0
         case .composing: false
         }
+    }
+}
+
+/// The line above the review bar (Figma 9272:17592: 9272:17121 / 9272:17215 / 9272:17309).
+/// Figma shows the gestures hint and the connected line with the same agent state, so which one shows
+/// is a timing rule: the connection is news for `connectionNewsHold` seconds, then the gestures hint
+/// takes over. Offline has no such timeout, because Save instead of Send must stay explained.
+/// While a Send is being tracked, the line narrates its delivery instead (Figma 9273:17925 / 9273:18020 /
+/// 9273:18115): the launcher pill is hidden in annotate mode, so this is the only place the progress shows.
+public enum ReviewHint: Equatable, Sendable {
+    /// Figma 9272:17041: "Draw, tap or hold to annotate", no dot.
+    case gestures
+    /// Figma 9272:17134: "Claude connected", green dot. The pull mode has no frame (derived).
+    case connected(agent: String, mode: AgentPresence.Mode)
+    /// Figma 9272:17228: "Agent offline · Notes will be saved", red dot, and the action reads Save.
+    case offline
+    /// The last Send's progress. `agent` may be a raw or display name: `resolve` stores the display
+    /// name, and `text` applies `displayName` again (idempotent), so a hand-built "Claude Code" reads "Claude".
+    /// Figma 9273:17925 (`.delivered`), 9273:18020 (`.received`), 9273:18115 (`.working(message:)`);
+    /// every other stage has no frame and is derived from the launcher's copy.
+    case delivery(DeliveryStage, agent: String)
+
+    public enum Dot: Equatable, Sendable {
+        /// Green (Figma 9272:17214).
+        case connected
+        /// Red (Figma 9272:17308).
+        case offline
+    }
+
+    public struct Inputs: Equatable, Sendable {
+        /// Who listens for Sends (agent.json), nil when nobody does.
+        public var agent: AgentPresence?
+        /// Annotate mode just opened, or the connection just changed (for `connectionNewsHold`).
+        public var isConnectionNews: Bool
+        /// The tracked Send's stage, nil when no Send is being tracked.
+        public var delivery: DeliveryStage?
+
+        public init(agent: AgentPresence?, isConnectionNews: Bool, delivery: DeliveryStage? = nil) {
+            self.agent = agent
+            self.isConnectionNews = isConnectionNews
+            self.delivery = delivery
+        }
+    }
+
+    /// A tracked Send → `.delivery`, ahead of everything: the user just acted and wants to see what
+    /// happened to it. With no agent connected the subject still reads "Agent" (`displayName("")`).
+    /// Otherwise: no agent → `.offline`, whatever the news flag, because with nobody listening the
+    /// Save action needs its explanation the whole time. Agent + news → `.connected`. Agent, no news
+    /// → `.gestures`.
+    public static func resolve(_ inputs: Inputs) -> ReviewHint {
+        if let stage = inputs.delivery {
+            return .delivery(stage, agent: displayName(inputs.agent?.agent ?? ""))
+        }
+        guard let presence = inputs.agent else { return .offline }
+        if inputs.isConnectionNews {
+            return .connected(agent: presence.agent, mode: presence.mode)
+        }
+        return .gestures
+    }
+
+    /// Seconds the connection line shows after annotate mode opens, or after the agent connection
+    /// changes while annotating, before it yields to the gestures hint. No Figma source (gap
+    /// threshold): long enough to read a short line once, short enough that the gestures hint is
+    /// what a user sees while actually annotating.
+    public static let connectionNewsHold: Double = 3
+
+    /// The short name for the hint line. Figma 9272:17215 reads "Claude connected" for the agent
+    /// that reports itself as "Claude Code", so the product suffix is dropped to keep the line short.
+    /// Other names pass through; a blank name still needs a subject, so it reads "Agent".
+    public static func displayName(_ agent: String) -> String {
+        let trimmed = agent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "Agent" }
+        if trimmed == "Claude Code" { return "Claude" }
+        return trimmed
+    }
+
+    public var text: String {
+        switch self {
+        case .gestures:
+            // Figma 9272:17121
+            "Draw, tap or hold to annotate"
+        case .connected(let agent, .push):
+            // Figma 9272:17215 (sample "Claude connected")
+            "\(Self.displayName(agent)) connected"
+        case .connected(let agent, .pull):
+            // No Figma frame (derived): a pull agent reads sessions only when asked, so the line
+            // tells the user to ask it, matching `AgentPresence.accessibilityDescription`.
+            "\(Self.displayName(agent)) connected · ask it to check"
+        case .offline:
+            // Figma 9272:17309
+            "Agent offline · Notes will be saved"
+        case .delivery(let stage, let agent):
+            switch stage {
+            case .sent(let count):
+                // No Figma frame (derived): the launcher's sent title, so the pill and the line agree
+                LauncherStatus.sentTitle(count)
+            case .unclaimed:
+                // No Figma frame (derived): launcher copy
+                "Not picked up yet"
+            case .delivered:
+                // Figma 9273:18006 (sample "Delivered to Claude")
+                "Delivered to \(Self.displayName(agent))"
+            case .received:
+                // Figma 9273:18101 (sample "Claude looking at it")
+                "\(Self.displayName(agent)) looking at it"
+            case .working(let message):
+                // Figma 9273:18196 shows the agent's own status.json message (sample "Changes applied,
+                // reinstalling"); the fallback without a message is derived
+                Self.cleaned(message) ?? "\(Self.displayName(agent)) is working"
+            case .done(let message):
+                // No Figma frame (derived): launcher copy
+                Self.cleaned(message).map { "Done · \($0)" } ?? "Done"
+            case .failed(let message):
+                // No Figma frame (derived): launcher copy, with the agent's name in the fallback
+                Self.cleaned(message).map { "Couldn't finish · \($0)" } ?? "\(Self.displayName(agent)) couldn't finish"
+            case .notSaved:
+                // No Figma frame (derived): launcher copy
+                "Couldn't save · prompt copied"
+            case .noAgent:
+                // No Figma frame (derived): launcher copy
+                "Saved · no agent connected"
+            }
+        }
+    }
+
+    /// nil for the gestures hint, which has no dot in Figma 9272:17121.
+    /// Delivery: green while things go to plan (Figma 9273:18004 / 18099 / 18194 for delivered, received
+    /// and working; sent and done derived), red for the stages that need the user's attention (unclaimed,
+    /// failed, notSaved, noAgent; derived).
+    public var dot: Dot? {
+        switch self {
+        case .gestures: nil
+        case .connected: .connected
+        case .offline: .offline
+        case .delivery(let stage, _):
+            switch stage {
+            case .sent, .delivered, .received, .working, .done: .connected
+            case .unclaimed, .failed, .notSaved, .noAgent: .offline
+            }
+        }
+    }
+
+    /// Whether the line appends the time since Send (Figma 9273:18007 / 18102 / 18197, samples "1s",
+    /// "2s", "9s"). Only while a delivery is still in flight (derived for sent and unclaimed): once
+    /// the result is in, the figure stops mattering.
+    public var showsElapsed: Bool {
+        switch self {
+        case .delivery(let stage, _): !stage.isFinal
+        case .gestures, .connected, .offline: false
+        }
+    }
+
+    /// Elapsed time since Send: "Ns" below a minute (Figma 9273:18007 sample "1s"), a negative input
+    /// (clock skew) reads "0s". From 60 s it reads whole minutes, floored ("Nm"); no Figma frame
+    /// (derived), since seconds past a minute are noise on a one-line hint.
+    public static func elapsedText(_ seconds: Int) -> String {
+        let seconds = max(seconds, 0)
+        if seconds < secondsPerMinute { return "\(seconds)s" }
+        return "\(seconds / secondsPerMinute)m"
+    }
+
+    /// Where `elapsedText` switches from seconds to minutes.
+    private static let secondsPerMinute = 60
+
+    /// "Save" while offline (Figma 9272:17306), else "Send" (Figma 9272:17119).
+    /// A delivery reads "Save" only for `.noAgent`: that is the one stage that proves nobody is
+    /// listening, so the next action would only save too. Every other stage keeps "Send" (derived).
+    /// Two accepted edges follow from delivery taking precedence in `resolve`:
+    /// - The agent disconnects while a delivery is narrating: delivery wins, so the bar still reads
+    ///   "Send" until the delivery clears.
+    /// - An agent connects during the `.noAgent` hold: the bar reads "Save" for up to
+    ///   `LauncherStatus.finalHold`.
+    public var actionTitle: String {
+        switch self {
+        case .offline, .delivery(.noAgent, _): OverlayChrome.saveTitle
+        case .gestures, .connected, .delivery: OverlayChrome.sendTitle
+        }
+    }
+
+    /// The agent's message trimmed, or nil when nothing is left, so a blank `status.json` message falls
+    /// back to the stage's own copy instead of rendering "Done · " or an empty line.
+    private static func cleaned(_ message: String?) -> String? {
+        guard let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 }
 

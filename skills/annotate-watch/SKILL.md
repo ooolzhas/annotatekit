@@ -35,7 +35,9 @@ user can annotate on their phone with no other setup. Run it from the checkout t
    pixel = point. Grep for the pin's own label or its "Nearby text"; `session.json` lists every
    visible label on the screen with its frame. A `Source:` line, when present, is exact.
 4. Make the changes, following the project's own instructions (CLAUDE.md / AGENTS.md) as for any
-   edit, and build if the project expects it.
+   edit, and build if the project expects it. When you rebuild and reinstall the app so the user
+   can see the change, first run `annotate status <id> working "Changes applied, reinstalling"`:
+   the app shows it while it restarts, and picks the narration back up after relaunch.
 5. `annotate status <id> done "<one-line summary of what you changed>"`, or
    `annotate status <id> failed "<why>"`.
 6. Summarize for the user in one or two lines and keep watching.

@@ -1,7 +1,9 @@
 // Root of the overlay window: the launcher while idle, and while annotating the frozen screen
 // dimmed with a pulsing blue edge glow, the touch catcher that feeds the controller (draw / tap / hold),
-// every pin's white markers and number badges, and the bottom chrome (comment card while a pin is
-// open, review bar otherwise) docked to the keyboard or the home indicator.
+// every pin's white markers and number badges, and the bottom chrome docked to the keyboard or the
+// home indicator: the comment card while a pin is open, otherwise the review bar with its hint line
+// above it (which also narrates the last Send while annotate mode is open), both over a blue
+// gradient that runs from the chrome's top down to the screen's bottom.
 // The whole tree ignores the safe area so SwiftUI coordinates equal window (= screen) points, which
 // is the space every frame from ElementScanner and the registry uses. Things are placed by top-left
 // offset inside a full-screen top-leading ZStack. The freeze-frame captured on start sits at the
@@ -41,9 +43,24 @@ struct OverlayRoot: View {
 private struct ActiveOverlay: View {
     let controller: AnnotateController
 
-    /// Gap between the bottom chrome and the keyboard / home indicator, and from the screen sides
-    /// (Figma 9257:13386 / 9257:13548: `pb-[8px] px-[8px]`).
+    /// Gap between the comment card and the keyboard / home indicator, and from the screen sides
+    /// (Figma 9272:16850: `pb-[8px] px-[8px]`).
     private static let chromeInset: CGFloat = 8
+    /// Review bar inset from each screen side (Figma 9272:17106: `px-[34px]`). Its bottom has no
+    /// extra gap: Figma's `pb-[34px]` is the home-indicator inset, which `chromeBottom` already is.
+    private static let reviewBarInset: CGFloat = 34
+    /// Space between the hint line's bottom and the review bar's top (Figma 9272:17120:
+    /// `bottom-[110px]` = 34 inset + 60 bar + 16).
+    private static let hintGap: CGFloat = 16
+    /// Strength of the bottom gradient at the screen's bottom edge; it fades to clear at the
+    /// chrome's top (Figma 9272:16849 / 9272:17105: `from-[rgba(0,136,255,0)] to-[rgba(0,136,255,0.5)]`).
+    private static let gradientOpacity: Double = 0.5
+    /// The chrome's keyboard snap (no Figma motion), shared by the gradient so the two move together.
+    private static let chromeAnimation: Animation = .snappy(duration: 0.25)
+
+    /// Top edge of the bottom chrome stack in screen points, measured from layout; the gradient
+    /// starts here. Nil until the first layout pass.
+    @State private var chromeTop: CGFloat?
 
     var body: some View {
         let bounds = controller.bounds
@@ -69,6 +86,9 @@ private struct ActiveOverlay: View {
             ScreenGlow()
                 .frame(width: bounds.width, height: bounds.height)
                 .allowsHitTesting(false)
+
+            // Figma layer order: Overlay (dim + glow), then the gradient, then pins and chrome
+            bottomGradient
 
             captureLayer
 
@@ -119,25 +139,71 @@ private struct ActiveOverlay: View {
             )
     }
 
-    /// Comment card while a pin is open, review bar otherwise; its bottom edge sits 8pt above
-    /// `chromeBottom` (keyboard top, or above the home indicator with no keyboard).
+    /// Comment card while a pin is open (8pt sides, 8pt above `chromeBottom`), otherwise the review
+    /// bar (34pt sides, bottom at `chromeBottom`) with the hint line 16pt above it. `chromeBottom`
+    /// is the keyboard top, or the top of the home-indicator area with no keyboard.
     private var bottomChrome: some View {
-        Group {
+        let bounds = controller.bounds
+        // Distance from `chromeBottom` down to the screen's bottom edge
+        let belowChrome = max(bounds.maxY - controller.chromeBottom, 0)
+
+        return Group {
             switch controller.chrome {
             case .composing:
                 if let draft = controller.draft {
                     ComposerCard(controller: controller, draft: draft)
                         .id(draft.annotation.id)
+                        .padding(.horizontal, Self.chromeInset)
+                        .padding(.bottom, Self.chromeInset)
                 }
             case .review:
-                ReviewBar(controller: controller)
+                VStack(spacing: Self.hintGap) {
+                    ReviewHintLine(hint: controller.reviewHint, startedAt: controller.deliveryStartedAt)
+                        // Delivery narration ("Changes applied, reinstalling 9s") runs wider than
+                        // the gestures hint: keep it on one centered line within the bar's 34pt insets
+                        .padding(.horizontal, Self.reviewBarInset)
+                    ReviewBar(controller: controller)
+                        .padding(.horizontal, Self.reviewBarInset)
+                }
             }
         }
-        .padding(.horizontal, Self.chromeInset)
-        .padding(.bottom, max(controller.bounds.maxY - controller.chromeBottom + Self.chromeInset, 0))
-        .frame(width: controller.bounds.width, height: controller.bounds.height, alignment: .bottom)
+        .frame(width: bounds.width)
+        // The gradient lives lower in the ZStack (under markers and badges), so it can't simply be
+        // this stack's background; it reads the stack's top from here instead. The tree ignores
+        // the safe area in its own window, so global = screen points, like `bounds`.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.frame(in: .global).minY
+        } action: { newTop in
+            // Layout reports the end value once; animate the gradient there with the chrome's
+            // own snap so it follows card ↔ bar and the keyboard instead of jumping
+            withAnimation(Self.chromeAnimation) { chromeTop = newTop }
+        }
+        .padding(.bottom, belowChrome)
+        .frame(width: bounds.width, height: bounds.height, alignment: .bottom)
         // No Figma motion: follow the keyboard with a short snap rather than jumping
-        .animation(.snappy(duration: 0.25), value: controller.keyboardTop)
+        .animation(Self.chromeAnimation, value: controller.keyboardTop)
+    }
+
+    /// Blue wash behind the bottom chrome (Figma 9272:16849 composing / 9272:17105 review): full
+    /// screen width, from the chrome stack's top (card, or hint line) down past the keyboard /
+    /// home indicator to the screen's bottom edge. Nothing is drawn until the chrome is measured.
+    @ViewBuilder
+    private var bottomGradient: some View {
+        if let top = chromeTop {
+            let bounds = controller.bounds
+            LinearGradient(
+                colors: [
+                    AnnotateStyle.action.opacity(0),
+                    AnnotateStyle.action.opacity(Self.gradientOpacity)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(width: bounds.width, height: max(bounds.maxY - top, 0))
+            .offset(y: top)
+            // Decoration only: drawing on the frozen screen behind it must keep working
+            .allowsHitTesting(false)
+        }
     }
 }
 

@@ -59,10 +59,10 @@ import Testing
 
     @Test("sent title is singular for 1 and plural above; ≤ 0 reads as 1",
           arguments: [
-              (1, "1 comment sent"),
-              (2, "2 comments sent"),
-              (0, "1 comment sent"),
-              (-3, "1 comment sent")
+              (1, "1 note sent"),
+              (2, "2 notes sent"),
+              (0, "1 note sent"),
+              (-3, "1 note sent")
           ])
     func sentTitle(count: Int, expected: String) {
         #expect(LauncherStatus.sentTitle(count) == expected)
