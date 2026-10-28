@@ -123,7 +123,8 @@ private struct ActiveOverlay: View {
 extension Annotation {
     /// Where the numbered pin attaches: a box's top-trailing corner, or just beside a spot.
     var pinAnchorFrame: CGRect {
-        kind == .point ? CGRect(x: anchor.x + 6, y: anchor.y - 6, width: 0, height: 0) : frame.cgRect
+        let offset = AnnotateStyle.spotBadgeOffset
+        return kind == .point ? CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0) : frame.cgRect
     }
 }
 

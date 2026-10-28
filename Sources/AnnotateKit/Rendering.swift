@@ -13,11 +13,26 @@ import SwiftUI
 import UIKit
 
 enum AnnotateStyle {
-    // Computed rather than stored: no global-state isolation questions for the Canvas renderer
+    // Computed rather than stored: no global-state isolation questions for the Canvas renderer.
+    // Three blues: `accent` for strokes and outlines, `accentFill` under white text (pins, chips,
+    // Send — deep enough for 4.5:1 at 11 pt), `accentText` for blue text and glyphs on materials.
     static var accentUI: UIColor { UIColor(red: 0.16, green: 0.49, blue: 0.96, alpha: 1) }
+    static var accentFillUI: UIColor { UIColor(red: 0.10, green: 0.40, blue: 0.86, alpha: 1) }
     static var sketchUI: UIColor { UIColor(red: 0.94, green: 0.23, blue: 0.21, alpha: 1) }
-    static var accent: Color { Color(red: 0.16, green: 0.49, blue: 0.96) }
-    static var sketch: Color { Color(red: 0.94, green: 0.23, blue: 0.21) }
+    static var sketchFillUI: UIColor { UIColor(red: 0.83, green: 0.18, blue: 0.16, alpha: 1) }
+    static var accent: Color { Color(uiColor: accentUI) }
+    static var accentFill: Color { Color(uiColor: accentFillUI) }
+    static var accentText: Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.47, green: 0.69, blue: 1.0, alpha: 1)
+                : UIColor(red: 0.10, green: 0.40, blue: 0.86, alpha: 1)
+        })
+    }
+    static var sketch: Color { Color(uiColor: sketchUI) }
+    static var sketchFill: Color { Color(uiColor: sketchFillUI) }
+    /// Gap between a spot's crosshair and its numbered badge.
+    static let spotBadgeOffset: CGFloat = 14
     static let pinRadius: CGFloat = 11
     static let sketchLineWidth: CGFloat = 2.5
 }
@@ -155,10 +170,11 @@ enum BundleRenderer {
 
         guard numbered else { return }
         let radius = AnnotateStyle.pinRadius
-        let pinFrame = annotation.kind == .point ? CGRect(x: anchor.x + 6, y: anchor.y - 6, width: 0, height: 0) : frame
+        let offset = AnnotateStyle.spotBadgeOffset
+        let pinFrame = annotation.kind == .point ? CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0) : frame
         let center = OverlayPlacement.pinCenter(for: pinFrame, radius: radius, in: bounds)
         let circle = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-        cg.setFillColor(AnnotateStyle.accentUI.cgColor)
+        cg.setFillColor(AnnotateStyle.accentFillUI.cgColor)
         cg.fillEllipse(in: circle)
         cg.setStrokeColor(UIColor.white.cgColor)
         cg.setLineWidth(1.5)

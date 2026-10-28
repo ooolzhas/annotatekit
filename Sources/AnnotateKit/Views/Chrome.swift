@@ -18,7 +18,7 @@ struct ElementChip: View {
             .truncationMode(.middle)
             .padding(.horizontal, 6)
             .frame(height: height)
-            .background(AnnotateStyle.accent, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .background(AnnotateStyle.accentFill, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
 
@@ -34,7 +34,7 @@ struct PinBadge: View {
                 .monospacedDigit()
                 .foregroundStyle(.white)
                 .frame(width: AnnotateStyle.pinRadius * 2, height: AnnotateStyle.pinRadius * 2)
-                .background(Circle().fill(AnnotateStyle.accent))
+                .background(Circle().fill(AnnotateStyle.accentFill))
                 .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
                 .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
                 .scaleEffect(isActive ? 1.18 : 1)
@@ -77,7 +77,7 @@ struct OverlayToolbar: View {
         HStack(spacing: 8) {
             Image(systemName: "pencil.and.scribble")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AnnotateStyle.accent)
+                .foregroundStyle(AnnotateStyle.accentText)
             Text(controller.hint)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
@@ -121,9 +121,9 @@ private struct DrawToggle: View {
         } label: {
             Image(systemName: "scribble.variable")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(isOn ? Color.white : AnnotateStyle.accent)
+                .foregroundStyle(isOn ? Color.white : AnnotateStyle.accentText)
                 .frame(width: 32, height: 30)
-                .background(isOn ? AnnotateStyle.sketch : AnnotateStyle.accent.opacity(0.12), in: Capsule())
+                .background(isOn ? AnnotateStyle.sketchFill : AnnotateStyle.accent.opacity(0.16), in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -160,7 +160,7 @@ private struct SendButton: View {
             .padding(.leading, 6)
             .padding(.trailing, 10)
             .frame(height: 30)
-            .background(AnnotateStyle.accent.opacity(count == 0 ? 0.45 : 1), in: Capsule())
+            .background(AnnotateStyle.accentFill.opacity(count == 0 ? 0.45 : 1), in: Capsule())
             .contentTransition(.numericText())
         } primaryAction: {
             controller.send(keepAnnotating: false)
@@ -190,7 +190,7 @@ struct LauncherButton: View {
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .frame(minWidth: 16, minHeight: 16)
-                        .background(Circle().fill(AnnotateStyle.accent))
+                        .background(Circle().fill(AnnotateStyle.accentFill))
                         .offset(x: 3, y: -3)
                 }
             }

@@ -59,11 +59,11 @@ struct EditorCard: View {
         HStack(spacing: 6) {
             Text(tagTitle)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AnnotateStyle.accent)
+                .foregroundStyle(AnnotateStyle.accentText)
                 .lineLimit(1)
                 .padding(.horizontal, 6)
                 .frame(height: 20)
-                .background(AnnotateStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .background(AnnotateStyle.accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
 
             if let source = draft.annotation.source {
                 Text(source.shortDescription)
@@ -116,7 +116,7 @@ private struct CardIconButton: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(prominent ? Color.white : Color.secondary)
                 .frame(width: 26, height: 26)
-                .background(prominent ? AnnotateStyle.accent : Color.clear, in: Circle())
+                .background(prominent ? AnnotateStyle.accentFill : Color.clear, in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -154,9 +154,9 @@ private struct SketchTools: View {
                 } label: {
                     Image(systemName: tool.symbolName)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isSelected ? AnnotateStyle.accent : Color.secondary)
+                        .foregroundStyle(isSelected ? AnnotateStyle.accentText : Color.secondary)
                         .frame(width: 32, height: 28)
-                        .background(isSelected ? AnnotateStyle.accent.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .background(isSelected ? AnnotateStyle.accent.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
