@@ -2,8 +2,10 @@
 // 9257:13754): the 44pt round icon button every surface uses, the shared chrome button style
 // (press feedback only, no disabled dimming), the glass helper, the white number badge, white
 // sketch strokes, and the review bar shown when no pin is open (9257:13549), whose trash asks for
-// confirmation first. Also owns the floating launcher with its delivery ring and the toast, which
-// predate the redesign.
+// confirmation first. Also owns the launcher pill (9265:14439 / 9265:14691): a solid capsule
+// docked above the home indicator whose title narrates the last Send ("Annotate", "4 comments
+// sent", …) so delivery progress needs no separate toast or ring. The toast below predates the
+// redesign and now only carries in-mode messages.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -216,75 +218,71 @@ struct ReviewBar: View {
 
 // MARK: - Launcher
 
+/// The launcher pill (9265:14504): a solid capsule whose title is `controller.launcherStatus.title`,
+/// so it reads "Annotate" when idle (9265:14439) and narrates the last Send afterwards
+/// (9265:14691 and the gap stages). The view never inspects the status itself; every case's copy
+/// lives on `LauncherStatus` in AnnotateCore, so the wording stays testable on Linux.
 struct LauncherButton: View {
     let controller: AnnotateController
-    @GestureState private var dragOffset: CGSize = .zero
+    /// Vertical drag only: the pill stays centered, so a side-edge snap has nothing to do and the
+    /// user can only lift it off an app's own bottom bar.
+    @GestureState private var dragOffset: CGFloat = 0
+
+    /// Figma's horizontal title padding (9265:14504 `px-[16px]`).
+    static let horizontalPadding: CGFloat = 16
+    /// Figma container `px-[8px]` (9265:14502): 8pt on each side caps the pill at `bounds.width - 16`,
+    /// which is what a long agent message truncates against.
+    static let containerInset: CGFloat = 8
+    /// Figma title: SF Pro Medium 17 (9265:14505). Its 22pt leading is the 17pt default, so no
+    /// line spacing modifier.
+    static let titleSize: CGFloat = 17
+    /// Drag threshold kept from the old launcher, so a tap with a little jitter still taps.
+    static let dragThreshold: CGFloat = 8
+    /// Not in Figma (no motion context for either frame): title and width changes animate so the
+    /// pill visibly grows into "4 comments sent" instead of jumping.
+    static let statusAnimation: Animation = .snappy(duration: 0.25)
+
+    /// Figma is black on white in light mode. Dark mode has no frame, so the pair inverts through
+    /// semantic colors: a fixed black pill would vanish into dark app UI.
+    private static let fill = Color(uiColor: .label)
+    private static let text = Color(uiColor: .systemBackground)
 
     var body: some View {
-        let center = controller.resolvedLauncherCenter
-        let count = controller.annotations.count
+        let status = controller.launcherStatus
+        let frame = controller.launcherFrame
+        let maxWidth = max(controller.bounds.width - Self.containerInset * 2, 0)
 
-        Image(systemName: "pencil.and.scribble")
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(.primary)
-            .frame(width: AnnotateController.launcherSize, height: AnnotateController.launcherSize)
-            .background(.regularMaterial, in: Circle())
-            .overlay(Circle().strokeBorder(.primary.opacity(0.1)))
-            .overlay(alignment: .topTrailing) {
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(minWidth: 16, minHeight: 16)
-                        .background(Circle().fill(AnnotateStyle.accentFill))
-                        .offset(x: 3, y: -3)
-                }
-            }
-            .overlay { DeliveryRing(delivery: controller.delivery) }
-            .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
-            .contentShape(Circle())
+        Text(status.title)
+            .font(.system(size: Self.titleSize, weight: .medium))
+            .foregroundStyle(Self.text)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, Self.horizontalPadding)
+            // The 44pt Figma height wins over its py-8 (22 + 16 = 38)
+            .frame(height: AnnotateController.launcherHeight)
+            .background(Self.fill, in: Capsule())
+            .animation(Self.statusAnimation, value: status)
+            // The controller's hit frame (OverlayWindow hit-tests it) must match the rendered width,
+            // which changes with every title; measured here, before `.position` expands the view
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { controller.updateLauncherSize($0) }
+            .contentShape(Capsule())
             .onTapGesture { controller.start() }
             .gesture(
-                DragGesture(minimumDistance: 8)
-                    .updating($dragOffset) { value, state, _ in state = value.translation }
+                DragGesture(minimumDistance: Self.dragThreshold)
+                    .updating($dragOffset) { value, state, _ in state = value.translation.height }
                     .onEnded { value in
-                        controller.moveLauncher(to: CGPoint(x: center.x + value.translation.width, y: center.y + value.translation.height))
+                        controller.moveLauncher(toCenterY: frame.midY + value.translation.height)
                     }
             )
-            .position(x: center.x + dragOffset.width, y: center.y + dragOffset.height)
-            .animation(.snappy(duration: 0.3), value: center)
-    }
-}
-
-/// Ring around the launcher narrating the last Send: dashed while waiting, spinning while Claude
-/// works, green when done, red on failure.
-private struct DeliveryRing: View {
-    let delivery: AnnotateController.Delivery?
-    @State private var spin = false
-
-    var body: some View {
-        Group {
-            switch delivery {
-            case .none:
-                EmptyView()
-            case .waiting?, .unclaimed?, .delivered?:
-                Circle()
-                    .strokeBorder(AnnotateStyle.accent.opacity(delivery == .unclaimed ? 0.35 : 0.8), style: StrokeStyle(lineWidth: 2, dash: [3, 4]))
-            case .received?, .working?:
-                Circle()
-                    .trim(from: 0, to: 0.7)
-                    .stroke(AnnotateStyle.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(spin ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spin)
-                    .onAppear { spin = true }
-                    .padding(1)
-            case .done?:
-                Circle().strokeBorder(Color.green, lineWidth: 2.5)
-            case .failed?:
-                Circle().strokeBorder(Color.red, lineWidth: 2.5)
-            }
-        }
-        .allowsHitTesting(false)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(status.title)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Annotate the screen")
+            // Caps the proposal so long titles truncate inside the capsule. It must come after the
+            // measurement and the hit shape, or they would take the capped frame's width (a
+            // maxWidth-only frame grows to the proposal) instead of the pill's
+            .frame(maxWidth: maxWidth)
+            .position(x: frame.midX, y: frame.midY + dragOffset)
     }
 }
 

@@ -20,6 +20,12 @@ All notable changes to this project are documented here. The format is based on
     white with white number badges. Trash asks before deleting ("Delete 4 comments?").
   - **Removed:** the toolbar and hint, the draw toggle, region dragging, the shape tools, in-place text
     retyping, the selection chip and "Send and keep annotating". The keyboard shortcuts stay.
+- The launcher is now a pill above the home indicator (Figma 9265:14439) that reads "Annotate" and
+  narrates the last Send in place of the delivery ring and toasts. It shows "4 comments sent"
+  (9265:14691), then each stage as the agent reports it ("Claude picked it up", "Done", and so on),
+  and returns to "Annotate" (or "Annotate · N" while unsent pins are waiting). It drags vertically
+  and inverts in dark mode.
+- The review bar and comment card use interactive Liquid Glass, so they respond to presses.
 - The annotated screenshot and crops keep their blue and red markers for contrast. Their strokes are
   now 4pt, and a crop covers the pin's drawing as well as its frame.
 

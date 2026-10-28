@@ -15,14 +15,18 @@
 // review bar shows: × stops (pins kept), trash clears, Send sends and exits. `chrome` resolves which.
 // Return / ↑ saves a pin with a comment, × discards it, Esc backs out one level, ⌘Z undoes.
 // Send → hands a SendJob to BundleRenderer off the main thread (1x/annotated images, crops,
-// attachments, PNG encoding, write, prune), then polls status.json so the overlay can show the agent
-// picking it up and finishing. No copy/paste.
+// attachments, PNG encoding, write, prune), then polls status.json; the launcher pill narrates each
+// stage (`delivery` → `launcherStatus`) instead of toasts, so progress stays on screen in one place
+// and toasts are left to in-mode messages. No copy/paste.
+// The launcher is a pill centered horizontally above the home indicator, or above the keyboard
+// while one is up, whether docked or dragged (Figma 9265:14439); a drag moves it vertically only,
+// so it can get out of the way of an app's own bottom bar.
 // Live scans (taps, sketch attribution) wait until they match the frozen image: SwiftUI's
 // accessibility tree is built right after the bootstrap, and while the comment keyboard is up the
 // app's labeled elements must still sit where they froze (an app may re-lay out for any keyboard;
 // if it did, the scan waits for the keyboard to go). The overlay itself never moves for the
-// keyboard; the card and review bar sit above it. A launch-time start waits for the first screen
-// the app settles on.
+// keyboard; the card, review bar and launcher pill sit above it. A launch-time start waits for
+// the first screen the app settles on.
 // Idle cost is near zero: the accessibility tree and `.annotatable()` frame tracking switch on
 // only while annotating, and the text outline is scanned once the tree is warm.
 
@@ -69,26 +73,6 @@ final class AnnotateController {
         var elements: [ScreenElement]?
     }
 
-    /// Progress of the most recent Send, read back from the bundle's status.json.
-    enum Delivery: Equatable {
-        /// Written; no agent has picked it up yet.
-        case waiting
-        /// Still nobody after a while: no watcher is running.
-        case unclaimed
-        /// Handed to Claude Code, not opened yet (Claude may be busy with another turn).
-        case delivered
-        case received
-        case working(String?)
-        case done(String?)
-        case failed(String?)
-
-        var isFinal: Bool {
-            if case .done = self { return true }
-            if case .failed = self { return true }
-            return false
-        }
-    }
-
     /// The touch in progress: identified by its start point (constant across a DragGesture's
     /// changes), so the first change of a new touch can be told apart from a continuing one.
     private struct TouchTrack {
@@ -118,11 +102,17 @@ final class AnnotateController {
     /// The stroke under the finger, in screen points; joins a pin when the finger lifts.
     private(set) var liveStroke: Stroke?
     private(set) var toast: Toast?
-    private(set) var launcherCenter: CGPoint?
+    /// Where the user dragged the launcher; nil keeps it docked above the home indicator.
+    private(set) var launcherCenterY: CGFloat?
+    /// The pill's measured size: its width follows the title, so the hit frame must too.
+    /// Starts at the Figma "Annotate" pill (9265:14504) until the view reports.
+    private(set) var launcherPillSize = CGSize(width: 104, height: 44)
     /// The still image shown under the overlay while annotating.
     private(set) var frozenImage: UIImage?
     private(set) var currentScreen = 0
-    private(set) var delivery: Delivery?
+    /// Progress of the most recent Send, read back from the bundle's status.json; nil once the
+    /// launcher has gone back to idle.
+    private(set) var delivery: DeliveryStage?
     /// Top of the software keyboard (or hardware-keyboard bar) in overlay points while it's up.
     private(set) var keyboardTop: CGFloat?
 
@@ -134,6 +124,11 @@ final class AnnotateController {
     /// Fires the hold once a touch has stayed still for `PointerIntent.holdDuration`.
     @ObservationIgnored private var holdTask: Task<Void, Never>?
     @ObservationIgnored private var deliveryTask: Task<Void, Never>?
+    /// Times out a stage that shows outside the poll loop (`notSaved`, `unclaimed`), so the poll
+    /// keeps running while it waits; a new Send cancels it.
+    @ObservationIgnored private var deliveryHold: Task<Void, Never>?
+    /// The latest Send's write completion; a newer Send cancels it so a stale outcome is dropped.
+    @ObservationIgnored private var deliveryWrite: Task<Void, Never>?
     @ObservationIgnored private var launchStart: Task<Void, Never>?
     @ObservationIgnored private var accessibilityWarmUp: Task<Void, Never>?
     @ObservationIgnored private var isTreeWarm = false
@@ -534,7 +529,8 @@ final class AnnotateController {
     }
 
     /// Gathers what's needed on the main actor, clears the overlay at once, and renders, encodes
-    /// and writes the bundle off the main thread; the toast and delivery ring follow when it lands.
+    /// and writes the bundle off the main thread. The launcher reads "N comments sent" at once and
+    /// narrates delivery from there (`trackDelivery`).
     func send(keepAnnotating: Bool) {
         finishDraft()
         guard chrome.canSend else {
@@ -579,21 +575,33 @@ final class AnnotateController {
             screens.removeAll()
             stop()
         }
+        // A new Send owns the pill: the previous one's write, tracking and holds must not narrate over it
+        deliveryWrite?.cancel()
         deliveryTask?.cancel()
-        delivery = .waiting
+        deliveryTask = nil
+        deliveryHold?.cancel()
+        deliveryHold = nil
+        // Set before the write so the pill answers the tap immediately (Figma 9265:14691)
+        delivery = .sent(count: outgoing.count)
 
-        Task { [weak self] in
+        deliveryWrite = Task { [weak self] in
+            // The detached write isn't cancelled with this task, so the bundle still lands
             let outcome = await Task.detached(priority: .userInitiated) { BundleRenderer.write(job) }.value
             guard let self else { return }
-            if self.options.copiesPromptToClipboard || outcome.error != nil {
+            // A failed write's prompt is the user's only copy of it, so it's copied even when a newer
+            // Send superseded this one. The opt-in copy of a successful write is skipped once
+            // superseded, so it can't clobber the newer Send's prompt.
+            if outcome.error != nil || (self.options.copiesPromptToClipboard && !Task.isCancelled) {
                 UIPasteboard.general.string = outcome.prompt
             }
-            if let error = outcome.error {
-                self.delivery = nil
-                self.showToast("Couldn't write the session (\(error)). Prompt copied instead.", duration: 5)
+            guard !Task.isCancelled else { return }
+            self.deliveryWrite = nil
+            if outcome.error != nil {
+                // The prompt is on the clipboard already; the pill says so instead of a toast
+                self.delivery = .notSaved
+                self.clearDelivery(ifStill: .notSaved, after: LauncherStatus.finalHold)
                 return
             }
-            self.showToast("Sent \(outcome.pinCount) \(outcome.pinCount == 1 ? "pin" : "pins")")
             self.trackDelivery(id: job.sessionID, in: job.outputDirectory)
         }
     }
@@ -612,7 +620,12 @@ final class AnnotateController {
 
     /// Review bar height, Figma 9257:13549.
     static let barHeight: CGFloat = 60
-    static let launcherSize: CGFloat = 44
+    /// Launcher pill height, Figma 9265:14504 (`h-[44px]`; it wins over py-8 + the 22pt line).
+    static let launcherHeight: CGFloat = 44
+    /// Gap between the docked pill and `chromeBottom`, Figma container 9265:14502 (`pb-[8px]`).
+    static let launcherBottomGap: CGFloat = 8
+    /// Extra touch slop around the pill on every side, so a near miss still opens annotate mode.
+    static let launcherHitSlop: CGFloat = 4
 
     /// Lowest y bottom chrome (comment card, review bar, toasts) may reach: above the home
     /// indicator, or above the keyboard while it's up.
@@ -621,27 +634,52 @@ final class AnnotateController {
         return keyboardTop.map { min($0, screenBottom) } ?? screenBottom
     }
 
-    var resolvedLauncherCenter: CGPoint {
-        if let launcherCenter { return launcherCenter }
-        let radius = Self.launcherSize / 2
-        return CGPoint(x: bounds.maxX - safeInsets.right - 16 - radius, y: bounds.maxY - safeInsets.bottom - 72 - radius)
+    /// What the launcher pill says: the delivery stage while one is showing, otherwise idle with
+    /// the pins kept from earlier (saved but not sent).
+    var launcherStatus: LauncherStatus {
+        .resolve(.init(delivery: delivery, pendingCount: annotations.count))
+    }
+
+    /// The pill in overlay points: centered horizontally, docked 8pt above `chromeBottom` (so it
+    /// rides the keyboard like the rest of the bottom chrome) unless the user dragged it.
+    var launcherFrame: CGRect {
+        let height = Self.launcherHeight
+        let width = launcherPillSize.width
+        // Clamped on read too: a rotation or safe-area change can leave a dragged position off screen
+        let centerY = launcherCenterY.flatMap { clampedLauncherCenterY($0) }
+        let maxY = centerY.map { $0 + height / 2 } ?? chromeBottom - Self.launcherBottomGap
+        return CGRect(x: bounds.midX - width / 2, y: maxY - height, width: width, height: height)
     }
 
     /// Touch target the overlay window accepts while annotate mode is off.
     var launcherHitFrame: CGRect {
         guard options.showsLauncher else { return .zero }
-        let center = resolvedLauncherCenter
-        let side = Self.launcherSize + 8
-        return CGRect(x: center.x - side / 2, y: center.y - side / 2, width: side, height: side)
+        return launcherFrame.insetBy(dx: -Self.launcherHitSlop, dy: -Self.launcherHitSlop)
     }
 
-    /// Snaps to the nearest side edge, clamped inside the safe area.
-    func moveLauncher(to point: CGPoint) {
-        let radius = Self.launcherSize / 2
-        let area = safeBounds.insetBy(dx: 8 + radius, dy: radius)
-        let x = point.x < bounds.midX ? area.minX : area.maxX
-        let y = min(max(point.y, area.minY), area.maxY)
-        launcherCenter = CGPoint(x: x, y: y)
+    /// The pill's measured size from the view. Equal sizes are dropped: every write would
+    /// invalidate `launcherFrame` readers even when nothing moved.
+    func updateLauncherSize(_ size: CGSize) {
+        guard launcherPillSize != size else { return }
+        launcherPillSize = size
+    }
+
+    /// Vertical drag only: x stays centered, y is clamped so the whole pill stays in the safe area.
+    func moveLauncher(toCenterY y: CGFloat) {
+        guard let clamped = clampedLauncherCenterY(y) else { return }
+        if launcherCenterY != clamped { launcherCenterY = clamped }
+    }
+
+    /// Range a dragged pill's center may take. The lowest center is the docked one, derived from
+    /// `chromeBottom` like the docked frame, so there's one bottom edge either way (`safeBounds`
+    /// would differ when the bottom inset is under 12). nil before the first layout, when the
+    /// area is smaller than the pill and there's nothing to clamp to.
+    private func clampedLauncherCenterY(_ y: CGFloat) -> CGFloat? {
+        let half = Self.launcherHeight / 2
+        let top = safeBounds.minY + half
+        let bottom = chromeBottom - Self.launcherBottomGap - half
+        guard bottom >= top else { return nil }
+        return min(max(y, top), bottom)
     }
 
     func showToast(_ message: String, duration: Double = 2.6) {
@@ -903,50 +941,70 @@ final class AnnotateController {
         }
     }
 
-    /// Polls status.json written by the receiving agent and narrates the transitions.
+    /// How long status.json is polled after a Send (the existing cap). Past it the agent is
+    /// presumed gone, and a stuck non-final stage is cleared so the pill shows pending pins again.
+    static let deliveryTrackingLimit: TimeInterval = 3600
+
+    /// Polls status.json written by the receiving agent; the launcher pill narrates each stage.
     private func trackDelivery(id: String, in output: URL) {
         deliveryTask?.cancel()
-        delivery = .waiting
         deliveryTask = Task { [weak self] in
             let started = Date()
-            var last: SessionStatus.State?
+            // Deduped on the mapped stage, not the state: repeated `working` notes carry new messages
+            var lastStage: DeliveryStage?
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                guard let self else { return }
+                guard let self, !Task.isCancelled else { return }
                 let elapsed = Date().timeIntervalSince(started)
+                // Checked for every status, so an agent that died mid-work doesn't pin the pill forever
+                if elapsed > Self.deliveryTrackingLimit {
+                    if self.delivery?.isFinal == false { self.delivery = nil }
+                    return
+                }
                 guard let status = SessionInbox.readStatus(id: id, in: output) else {
-                    if elapsed > self.options.unclaimedAfter, self.delivery == .waiting {
+                    // Nobody picked it up: say so briefly, then go back to idle. Polling goes on,
+                    // because a watcher started late still claims the bundle.
+                    if elapsed > self.options.unclaimedAfter, case .sent = self.delivery {
                         self.delivery = .unclaimed
-                        self.showToast("Saved, but nothing picked it up. Is the Claude Code watcher running?", duration: 4)
+                        self.clearDelivery(ifStill: .unclaimed, after: LauncherStatus.unclaimedHold)
                     }
-                    if elapsed > 3600 { return }
                     continue
                 }
-                guard status.state != last else { continue }
-                last = status.state
-                switch status.state {
-                case .delivered:
-                    self.delivery = .delivered
-                    self.showToast("Delivered to Claude Code")
-                case .received:
-                    self.delivery = .received
-                    self.showToast("Claude picked it up")
-                case .working:
-                    self.delivery = .working(status.message)
-                    if let message = status.message { self.showToast(message) }
-                case .done:
-                    self.delivery = .done(status.message)
-                    self.showToast(status.message.map { "Done · \($0)" } ?? "Done", duration: 4)
-                case .failed:
-                    self.delivery = .failed(status.message)
-                    self.showToast(status.message.map { "Claude couldn't finish · \($0)" } ?? "Claude couldn't finish", duration: 5)
-                }
-                if status.isFinal {
-                    try? await Task.sleep(for: .seconds(6))
-                    if self.delivery?.isFinal == true { self.delivery = nil }
+                let stage = Self.stage(for: status)
+                guard stage != lastStage else { continue }
+                lastStage = stage
+                // A status that lands while "not picked up" is still showing replaces it
+                self.deliveryHold?.cancel()
+                self.deliveryHold = nil
+                self.delivery = stage
+                if stage.isFinal {
+                    try? await Task.sleep(for: .seconds(LauncherStatus.finalHold))
+                    // Cancelled means a newer Send owns the pill; leave it alone
+                    if !Task.isCancelled, self.delivery == stage { self.delivery = nil }
                     return
                 }
             }
+        }
+    }
+
+    private static func stage(for status: SessionStatus) -> DeliveryStage {
+        switch status.state {
+        case .delivered: .delivered
+        case .received: .received
+        case .working: .working(message: status.message)
+        case .done: .done(message: status.message)
+        case .failed: .failed(message: status.message)
+        }
+    }
+
+    /// Returns the launcher to idle after `seconds`, unless the stage changed meanwhile. Runs beside
+    /// the poll loop rather than inside it, so tracking keeps going during the hold.
+    private func clearDelivery(ifStill stage: DeliveryStage, after seconds: Double) {
+        deliveryHold?.cancel()
+        deliveryHold = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled, self.delivery == stage else { return }
+            self.delivery = nil
         }
     }
 
