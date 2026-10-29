@@ -9,7 +9,7 @@ In Xcode choose **File → Add Package Dependencies…**, enter
 In a `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.1.1")
+.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.2.0")
 ```
 
 ## Install the overlay
@@ -41,13 +41,13 @@ pick a delivery mode:
 
 ## Annotate
 
-Tap the pencil (or call ``Annotate/start()``). The screen freezes.
+Tap the **Annotate** pill (or call ``Annotate/start()``). The screen freezes.
 
-- **Tap** pins the element under your finger, or the exact spot if nothing distinct is there.
-  Use `↑`/`↓` to move between spot, element and containers.
-- **Drag** makes a region with sketch tools.
-- **Draw mode** (the scribble button) lets you sketch anywhere on the screen.
-- **Return** saves a pin, **Esc** backs out, and **Send** delivers everything.
+- **Draw** anywhere: the drawing becomes a note, attributed to the view under it.
+- **Tap** selects the element under your finger. Use `↑`/`↓` to move between it and its
+  containers.
+- **Hold** still for half a second to pin an exact spot.
+- **↑** on the comment card saves a note, **Esc** backs out, and **Send** delivers everything.
 
 ## Optional: exact source lines
 

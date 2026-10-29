@@ -16,15 +16,15 @@ Tap, draw and comment on your running app. Hit Send. Your agent gets the screens
 
 ---
 
-1. In your app in the Simulator, tap the pencil. The screen freezes.
-2. **Tap anything** to pin a comment: an element, or the exact spot. **Drag** a region and sketch
-   in it, or flip on **Draw** and scribble anywhere. Retype a label in place.
+1. In your running app, in the Simulator or on your iPhone, tap the **Annotate** pill. The screen
+   freezes.
+2. **Draw** around anything, **tap** an element to select it, or **hold** to pin an exact spot.
+   Say what should change.
 3. Hit **↑**. Claude Code, already open on your Mac, starts working. Annotate mode stays open and
-   narrates it: *Claude received your notes → Claude is working… → All changes applied · Reinstalling*,
-   while each pin's
-   badge spins until the agent resolves it and then turns into a green check. The dot on the pill
-   is green while an agent listens, yellow while it reconnects, and red when nothing does. It works
-   the same from a physical iPhone, with no extra setup.
+   narrates it: *Claude received your notes → Claude is working… → All changes applied ·
+   Reinstalling*, while each note's badge spins until the agent resolves it and then turns into a
+   green check. The dot on the pill is green while an agent listens, yellow while it reconnects, and
+   red when nothing does. It works the same from a physical iPhone, with no extra setup.
 
 No copy/paste and no tagging views: every pixel is annotatable. It works with SwiftUI and UIKit,
 and everything is compiled out of Release builds.
@@ -127,18 +127,18 @@ Tools:
 
 | Action | Gesture / key |
 |---|---|
-| Enter annotate mode (freezes the screen) | Pencil button, `Annotate.start()`, or launch with `ANNOTATE=1` (waits for the first settled screen; `ANNOTATE_DELAY=<seconds>` for a fixed wait) |
-| Pin anything | Tap. It snaps to the element under your finger, or pins the exact spot when nothing distinct is there |
-| Walk spot → element → containers | `↑` / `↓` before saving |
-| Comment and save | Type, then ↑ (`Return` types a newline) |
-| Discard the open pin | × in undo's place, once there's nothing left to undo |
-| Retype a label in place | Text-cursor button on the card |
-| Region with a sketch inside | Drag, then draw with pen / ellipse / rectangle / arrow |
-| Draw anywhere on the screen | Scribble button in the toolbar. The drawing becomes one pin, attributed to the view under it |
-| Undo / redo a stroke | The card's undo and redo buttons, or `⌘Z` / `⇧⌘Z`. `⌘Z` with no pin open removes the last pin |
+| Enter annotate mode (freezes the screen) | The **Annotate** pill, `Annotate.start()`, or launch with `ANNOTATE=1` (waits for the first settled screen; `ANNOTATE_DELAY=<seconds>` for a fixed wait) |
+| Draw | Drag anywhere. Further strokes join the open note while its card is up; the note is attributed to the view under the drawing |
+| Select an element | Tap. The whole element under your finger is outlined |
+| Pin an exact spot | Hold still for half a second |
+| Walk element → containers | `↑` / `↓` before saving |
+| Comment and save | Type, then ↑ (`Return` types a newline). The chip picks **Fix** or **Question**; the paperclip attaches up to 4 images |
+| Undo / redo a stroke | The card's undo and redo buttons, or `⌘Z` / `⇧⌘Z`. `⌘Z` with no note open removes the last one |
+| Discard the open note | × in undo's place, once there's nothing left to undo |
 | Back out | `Esc` |
-| Send | **↑** on the bar or `⌘Return`. Annotate mode stays open with the sent pins' progress |
-| See, open or delete notes | Tap the note count on the bar: the notes sheet lists them; swipe to delete, *Clear All* for every one |
+| Send | **↑** on the bar or `⌘Return`. Annotate mode stays open with the sent notes' progress |
+| See, open or delete notes | Tap the note count on the bar: the notes sheet lists them; swipe to delete, the trash icon clears them all |
+| Move the pill | Drag it up or down. Left alone, it keeps clear of your tab bar and other bottom bars |
 
 To annotate another screen, leave annotate mode, navigate, and come back. One Send carries every
 screen with pins on it.
@@ -209,7 +209,7 @@ Screen 1 (402×874 pt) — annotated …/screens/1-annotated.png · clean …/sc
 
 3. Sketch over Image "Halo Pendant" at (190, 520, 180×140) — center (280, 590), 70% across, 68% down
    make this card a carousel
-   Drawn on the screen in red (arrow, arrow); see the crop
+   Drawn on the screen in red (pen); see the crop
    Crop: …/crops/3.png
 
 Full detail (all frames, visible text per screen, sketch vectors): …/session.json
@@ -275,7 +275,7 @@ Foundation-only, so viewers, bots and other tools can depend on it without UIKit
 On tap, AnnotateKit asks UIKit which view would receive the touch. It then walks that view's
 ancestors, its subtree, and the accessibility children of both, so views behind a sheet are skipped.
 SwiftUI `Text`, `Button` and `Image` exist at runtime only as accessibility nodes, so it turns on
-the in-process accessibility tree at install, the same switch XCUITest flips. You can opt out with
+the in-process accessibility tree the first time you annotate, the same switch XCUITest flips. You can opt out with
 `AnnotateOptions(enablesAccessibilityTree: false)`. Candidates are sorted smallest-first. If only a
 big container (more than 40% of the screen) is under your finger, the pin starts as a spot at the
 exact point.
@@ -305,7 +305,6 @@ skills/                 annotate-setup and annotate-watch (Agent Skills format)
 
 - Frames assume a full-screen window (iPhone, or a full-screen iPad app). Stage Manager windows
   aren't handled.
-- The inline retype field estimates the font size from the label's height.
 - There's no hover highlight: the iPhone Simulator doesn't deliver pointer hover to apps.
 - Channels are a Claude Code research preview, so their flags and protocol may change.
 

@@ -6,202 +6,89 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed
-- Pins follow scrolled content: back in annotate mode after scrolling, pins move with the scroll
-  view's content instead of disappearing; pins scrolled out of view return when scrolled back.
-- Redesigned overlay (Figma SUNSET 9257:13754). Annotate mode dims the frozen screen 50% and draws
-  a blue inset glow along the screen edge (62pt radius) that drifts slowly while annotate mode is on
-  (static with Reduce Motion).
-  - **Drawing is the default:** a stroke is a white 4pt pen line, and further strokes join the open
-    pin for as long as its comment card is up.
-  - **Tap and hold:** a tap selects the whole element under the finger, outlined in white with no
-    label chip. Holding still for 0.5s drops a spot.
-  - **Comment card:** it always docks to the keyboard, never to the marker. It has the comment, a
-    paperclip, × and ↑ (Return also submits).
-  - **Review bar:** with no pin open, the bottom bar shows ×, "N comments", trash and Send. Pins are
-    white with white number badges. Trash asks before deleting ("Delete 4 comments?").
-  - **Removed:** the toolbar and hint, the draw toggle, region dragging, the shape tools, in-place text
-    retyping, the selection chip and "Send and keep annotating". The keyboard shortcuts stay.
-- The launcher is now a pill above the home indicator (Figma 9265:14439) that reads "Annotate" and
-  narrates the last Send in place of the delivery ring and toasts. It shows "4 comments sent"
-  (9265:14691), then each stage as the agent reports it ("Claude picked it up", "Done", and so on),
-  and returns to "Annotate" (or "Annotate · N" while unsent pins are waiting). It drags vertically
-  and inverts in dark mode.
-- The review bar and comment card use interactive Liquid Glass, so they respond to presses.
-- Overlay refinements (Figma SUNSET 9272:17592, 9273:17925):
-  - **Review bar:** it sits 34pt in from the screen edges, on the home indicator. It opens with a
-    back chevron instead of ×, and counts "notes" instead of "comments" (also "Delete N notes?" and
-    "N notes sent").
-  - **Hint line above the bar:**
-    - "Draw, tap or hold to annotate" for a few seconds after you open annotate mode.
-    - Then "● Claude connected", or "● No agent connected · Notes will be saved" when nothing is
-      listening, and it stays on that, following the connection.
-    - While a Send is in flight it narrates it with a timer: "● Sending notes · 1/4", "● Claude received
-      your notes 1s", "● Claude is reading… 2s", the agent's own "All changes applied · Reinstalling
-      9s", then "● Claude is done · 4 notes" (owner copy: subject first). A Send nobody claims reads
-      "● Claude failed to receive your notes".
-  - **Background:** a blue gradient rises behind the bottom chrome.
-  - **Comment card:** text sits at 20/16pt. Attached images are 64pt with a white remove badge.
-- The annotated screenshot and crops keep their blue and red markers for contrast. Their strokes are
-  now 4pt, and a crop covers the pin's drawing as well as its frame.
+## [0.2.0] - 2026-10-29
 
-- Comment card: undo and redo buttons replace ×. They step through the strokes drawn since the card
-  opened; `⇧⌘Z` redoes. With nothing left to undo, undo turns into × and discards the pin (deletes a
-  reopened one); redo dims with nothing to redo.
-  `Return` now types a newline in the comment and reply fields (↑ saves or sends), and a new drawing
-  opens its card without the keyboard so the next stroke has the whole screen.
-- The hint line's elapsed counter is dimmed to 50%, and every delivery stage change plays a haptic:
-  a light tick while the Send moves along, success when it's done, a warning for a question or when
-  nobody picked it up, an error when it failed.
-
-- Motion: entering and leaving annotate mode, the bottom chrome rises into place and sinks away while
-  the frozen screen cross-fades; the bar, comment and reply cards swap with a short slide, fade and
-  scale (a card that closes leaves at once, with its keyboard); the launcher pill scales and fades in place. Reduce Motion keeps the fades.
-- The review bar stays at the bottom of the screen while a keyboard is up; only the cards dock to the
-  keyboard.
-- The comment card quotes an element pin's own text in a thumbnail-style box (two lines at most),
-  like the message a reply quotes.
-- The comment and reply cards no longer focus on a tap anywhere on the card; that gesture took taps
-  meant for intent-menu items drawn over the card. Tap the field itself to type.
-
-- Overlay layout pass (Figma SUNSET 9276:28552):
-  - **Review bar:** three glass pieces 8pt apart: a 52pt back button, the note count, and a 52pt ↑
-    tinted blue while there is something to send. VoiceOver calls ↑ Save while no agent listens.
-  - **Notes sheet:** the count is a button that opens a sheet at a small detent, draggable to full
-    height. It lists the unsent notes (tap one to open it, swipe to delete, Clear All asks first;
-    this replaces the old trash button) and the last Send's notes with their progress and Reply.
-    With no notes it opens on an empty state that says how to add one. Tags under its toolbar
-    (Current, In Progress, Resolved, Failed, each with a count) pick what it lists; it replaces the
-    results card, and the hint line is a plain label again. The sheet is titled "My Notes", every
-    tag shows its count (0 included), and the empty states fit their symbol into one 48pt box.
-  - **Send keeps annotate mode open.** The sent pins stay on the frozen screen, and each badge shows
-    a spinner while the agent has the pin, then a green check when it's resolved (`?` for a question,
-    × when dismissed). The bar reads "N notes sent". Saving a new pin hides them; leaving annotate
-    mode drops them. `⌘↩` does the same.
-  - **Comment card:** with no keyboard up it sits where the bar does (34pt sides, on the home
-    indicator); over the keyboard it keeps 8pt. The intent chip's title is 17pt, still with its
-    up/down chevron. Move is gone from the intent menu (a saved `move` loads as Fix), leaving Fix and
-    Question. Disabled glyphs (↑ with no text, redo with nothing to redo) are 25% instead of 50%.
-  - **Quote box:** 236pt wide, 13/20pt text at 75%, hanging from the top.
-  - **Hint line:** two-part lines split into a headline and a dimmed detail ("No agent connected", "Notes
-    will be saved"); the detail and the elapsed sit 4pt after the headline.
-  - The undo ↔ × glyph swap runs four times as fast.
-  - **Fluid glow and frost:** the edge glow is two bands of uneven blues that turn slowly in
-    opposite directions, so it swells, thins and runs along the edge; the frost behind the bottom
-    chrome has soft blue pools drifting sideways. Reduce Motion holds both still.
-  - Entering and leaving annotate mode fades the dim, glow and frost over the same 0.3s the bar
-    takes to rise, on an ease so it reads as a fade rather than a pop.
-  - **48 hours of notes:** the notes sheet lists every Send of the last 48 hours under "Sent 2 hours
-    ago" headers, read back from their session folders with the agent's latest status, so it
-    survives relaunches; pruning never removes a session that young. A note the agent never
-    reported on follows its Send: resolved once the Send is done, failed when it failed.
-  - Sending from a card with the keyboard up hides the card at once and saves once the keyboard has
-    slid away, so the keyboard keeps its slide. Clear All is a trash icon and asks with a centered alert. The tag bar
-    sits right under the toolbar.
-  - The launcher pill is Liquid Glass instead of a solid black capsule, with 8pt between its dot
-    and title.
-  - On iOS 26 the overlay's glass materializes as it appears and dematerializes as it leaves
-    (`glassEffectTransition(.materialize)`): the bar and card switches fade while their glass
-    condenses in or melts away, in place of the slide and scale (kept before iOS 26).
-  - Pin badges scale up from their own center on a spring instead of flying in from the screen's
-    middle. The edge glow and the frost turn green, with mint and teal, while Claude reads or works
-    on a Send, crossfading back to blue after. The elapsed counter reads "45s", then "1m 5s",
-    never minutes alone. The notes sheet's empty states use one speech-bubble family:
-    `text.bubble`, `progress.indicator`, `checkmark.bubble`, `exclamationmark.bubble`.
-  - The hint line swaps with a soft rise: the new line comes up from below while the old one leaves
-    upward, both blurred and faded (a plain fade with Reduce Motion).
-  - The hint line's elapsed counter rolls its digits on each tick, and its status dot pulses slowly
-    to 40% and back every 2 s (solid with Reduce Motion).
-  - The intent chip opens our own dropdown above it instead of a system menu: on iOS 27 devices a
-    tap on a system menu item could be taken by the frozen screen's drawing gesture.
-  - The review bar's back, count and ↑ share one glass container, so a pressed one swells into its
-    neighbours. The edge glow's corners are 4pt tighter (58pt).
-  - The launcher pill follows Figma 9289:1305. It docks on the review bar's bottom edge (34pt above
-    the screen's bottom on a phone with a home indicator) instead of 8pt above it. It stays 34pt from
-    the sides, and its connection dot is 8pt. On a fresh open it no longer pops up with the window:
-    it waits for the app's first settled screen, then scales up and fades in like it does when
-    annotate mode closes.
-  - The pill's connection dot is always there and only changes color (owner request): green while
-    an agent listens, yellow while its heartbeat is late (past 7 s, before it goes stale at 15 s,
-    as when the copy to a device lags), red when nothing listens. Push and pull agents look alike on
-    the pill; the hint line still tells them apart. The model is `AgentLink` in AnnotateCore.
-  - The quoted element text in the comment card has 2pt more padding above and below and 2pt more
-    between its two lines, so a two-line quote makes the box 70pt; the strip bottom-aligns it with
-    the thumbnails.
+A redesigned overlay, a two-way loop with your agent (per-note results, questions, replies), Sends
+from a physical iPhone, and a launcher pill that narrates each Send and keeps off your app's bars.
 
 ### Added
-- **Launcher collision avoidance:** the idle pill keeps off the app's own bottom chrome. Once a
-  second it re-reads the bottom 240pt of the screen and springs to a clear spot: above whatever
-  covers the dock (a tab bar, a mini player on it), else to the trailing or leading side at dock
-  height. It counts visible tab bars, toolbars, text inputs and controls outside scroll views,
-  plus the extra bottom safe area a container reserves for its bars.
-  - Moving off something happens on the next check; settling back lower waits for two checks that
-    agree, so a bar that resizes while you scroll doesn't make the pill bob.
-  - A dragged pill stays where you put it, the keyboard dock still wins, and nothing moves while
-    annotating. The rule is pure and tested (`LauncherAvoidance` in AnnotateCore).
-- **`.annotateAvoid()`:** tags a view the launcher should keep off, for bars SwiftUI draws itself
-  (a custom tab bar, a floating button, a composer in `safeAreaBar`), which aren't UIKit views. It
-  is an empty stub in Release.
-- **Agent loop** (ideas from Agentation):
+- **Agent loop:**
   - **`annotation_wait` MCP tool:** blocks until you Send or answer a question, batches for 10 s and
-    returns everything. It gives hands-free delivery in Cursor, Codex, the Claude desktop app or any
-    MCP client, with no channels. A pending wait shows as a green dot.
-  - **Per-pin results:**
-    - MCP tools: `annotation_resolve` / `annotation_dismiss`.
-    - CLI: `annotate resolve|dismiss <id> <pin> "…"`.
-    - `status.json` gains `pins`.
-    - The notes sheet shows each sent note's result.
-  - **Questions:**
-    - The agent asks about one pin with `annotation_ask` / `annotate ask`, which waits for the answer.
-    - The pill and hint line say "Question on note N".
-    - The notes sheet's Reply opens a reply card.
-    - The answer is saved to `replies.json` and travels back from a device too.
-  - **Intent per pin** (Fix · Question), on a chip on the comment card. Prompts tag
-    non-fix pins.
+    returns everything, so delivery is hands-free in Cursor, Codex, the Claude desktop app or any
+    MCP client, with no channels.
+  - **Per-note results:** `annotation_resolve` / `annotation_dismiss` (CLI: `annotate resolve|dismiss
+    <id> <pin> "…"`). Each sent pin's badge spins while the agent has it, then shows a check, `?`
+    or ×.
+  - **Questions:** the agent asks about one note with `annotation_ask` / `annotate ask` and waits.
+    You answer on the device from the notes sheet; the reply is saved to `replies.json` and travels
+    back from a device too.
+  - **Intent per note** (Fix or Question) on a chip in the comment card; prompts tag Question notes.
   - **`AnnotateOptions.promptDetail`:** `.compact`, `.standard` or `.detailed`.
-  - **`SCHEMA.md`:** documents every file the app and agents exchange.
-  - **Schema (additive, still v1):** `Annotation.intent`, `SessionStatus.pins`, and the new
-    `replies.json`.
-- **Sends from a physical iPhone or iPad reach your agent**, with no setup in the app: no network
-  permission and no Info.plist keys. `annotate mcp`, `watch` and `run` copy each new bundle from a
-  paired device's development build over the developer connection (`devicectl`, USB or Wi-Fi) into
-  the project's `.annotate/`. They also copy status back, so the pill narrates on the device too. A
-  Send reaches the checkout the build came from (bundles record the `Annotate.install()` file), so
-  builds from two worktrees go to the agent in each. `--no-device` turns this off.
-- **Connection dot on the launcher pill:**
-  - **Solid green:** an agent that starts on Send is listening (a watcher, the headless runner, or a
-    channel Claude has been seen answering).
-  - **Ring:** an agent is connected but only reads sessions when asked (MCP tools).
-  - **No dot:** nothing is listening. A Send then says "Saved · no agent connected" at once instead
-    of waiting 10 s.
+- **Sends from a physical iPhone or iPad** reach your agent with no setup in the app (no network
+  permission, no Info.plist keys). `annotate mcp`, `watch` and `run` copy each new bundle from a
+  paired device's development build over the developer connection (`devicectl`, USB or Wi-Fi), and
+  copy status back so the device narrates too. A Send reaches the checkout its build came from, so
+  two worktrees each get their own. `--no-device` turns this off.
+- **Notes sheet ("My Notes"):** the review bar's count opens it. It lists unsent notes (tap to
+  open, swipe to delete, Clear All) and every Send of the last 48 hours with each note's result
+  and Reply, filtered by Current, In Progress, Resolved and Failed tags.
+- **Launcher pill:** it narrates the last Send in place of the delivery ring and toasts ("4 notes
+  sent", then each stage the agent reports), and its dot always shows the connection: green while an
+  agent listens, yellow while its heartbeat is late, red when nothing does.
+- **Launcher collision avoidance:** the idle pill keeps off the app's own bottom chrome (tab bars,
+  toolbars, text inputs, controls outside scroll views, a container's reserved bottom safe area),
+  lifting above it or moving to a side. A dragged pill stays put, and the keyboard dock still wins.
+- **`.annotateAvoid()`:** tags a view the launcher should keep off, for bars SwiftUI draws itself.
+  An empty stub in Release.
+- **Reference images:** the paperclip attaches up to 4 photos per note
+  (`attachments/<pin>-<n>.jpg`, listed in `prompt.md`).
+- **Pins follow scrolled content:** back in annotate mode after scrolling, pins move with the scroll
+  view's content; pins scrolled out of view come back with it.
+- **Agent presence:** every `annotate` process writes a heartbeat to `.annotate/agents/`, merged
+  into `.annotate/agent.json` for the app.
+- Haptics on every delivery stage: a tick while a Send moves along, success when it's done, a warning
+  for a question or an unclaimed Send, an error when it failed.
+- **`SCHEMA.md`** documents every file the app and agents exchange. Schema additions (still v1):
+  `Annotation.intent`, `Annotation.attachments`, `SessionStatus.pins`, `AppInfo.installFile`,
+  `replies.json`; pins of any kind can carry `sketch` strokes.
 
-  Every `annotate` process writes a heartbeat to `.annotate/agents/`, and one of them merges the
-  live ones into `.annotate/agent.json`, which the app reads.
-- After a relaunch, the pill picks the newest Send's narration back up. An agent that reinstalls
-  the app to show its change restarts it mid-delivery, and the "Done" now still shows.
-- Reference images: the paperclip opens the photo picker (up to 4 images per pin). Send writes them
-  to `attachments/<pin>-<n>.jpg`, and `prompt.md` lists them.
-- **Schema (additive, still v1):** `AppInfo.installFile: String?`, `Annotation.attachments: [String]?`. Pins of any kind can now
-  carry `sketch` strokes, whose points may extend outside the pin's frame.
+### Changed
+- **Redesigned overlay.** Annotate mode dims the frozen screen and draws a slowly drifting blue edge
+  glow, which turns green while the agent works. Liquid Glass bottom chrome, Reduce Motion
+  respected throughout.
+  - **Draw, tap or hold:** drawing is the default (a white pen, and further strokes join the open
+    note), a tap selects the element under your finger, and holding drops a spot.
+  - **Comment card:** docks to the keyboard, with undo and redo for strokes (`⇧⌘Z` redoes), a
+    quote of the selected element's text, the intent chip and ↑. Return types a newline.
+  - **Review bar:** back, the note count and ↑ in one glass group, with a hint line above it that
+    starts on the gestures, then shows the connection and narrates each Send with a timer.
+  - **Send keeps annotate mode open**, with the sent notes and their progress on the frozen screen.
+- On iOS 26 the overlay's glass materializes in and out; before iOS 26 the bar and cards slide.
+- The launcher pill is Liquid Glass and fades in once the app's first screen settles.
+- Bundle images keep blue and red markers for contrast, with 4pt strokes, and a crop covers the
+  note's drawing as well as its frame.
+
+### Removed
+- The toolbar and its hint, the draw toggle, region dragging, the shape tools, in-place text
+  retyping, the selection chip and "Send and keep annotating" (keyboard shortcuts stay).
+- The delivery ring and toasts (the launcher pill narrates instead) and the results card (the notes
+  sheet lists results).
+- The Move intent; a saved `move` loads as Fix.
 
 ### Fixed
-- Drawing at the screen's edge no longer shifts the whole overlay sideways. A pin badge's 40pt hit
-  frame was laid out at the edge and widened the overlay, which re-centered it; badges now ride a
-  zero-size anchor, and every layer is held to the screen's size. The sketch's badge also stays on
-  the stroke: a thin stroke at the edge used to send it to the bottom-trailing corner.
-- `annotate mcp` no longer swallows Sends.
-  - **Without channels:** Claude Code, including the desktop app, drops channel events silently,
-    yet the server marked each session delivered. A push now counts only once Claude is seen acting
-    on one. An unanswered push is handed back after 45 s, the server stops pushing, and a watcher or
-    the tools pick the session up.
-  - **Other agents:** clients other than Claude Code no longer get sessions claimed on their behalf.
-- Pins disappeared after leaving annotate mode and coming back, while the count still included them:
-  each start took a new freeze-frame. Starting again on a screen that has pins (same look within a
-  small tolerance) now brings back its freeze-frame and pins.
-- Return in the comment only closed the keyboard on iOS 26, which delivers it as a submit rather than
-  a newline; it now saves the pin.
-- Card placement no longer goes stale after the photo picker. It follows UIKit's keyboard layout
-  guide, because keyboard notifications can end on a frame without the suggestion bar.
+- `annotate mcp` no longer swallows Sends. Claude Code drops channel events silently without
+  channels enabled, yet each session was marked delivered: a push now counts only once Claude acts
+  on it, an unanswered push is handed back after 45 s, and other MCP clients no longer get sessions
+  claimed on their behalf.
+- Pins disappeared after leaving annotate mode and coming back to the same screen.
+- Drawing at the screen's edge shifted the whole overlay sideways, and a thin stroke there sent its
+  badge to the bottom-trailing corner.
+- After a relaunch mid-delivery (an agent reinstalling the app to show its change), the pill picks
+  the newest Send's narration back up, so "Done" still shows.
+- Return in the comment only closed the keyboard on iOS 26.
+- The comment card's placement went stale after the photo picker.
+- On iOS 27 devices a tap on the intent menu could be taken by the drawing gesture; the menu is now
+  drawn inside the overlay.
 
 ## [0.1.1] - 2026-10-28
 
@@ -231,7 +118,7 @@ All notable changes to this project are documented here. The format is based on
 
 ## [0.1.0] - 2026-10-28
 
-First public release.
+First release.
 
 ### Added
 - **AnnotateKit** in-app overlay (DEBUG only, iOS 17+):
@@ -259,6 +146,7 @@ First public release.
   tracking and the text outline all start on first use.
 - Send renders, encodes and writes off the main thread, in 8-bit sRGB.
 
-[Unreleased]: https://github.com/ooolzhas/annotate-ios/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/ooolzhas/annotate-ios/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ooolzhas/annotate-ios/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/ooolzhas/annotate-ios/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ooolzhas/annotate-ios/releases/tag/v0.1.0

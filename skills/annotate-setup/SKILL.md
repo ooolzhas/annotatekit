@@ -7,7 +7,7 @@ compatibility: iOS 17+ apps built with Xcode 16+ (SwiftUI or UIKit). Works with 
 
 # Set up AnnotateKit in an iOS project
 
-Goal: the user can tap the pencil in their running app, annotate, hit Send, and you (the agent)
+Goal: the user can tap the Annotate pill in their running app, annotate, hit Send, and you (the agent)
 receive it with no copy/paste. Three parts: the package in the app, the `annotate` CLI on the Mac,
 and the agent connection. Do them in order and verify each.
 
@@ -24,17 +24,17 @@ a `UIApplicationDelegate`.
 
 ## 2. Add the package
 
-Package URL `https://github.com/ooolzhas/annotate-ios`, product **AnnotateKit**, version `from: "0.1.1"`.
+Package URL `https://github.com/ooolzhas/annotate-ios`, product **AnnotateKit**, version `from: "0.2.0"`.
 Link it to the **app target only**, not widgets or extensions.
 
 ### 2a. Manifests
 
 - XcodeGen `project.yml`: under `packages:` add
-  `AnnotateKit: { url: https://github.com/ooolzhas/annotate-ios, from: 0.1.1 }`, and under the app
+  `AnnotateKit: { url: https://github.com/ooolzhas/annotate-ios, from: 0.2.0 }`, and under the app
   target's `dependencies:` add `- package: AnnotateKit`. Run `xcodegen`.
-- Tuist: add `.remote(url: "https://github.com/ooolzhas/annotate-ios", requirement: .upToNextMajor(from: "0.1.1"))`
+- Tuist: add `.remote(url: "https://github.com/ooolzhas/annotate-ios", requirement: .upToNextMajor(from: "0.2.0"))`
   and `.package(product: "AnnotateKit")` to the app target, then `tuist install && tuist generate`.
-- SwiftPM: `.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.1.1")` and
+- SwiftPM: `.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.2.0")` and
   `.product(name: "AnnotateKit", package: "annotate-ios")` on the app target.
 
 ### 2b. Plain .xcodeproj
@@ -62,7 +62,7 @@ edit `project.pbxproj` yourself, add four objects with fresh unique 24-character
 			repositoryURL = "https://github.com/ooolzhas/annotate-ios";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.1.1;
+				minimumVersion = 0.2.0;
 			};
 		};
 
@@ -128,8 +128,8 @@ Without channels, the user says "check my latest annotation" and you call `get_a
 1. Build the app for the simulator, e.g.
    `xcodebuild build -scheme <App> -destination 'generic/platform=iOS Simulator'`.
 2. Tell the user to run it in the Simulator (or launch with `ANNOTATE=1` in the scheme's
-   environment to start in annotate mode), tap the pencil, pin something, and hit Send.
+   environment to start in annotate mode), tap the Annotate pill, pin something, and hit Send.
 3. A bundle appears in `.annotate/sessions/`, and `annotate list` shows it.
 
-Finish by telling the user, in a few lines, how to annotate (tap to pin, drag for a region, the
-scribble button to draw, Return to save, Send) and which delivery mode you set up.
+Finish by telling the user, in a few lines, how to annotate (draw around anything, tap to select
+an element, hold to pin a spot, ↑ to save a note, Send) and which delivery mode you set up.

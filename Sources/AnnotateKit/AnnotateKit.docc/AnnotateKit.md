@@ -6,8 +6,8 @@ straight to your coding agent.
 ## Overview
 
 AnnotateKit adds a DEBUG-only overlay window to your app. Enter annotate mode and the screen
-freezes. Tap anything to pin a comment to it, drag out a region, sketch anywhere, or retype a label
-in place. **Send** writes a session bundle (screenshots where pixel = point, crops, a prompt and
+freezes. Draw around anything, tap an element to select it, or hold to pin an exact spot, and say
+what should change. **Send** writes a session bundle (screenshots where pixel = point, crops, a prompt and
 `session.json`) to your project's `.annotate/` folder. The `annotate` CLI then hands it to Claude
 Code or any MCP-capable agent, and the overlay shows the agent's progress.
 
