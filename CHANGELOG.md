@@ -64,8 +64,9 @@ All notable changes to this project are documented here. The format is based on
   - **Review bar:** three glass pieces 8pt apart: a 52pt back button, the note count, and a 52pt ↑
     tinted blue while there is something to send. VoiceOver calls ↑ Save while no agent listens.
   - **Notes sheet:** the count is a button that opens a sheet at a small detent, draggable to full
-    height. It lists the unsent notes (tap one to open it, swipe to delete, Delete All asks first;
+    height. It lists the unsent notes (tap one to open it, swipe to delete, Clear All asks first;
     this replaces the old trash button) and the last Send's notes with their progress and Reply.
+    With no notes it opens on an empty state that says how to add one.
   - **Send keeps annotate mode open.** The sent pins stay on the frozen screen, and each badge shows
     a spinner while the agent has the pin, then a green check when it's resolved (`?` for a question,
     × when dismissed). The bar reads "N notes sent". Saving a new pin hides them; leaving annotate

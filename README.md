@@ -136,7 +136,7 @@ Tools:
 | Undo / redo a stroke | The card's undo and redo buttons, or `⌘Z` / `⇧⌘Z`. `⌘Z` with no pin open removes the last pin |
 | Back out | `Esc` |
 | Send | **↑** on the bar or `⌘Return`. Annotate mode stays open with the sent pins' progress |
-| Clear all | Hold the note count on the bar, then *Delete All Notes* |
+| See, open or delete notes | Tap the note count on the bar: the notes sheet lists them; swipe to delete, *Clear All* for every one |
 
 To annotate another screen, leave annotate mode, navigate, and come back. One Send carries every
 screen with pins on it.
