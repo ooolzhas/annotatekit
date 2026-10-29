@@ -185,9 +185,35 @@ import Testing
 
     @Test("offline splits into a headline and a dimmed detail (Figma 9276:28048 / 9276:28049)")
     func offlineParts() {
-        #expect(ReviewHint.offline.headline == "Agent offline")
+        #expect(ReviewHint.offline.headline == "No agent connected")
         #expect(ReviewHint.offline.detail == "Notes will be saved")
-        #expect(ReviewHint.offline.text == "Agent offline · Notes will be saved")
+        #expect(ReviewHint.offline.text == "No agent connected · Notes will be saved")
+    }
+
+    @Test("sending counts the notes written so far, never past the total",
+          arguments: [(0, 4, "0/4"), (1, 4, "1/4"), (4, 4, "4/4"), (6, 4, "4/4")])
+    func sendingProgress(written: Int, notes: Int, expected: String) {
+        let hint = ReviewHint.delivery(.sent(count: notes), agent: "Claude", notes: notes, written: written)
+        #expect(hint.headline == "Sending notes")
+        #expect(hint.detail == expected)
+    }
+
+    @Test("a Send with no count says only that it's sending")
+    func sendingWithoutCount() {
+        #expect(ReviewHint.delivery(.sent(count: 1), agent: "Claude").detail == nil)
+    }
+
+    @Test("done counts the Send's notes", arguments: [(1, "1 note"), (4, "4 notes")])
+    func doneCountsNotes(notes: Int, expected: String) {
+        let hint = ReviewHint.delivery(.done(message: "Shipped"), agent: "Claude", notes: notes)
+        #expect(hint.headline == "Claude is done")
+        #expect(hint.detail == expected)
+    }
+
+    @Test("a failed Send reads Error, with the agent's reason when it gave one")
+    func failedReadsError() {
+        #expect(ReviewHint.delivery(.failed(message: "Build broke"), agent: "Claude").text == "Error · Build broke")
+        #expect(ReviewHint.delivery(.failed(message: nil), agent: "Claude").text == "Error")
     }
 
     @Test("text is the headline, then the detail after a middle dot",
@@ -202,11 +228,23 @@ import Testing
         #expect(hint.detail?.isEmpty != true)
     }
 
-    @Test("an agent's working message stays whole, even with a middle dot in it")
-    func workingMessageNotSplit() {
-        let hint = Self.delivery(.working(message: "Built · reinstalling"))
-        #expect(hint.headline == "Built · reinstalling")
+    @Test("an agent's working message splits at its first middle dot")
+    func workingMessageSplits() {
+        let hint = Self.delivery(.working(message: "All changes applied · Reinstalling"))
+        #expect(hint.headline == "All changes applied")
+        #expect(hint.detail == "Reinstalling")
+    }
+
+    @Test("a working message stays whole when a side of the dot would be empty",
+          arguments: ["Built · ", " · reinstalling", "Built and reinstalling"])
+    func workingMessageStaysWhole(message: String) {
+        let hint = Self.delivery(.working(message: message))
         #expect(hint.detail == nil)
+    }
+
+    @Test("no working message falls back to the agent working")
+    func workingFallback() {
+        #expect(Self.delivery(.working(message: nil)).headline == "Claude is working…")
     }
 
     @Test("elapsed time shows exactly while the delivery is still in flight", arguments: allStages)
@@ -246,11 +284,10 @@ import Testing
         #expect(Self.delivery(.failed(message: blank)).text == Self.delivery(.failed(message: nil)).text)
     }
 
-    @Test("a non-blank agent message appears trimmed in the text")
+    @Test("a non-blank agent message appears trimmed in the text (done shows the note count instead)")
     func messageAppearsTrimmed() {
         let stages: [DeliveryStage] = [
-            .working(message: "  Reinstalling\n"), .done(message: "  Reinstalling\n"),
-            .failed(message: "  Reinstalling\n")
+            .working(message: "  Reinstalling\n"), .failed(message: "  Reinstalling\n")
         ]
         for stage in stages {
             let text = Self.delivery(stage).text

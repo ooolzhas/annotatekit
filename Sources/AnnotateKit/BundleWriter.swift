@@ -45,11 +45,14 @@ extension BundleRenderer {
     /// JPEG quality for reference-image attachments (plan value): photos stay small, detail stays legible.
     private static let attachmentQuality: CGFloat = 0.85
 
-    static func write(_ job: SendJob) -> SendOutcome {
+    /// `progress` gets how many notes are written so far after each one, off the main thread; the
+    /// hint line counts them ("Sending notes · 1/4").
+    static func write(_ job: SendJob, progress: @Sendable (Int) -> Void = { _ in }) -> SendOutcome {
         /// Bundle-relative path → encoded file. PNGs for screens/crops, JPEGs for attachments.
         var images: [String: Data] = [:]
         var annotations = job.annotations
         var screens: [Screen] = []
+        var written = 0
 
         for capture in job.captures {
             let positions = annotations.indices.filter { annotations[$0].screen == capture.index }
@@ -79,6 +82,11 @@ extension BundleRenderer {
                 screen.hiResImage = path
             }
             for position in positions {
+                // A pin is written once its crop is encoded, or found to have none
+                defer {
+                    written += 1
+                    progress(written)
+                }
                 let pin = annotations[position]
                 guard let crop = crop(pin, from: capture.image, padding: job.cropPadding), let data = crop.pngData() else { continue }
                 let path = "crops/\(pin.index).png"

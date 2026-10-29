@@ -130,13 +130,15 @@ public enum ReviewHint: Equatable, Sendable {
     case gestures
     /// Figma 9272:17134: "Claude connected", green dot. The pull mode has no frame (derived).
     case connected(agent: String, mode: AgentPresence.Mode)
-    /// Figma 9272:17228: "Agent offline · Notes will be saved", red dot, and the action reads Save.
+    /// Figma 9272:17228: "No agent connected · Notes will be saved" (owner copy), red dot, and the
+    /// action reads Save.
     case offline
     /// The last Send's progress. `agent` may be a raw or display name: `resolve` stores the display
     /// name, and `text` applies `displayName` again (idempotent), so a hand-built "Claude Code" reads "Claude".
     /// Figma 9273:17925 (`.delivered`), 9273:18020 (`.received`), 9273:18115 (`.working(message:)`);
     /// every other stage has no frame and is derived from the launcher's copy.
-    case delivery(DeliveryStage, agent: String)
+    /// `notes`: how many notes the Send carries; `written`: how many are written into it so far.
+    case delivery(DeliveryStage, agent: String, notes: Int = 0, written: Int = 0)
 
     public enum Dot: Equatable, Sendable {
         /// Green (Figma 9272:17214).
@@ -155,11 +157,17 @@ public enum ReviewHint: Equatable, Sendable {
         public var isIntro: Bool
         /// The tracked Send's stage, nil when no Send is being tracked.
         public var delivery: DeliveryStage?
+        /// How many notes the tracked Send carries.
+        public var notes: Int
+        /// How many of them are written into it so far ("Sending notes · 1/4").
+        public var written: Int
 
-        public init(agent: AgentPresence?, isIntro: Bool, delivery: DeliveryStage? = nil) {
+        public init(agent: AgentPresence?, isIntro: Bool, delivery: DeliveryStage? = nil, notes: Int = 0, written: Int = 0) {
             self.agent = agent
             self.isIntro = isIntro
             self.delivery = delivery
+            self.notes = notes
+            self.written = written
         }
     }
 
@@ -169,7 +177,7 @@ public enum ReviewHint: Equatable, Sendable {
     /// `.offline`, and the line follows the connection from then on.
     public static func resolve(_ inputs: Inputs) -> ReviewHint {
         if let stage = inputs.delivery {
-            return .delivery(stage, agent: displayName(inputs.agent?.agent ?? ""))
+            return .delivery(stage, agent: displayName(inputs.agent?.agent ?? ""), notes: inputs.notes, written: inputs.written)
         }
         if inputs.isIntro { return .gestures }
         guard let presence = inputs.agent else { return .offline }
@@ -204,56 +212,63 @@ public enum ReviewHint: Equatable, Sendable {
     /// frame; the other two-part lines are split the same way (derived).
     public var detail: String? { parts.detail }
 
+    /// Copy rules (owner rewrite, 2026-10-29): every line opens with its subject (the agent, "No
+    /// agent", or the notes), in the present tense, and the part after " · " is the consequence or the
+    /// agent's own words. No Figma frame for the rewrite; the states are the Figma ones.
     private var parts: (headline: String, detail: String?) {
         switch self {
         case .gestures:
             // Figma 9272:17121
-            ("Draw, tap or hold to annotate", nil)
+            return ("Draw, tap or hold to annotate", nil)
         case .connected(let agent, .push):
             // Figma 9272:17215 (sample "Claude connected")
-            ("\(Self.displayName(agent)) connected", nil)
+            return ("\(Self.displayName(agent)) connected", nil)
         case .connected(let agent, .pull):
-            // No Figma frame (derived): a pull agent reads sessions only when asked, so the line
-            // tells the user to ask it, matching `AgentPresence.accessibilityDescription`.
-            ("\(Self.displayName(agent)) connected", "ask it to check")
+            // A pull agent reads sessions only when asked, matching `AgentPresence.accessibilityDescription`
+            return ("\(Self.displayName(agent)) connected", "Checks when asked")
         case .offline:
-            // Figma 9276:28048 / 9276:28049
-            ("Agent offline", "Notes will be saved")
-        case .delivery(let stage, let agent):
+            // Figma 9276:28048 / 9276:28049 states, owner copy
+            return ("No agent connected", "Notes will be saved")
+        case .delivery(let stage, let agent, let notes, let written):
+            let agent = Self.displayName(agent)
             switch stage {
-            case .sent(let count):
-                // No Figma frame (derived): the launcher's sent title, so the pill and the line agree
-                (LauncherStatus.sentTitle(count), nil)
+            case .sent:
+                // The Send's notes as they're written into it, then held at the total until picked up
+                return ("Sending notes", notes > 0 ? "\(min(max(written, 0), notes))/\(notes)" : nil)
             case .unclaimed:
-                // No Figma frame (derived): launcher copy
-                ("Not picked up yet", nil)
+                return ("\(agent) hasn't picked them up", nil)
             case .delivered:
-                // Figma 9273:18006 (sample "Delivered to Claude")
-                ("Delivered to \(Self.displayName(agent))", nil)
+                // Figma 9273:18006 state
+                return ("\(agent) has your notes", nil)
             case .received:
-                // Figma 9273:18101 (sample "Claude looking at it")
-                ("\(Self.displayName(agent)) looking at it", nil)
+                // Figma 9273:18101 state
+                return ("\(agent) is reading…", nil)
             case .question(let pin):
-                // No Figma frame (derived): the agent asked about one pin and waits for the reply
-                ("\(Self.displayName(agent)) asked about note \(pin)", nil)
+                return ("\(agent) has a question", "Note \(pin)")
             case .working(let message):
-                // Figma 9273:18196 shows the agent's own status.json message (sample "Changes applied,
-                // reinstalling"); the fallback without a message is derived
-                (Self.cleaned(message) ?? "\(Self.displayName(agent)) is working", nil)
-            case .done(let message):
-                // No Figma frame (derived): launcher copy
-                ("Done", Self.cleaned(message))
+                // Figma 9273:18196 shows the agent's own status.json message; agents write it as
+                // "headline · next step" (the watcher skill), so it splits like the app's own lines
+                return Self.cleaned(message).map(Self.split) ?? ("\(agent) is working…", nil)
+            case .done:
+                return ("\(agent) is done", notes > 0 ? OverlayChrome.countTitle(notes) : nil)
             case .failed(let message):
-                // No Figma frame (derived): launcher copy, with the agent's name in the fallback
-                Self.cleaned(message).map { ("Couldn't finish", $0) } ?? ("\(Self.displayName(agent)) couldn't finish", nil)
+                return ("Error", Self.cleaned(message))
             case .notSaved:
-                // No Figma frame (derived): launcher copy
-                ("Couldn't save", "prompt copied")
+                return ("Notes not saved", "Prompt copied")
             case .noAgent:
-                // No Figma frame (derived): launcher copy
-                ("Saved", "no agent connected")
+                return ("No agent connected", "Notes saved")
             }
         }
+    }
+
+    /// An agent's message as headline and detail, split at its first " · "; whole when either side
+    /// would be empty.
+    private static func split(_ message: String) -> (headline: String, detail: String?) {
+        guard let separator = message.range(of: " · ") else { return (message, nil) }
+        let headline = message[..<separator.lowerBound].trimmingCharacters(in: .whitespaces)
+        let detail = message[separator.upperBound...].trimmingCharacters(in: .whitespaces)
+        guard !headline.isEmpty, !detail.isEmpty else { return (message, nil) }
+        return (headline, detail)
     }
 
     /// nil for the gestures hint, which has no dot in Figma 9272:17121.
@@ -265,7 +280,7 @@ public enum ReviewHint: Equatable, Sendable {
         case .gestures: nil
         case .connected: .connected
         case .offline: .offline
-        case .delivery(let stage, _):
+        case .delivery(let stage, _, _, _):
             switch stage {
             case .sent, .delivered, .received, .working, .done: .connected
             case .unclaimed, .failed, .notSaved, .noAgent: .offline
@@ -279,7 +294,7 @@ public enum ReviewHint: Equatable, Sendable {
     /// which is non-final): once the result is in, the figure stops mattering.
     public var showsElapsed: Bool {
         switch self {
-        case .delivery(let stage, _): !stage.isFinal
+        case .delivery(let stage, _, _, _): !stage.isFinal
         case .gestures, .connected, .offline: false
         }
     }
@@ -306,7 +321,7 @@ public enum ReviewHint: Equatable, Sendable {
     ///   `LauncherStatus.finalHold`.
     public var actionTitle: String {
         switch self {
-        case .offline, .delivery(.noAgent, _): OverlayChrome.saveTitle
+        case .offline, .delivery(.noAgent, _, _, _): OverlayChrome.saveTitle
         case .gestures, .connected, .delivery: OverlayChrome.sendTitle
         }
     }

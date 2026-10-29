@@ -418,7 +418,7 @@ private struct InboxFixture {
 
     @Test func questionStageResolvesToADeliveryHint() {
         let hint = ReviewHint.resolve(ReviewHint.Inputs(agent: Self.presence, isIntro: true, delivery: .question(pin: 2)))
-        guard case .delivery(.question(pin: 2), let agent) = hint else {
+        guard case .delivery(.question(pin: 2), let agent, _, _) = hint else {
             Issue.record("expected .delivery(.question(pin: 2), …), got \(hint)")
             return
         }

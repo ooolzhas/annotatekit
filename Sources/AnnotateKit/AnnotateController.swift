@@ -180,6 +180,8 @@ final class AnnotateController {
     private(set) var isShowingNotes = false
     /// Earlier Sends of the last 48 hours, newest first (`refreshHistory`); `lastSend` isn't among them.
     private(set) var history: [PastSend] = []
+    /// How many of `lastSend`'s notes are written into its bundle so far ("Sending notes · 1/4").
+    private(set) var notesWritten = 0
     /// Where `lastSend` got to. Unlike `delivery`, which the pill clears after its final hold, it
     /// keeps the last stage, so the notes sheet can file a finished Send's notes for good.
     private(set) var lastSendStage: DeliveryStage?
@@ -861,11 +863,24 @@ final class AnnotateController {
         // Set before the write so the pill answers the tap immediately (Figma 9265:14691)
         delivery = .sent(count: outgoing.count)
         lastSendStage = delivery
+        notesWritten = 0
         deliveryStartedAt = Date()
 
+        // Each note written into the bundle moves "Sending notes · 1/4" along
+        let sessionID = job.sessionID
+        let report: @Sendable (Int) -> Void = { [weak self] written in
+            let controller = self
+            Task { @MainActor in
+                // A newer Send owns the count
+                guard let controller, controller.lastSend?.sessionID == sessionID else { return }
+                controller.notesWritten = max(controller.notesWritten, written)
+            }
+        }
         deliveryWrite = Task { [weak self] in
             // The detached write isn't cancelled with this task, so the bundle still lands
-            let outcome = await Task.detached(priority: .userInitiated) { BundleRenderer.write(job) }.value
+            let outcome = await Task.detached(priority: .userInitiated) {
+                BundleRenderer.write(job, progress: report)
+            }.value
             guard let self else { return }
             // A failed write's prompt is the user's only copy of it, so it's copied even when a newer
             // Send superseded this one. The opt-in copy of a successful write is skipped once
@@ -954,7 +969,13 @@ final class AnnotateController {
     /// (9272:17041), "<agent> connected" while the connection is news (9272:17134), or offline
     /// whenever no agent listens (9272:17228).
     var reviewHint: ReviewHint {
-        .resolve(.init(agent: agent, isIntro: isIntro, delivery: delivery))
+        .resolve(.init(
+            agent: agent,
+            isIntro: isIntro,
+            delivery: delivery,
+            notes: lastSend?.pins.count ?? 0,
+            written: notesWritten
+        ))
     }
 
     /// The pill in overlay points: centered horizontally, docked 8pt above `chromeBottom` (so it
@@ -1334,6 +1355,8 @@ final class AnnotateController {
             self.localReplies.removeAll()
             self.updateReportedStatuses(resumable.pins)
             self.deliveryStartedAt = session.createdAt
+            // A resumed Send was written before the relaunch
+            self.notesWritten = session.annotations.count
             self.trackDelivery(id: session.id, in: output)
         }
     }
