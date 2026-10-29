@@ -259,4 +259,40 @@ import Testing
         #expect(SentPinMark.resolve(outcome: .question("q"), delivery: stage) == .symbol("questionmark", .attention))
         #expect(SentPinMark.resolve(outcome: .dismissed(reason: nil), delivery: stage) == .symbol("xmark", .muted))
     }
+
+    // MARK: NoteFilter
+
+    @Test("the agent's report decides the tag, whatever the delivery",
+          arguments: [DeliveryStage?.none, .working(message: nil), .failed(message: nil), .done(message: nil)])
+    func reportedOutcomeTag(delivery: DeliveryStage?) {
+        #expect(NoteFilter.of(.resolved(summary: nil), delivery: delivery) == .resolved)
+        #expect(NoteFilter.of(.dismissed(reason: nil), delivery: delivery) == .failed)
+        #expect(NoteFilter.of(.question("q"), delivery: delivery) == .inProgress)
+        #expect(NoteFilter.of(.answered(question: nil, reply: "r"), delivery: delivery) == .inProgress)
+    }
+
+    @Test("an unreported pin fails only with its Send", arguments: [DeliveryStage.failed(message: "x"), .notSaved])
+    func openPinFailsWithItsSend(delivery: DeliveryStage) {
+        #expect(NoteFilter.of(.open, delivery: delivery) == .failed)
+    }
+
+    @Test("an unreported pin is otherwise in progress",
+          arguments: [DeliveryStage?.none, .sent(count: 1), .unclaimed, .delivered, .received,
+                      .working(message: nil), .question(pin: 1), .done(message: nil), .noAgent])
+    func openPinInProgress(delivery: DeliveryStage?) {
+        #expect(NoteFilter.of(.open, delivery: delivery) == .inProgress)
+    }
+
+    @Test("the sheet opens on the first tag with notes, else Current")
+    func initialTag() {
+        #expect(NoteFilter.initial(counts: [:]) == .current)
+        #expect(NoteFilter.initial(counts: [.current: 0, .resolved: 2, .failed: 1]) == .resolved)
+        #expect(NoteFilter.initial(counts: [.current: 1, .inProgress: 3]) == .current)
+    }
+
+    @Test("every tag has a title and an empty-state title")
+    func tagCopy() {
+        #expect(NoteFilter.allCases.allSatisfy { !$0.title.isEmpty && !$0.emptyTitle.isEmpty })
+        #expect(Set(NoteFilter.allCases.map(\.title)).count == NoteFilter.allCases.count)
+    }
 }

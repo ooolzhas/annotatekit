@@ -130,6 +130,8 @@ struct ReplyCard: View {
                 // Only `.dimmed` dims; `.disabled` just blocks the tap (submitReply no-ops anyway
                 // when it can't submit)
                 CircleIconButton(systemName: "arrow.up", style: canSubmit ? .prominent : .dimmed) {
+                    // Let go of the keyboard in the same update the card leaves in, not after it
+                    isFocused = false
                     controller.submitReply()
                 }
                 .disabled(!canSubmit)

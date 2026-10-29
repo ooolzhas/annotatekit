@@ -347,35 +347,27 @@ private struct InboxFixture {
         open: Bool = false,
         comment: String = "",
         pins: Int = 2,
-        reply: String? = nil,
-        showingResults: Bool = false,
-        results: Int = 0
+        reply: String? = nil
     ) -> OverlayChrome.Inputs {
-        OverlayChrome.Inputs(
-            isDraftOpen: open, draftComment: comment, pinCount: pins,
-            replyText: reply, isShowingResults: showingResults, resultCount: results
-        )
+        OverlayChrome.Inputs(isDraftOpen: open, draftComment: comment, pinCount: pins, replyText: reply)
     }
 
-    @Test("a reply in progress wins over a draft and the results card; blank can't submit",
+    @Test("a reply in progress wins over a draft; blank can't submit",
           arguments: ["", " ", "\n\t "])
     func blankReplyCannotSubmit(reply: String) {
         #expect(OverlayChrome.resolve(Self.inputs(reply: reply)) == .replying(canSubmit: false))
-        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: "typed", reply: reply, showingResults: true, results: 3))
+        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: "typed", reply: reply))
                 == .replying(canSubmit: false))
     }
 
     @Test func typedReplyCanSubmit() {
         #expect(OverlayChrome.resolve(Self.inputs(reply: "  Blue  ")) == .replying(canSubmit: true))
-        #expect(OverlayChrome.resolve(Self.inputs(open: true, reply: "Blue", showingResults: true, results: 3))
-                == .replying(canSubmit: true))
+        #expect(OverlayChrome.resolve(Self.inputs(open: true, reply: "Blue")) == .replying(canSubmit: true))
     }
 
-    @Test func openDraftWinsOverResults() {
-        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: "fix it", showingResults: true, results: 3))
-                == .composing(canSubmit: true))
-        #expect(OverlayChrome.resolve(Self.inputs(open: true, showingResults: true, results: 3))
-                == .composing(canSubmit: false))
+    @Test func openDraftWinsOverTheBar() {
+        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: "fix it")) == .composing(canSubmit: true))
+        #expect(OverlayChrome.resolve(Self.inputs(open: true)) == .composing(canSubmit: false))
     }
 
     @Test("an open pin needs a comment; whitespace isn't one",
@@ -385,18 +377,10 @@ private struct InboxFixture {
         #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: comment + "x")) == .composing(canSubmit: true))
     }
 
-    @Test func resultsShowOnlyWhileOpenAndNonEmpty() {
-        #expect(OverlayChrome.resolve(Self.inputs(pins: 0, showingResults: true, results: 3)) == .results(count: 3))
-        #expect(OverlayChrome.resolve(Self.inputs(pins: 2, showingResults: true, results: 0)) == .review(count: 2))
-        #expect(OverlayChrome.resolve(Self.inputs(pins: 2, showingResults: false, results: 3)) == .review(count: 2))
-    }
-
     @Test("Send is live only on the review bar with pins",
           arguments: [
             (OverlayChrome.replying(canSubmit: true), false),
             (.replying(canSubmit: false), false),
-            (.results(count: 3), false),
-            (.results(count: 0), false),
             (.composing(canSubmit: true), false),
             (.review(count: 0), false),
             (.review(count: 1), true)
@@ -405,14 +389,6 @@ private struct InboxFixture {
         #expect(chrome.canSend == expected)
     }
 
-    @Test func resultsTitleCountsNotes() {
-        let one = OverlayChrome.resultsTitle(1)
-        let three = OverlayChrome.resultsTitle(3)
-        #expect(one == "Last Send · 1 note")
-        #expect(three == "Last Send · 3 notes")
-        #expect(one.contains("1") && !one.hasSuffix("notes"))
-        #expect(three.contains("3") && three.hasSuffix("notes"))
-    }
 
     @Test func replyCopyConstants() {
         #expect(OverlayChrome.replyPlaceholder == "Reply")

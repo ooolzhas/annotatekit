@@ -1,14 +1,15 @@
 // Root of the overlay window: the launcher while idle, and while annotating the frozen screen
 // dimmed with a pulsing blue edge glow, the touch catcher that feeds the controller (draw / tap / hold),
 // every pin's white markers and number badges (after a Send, the sent pins with spinners that turn
-// into the agent's outcome), and the bottom chrome docked to the keyboard or the home indicator: the reply card while answering an agent's question about a sent pin, the comment
-// card while a pin is open, the last Send's results card, otherwise the review bar with its hint
-// line above it (which also narrates the last Send while annotate mode is open, and opens the
-// results on tap once there are any), all over a blue gradient that runs from the chrome's top
-// down to the screen's bottom.
+// into the agent's outcome), and the bottom chrome docked to the keyboard or the home indicator: the
+// reply card while answering an agent's question about a sent pin, the comment card while a pin is
+// open, otherwise the review bar with its hint line above it (which also narrates the last Send
+// while annotate mode is open), all over a blue frost that runs from the chrome's top down to the
+// screen's bottom. The notes sheet (every note and the last Send's outcomes) hangs off the chrome.
 // Motion (no Figma motion context): entering and leaving annotate mode fades the frozen screen, its
 // dim, the edge glow and the frost in and out over the same `modeDuration` the bottom chrome
-// (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; the bar, comment card, reply card and results card swap with a short slide, fade and scale
+// (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; the bar,
+// comment card and reply card swap with a short slide, fade and scale
 // from the bottom; the launcher pill scales down and fades about its own center. The edge glow and
 // the frost behind the chrome drift like liquid while annotate mode is on. Reduce Motion keeps the
 // fades only and holds the glow and frost still.
@@ -89,7 +90,7 @@ struct OverlayRoot: View {
     }
 }
 
-/// The bottom chrome: the reply card, comment card or results card, otherwise the hint line and the
+/// The bottom chrome: the reply card or comment card, otherwise the hint line and the
 /// review bar. It measures its own top for ActiveOverlay's gradient (`chromeTop`).
 private struct BottomChrome: View {
     let controller: AnnotateController
@@ -107,7 +108,7 @@ private struct BottomChrome: View {
     private static let hintGap: CGFloat = 16
     /// The chrome's keyboard snap (no Figma motion), shared by the gradient so the two move together.
     private static let chromeAnimation: Animation = .snappy(duration: 0.25)
-    /// Bar ↔ card ↔ results swaps: each comes in from (and leaves toward) this far below, slightly
+    /// Bar ↔ card swaps: each comes in from (and leaves toward) this far below, slightly
     /// scaled down from its bottom edge, fading.
     private static let swapOffset: CGFloat = 24
     private static let swapScale: CGFloat = 0.96
@@ -115,7 +116,7 @@ private struct BottomChrome: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Reply card, comment card or results card: over the keyboard 8pt sides and 8pt above it, with
+    /// Reply card or comment card: over the keyboard 8pt sides and 8pt above it, with
     /// no keyboard where the review bar sits (34pt sides, bottom at `screenChromeBottom`). Otherwise
     /// the review bar (34pt sides, bottom at `screenChromeBottom`, never the keyboard) with the hint
     /// line 16pt above it. `chromeBottom` is the keyboard top, or `screenChromeBottom` with none.
@@ -140,7 +141,7 @@ private struct BottomChrome: View {
                     ReplyCard(controller: controller, reply: reply)
                         .padding(.horizontal, cardSides)
                         .padding(.bottom, belowCard)
-                        .transition(swapTransition)
+                        .transition(cardTransition)
                 }
             case .composing:
                 if let draft = controller.draft {
@@ -148,22 +149,11 @@ private struct BottomChrome: View {
                         .id(draft.annotation.id)
                         .padding(.horizontal, cardSides)
                         .padding(.bottom, belowCard)
-                        .transition(swapTransition)
+                        .transition(cardTransition)
                 }
-            case .results:
-                // No Figma: placed like the comment card
-                ResultsCard(controller: controller)
-                    .padding(.horizontal, cardSides)
-                    .padding(.bottom, belowCard)
-                    .transition(swapTransition)
             case .review:
                 VStack(spacing: Self.hintGap) {
-                    ReviewHintLine(
-                        hint: controller.reviewHint,
-                        startedAt: controller.deliveryStartedAt,
-                        // Tapping the hint reopens the last Send's results, once there are any
-                        onTap: controller.pinResults.isEmpty ? nil : { controller.openResults() }
-                    )
+                    ReviewHintLine(hint: controller.reviewHint, startedAt: controller.deliveryStartedAt)
                         // Delivery narration ("Changes applied, reinstalling 9s") runs wider than
                         // the gestures hint: keep it on one centered line within the bar's 34pt insets
                         .padding(.horizontal, Self.screenInset)
@@ -211,13 +201,12 @@ private struct BottomChrome: View {
         switch controller.chrome {
         case .replying: .replying
         case .composing: .composing(controller.draft?.annotation.id)
-        case .results: .results
         case .review: .review
         }
     }
 
     private enum ChromeKind: Hashable {
-        case replying, composing(UUID?), results, review
+        case replying, composing(UUID?), review
     }
 
     private var swapTransition: AnyTransition {
@@ -225,6 +214,12 @@ private struct BottomChrome: View {
         return .offset(y: Self.swapOffset)
             .combined(with: .scale(scale: Self.swapScale, anchor: .bottom))
             .combined(with: .opacity)
+    }
+
+    /// The comment and reply cards slide in like the bar, but leave at once (owner request): a card
+    /// still sliding out keeps its field, and with it the keyboard, until it's gone.
+    private var cardTransition: AnyTransition {
+        .asymmetric(insertion: swapTransition, removal: .identity)
     }
 }
 
@@ -302,7 +297,7 @@ private struct ActiveOverlay: View {
 
             ForEach(sent) { pin in
                 SentPinBadge(number: pin.index, mark: controller.sentPinMark(for: pin)) {
-                    controller.openResults()
+                    controller.openNotes()
                 }
                 .position(OverlayPlacement.pinCenter(
                     for: pin.pinAnchorFrame,

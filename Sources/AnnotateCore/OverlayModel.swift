@@ -1,6 +1,6 @@
 // Pure state model for the annotate overlay (Figma PVX9n74hzo5BWauvymG141, group 9272:17592).
-// `OverlayChrome` decides which bottom chrome shows (the review bar, the comment card, the reply card for
-// an agent's question about one sent pin, or the last Send's results card) and the copy it carries,
+// `OverlayChrome` decides which bottom chrome shows (the review bar, the comment card, or the reply card
+// for an agent's question about one sent pin) and the copy it carries,
 // including whether the open pin can be saved (it needs a comment); `ReviewHint` decides the
 // line above the review bar (gestures, agent connected, offline, or the last Send's delivery narration
 // with its elapsed time, including an agent's open question) and whether the bar's action reads Send or
@@ -23,9 +23,6 @@ public enum OverlayChrome: Equatable, Sendable {
     /// Answering an agent's question about one sent pin: the reply card docked above the keyboard.
     /// No Figma frame (derived): `canSubmit` follows the reply text the way `composing` follows the comment.
     case replying(canSubmit: Bool)
-    /// The last Send's per-pin results card (resolved, dismissed, questions).
-    /// No Figma frame (derived): shown only while opened and while there is at least one result.
-    case results(count: Int)
 
     public struct Inputs: Equatable, Sendable {
         public var isDraftOpen: Bool
@@ -34,34 +31,21 @@ public enum OverlayChrome: Equatable, Sendable {
         public var pinCount: Int
         /// The reply being typed, non-nil while answering an agent's question.
         public var replyText: String?
-        /// The results card was opened (from the hint line, or on start with an open question).
-        public var isShowingResults: Bool
-        /// How many pins the last Send's results list.
-        public var resultCount: Int
 
-        /// The new inputs default to "not replying, no results", so existing callers keep
-        /// today's review / composing behavior.
-        public init(
-            isDraftOpen: Bool,
-            draftComment: String,
-            pinCount: Int,
-            replyText: String? = nil,
-            isShowingResults: Bool = false,
-            resultCount: Int = 0
-        ) {
+        /// `replyText` defaults to "not replying", so callers that never reply keep the review /
+        /// composing behavior.
+        public init(isDraftOpen: Bool, draftComment: String, pinCount: Int, replyText: String? = nil) {
             self.isDraftOpen = isDraftOpen
             self.draftComment = draftComment
             self.pinCount = pinCount
             self.replyText = replyText
-            self.isShowingResults = isShowingResults
-            self.resultCount = resultCount
         }
     }
 
-    /// Precedence: a reply in progress, then an open draft, then the results card, then the review bar.
-    /// Replying wins because the agent is waiting on it and the reply card owns the keyboard; a draft
-    /// comes next for the same keyboard reason; results only replace the review bar, never a card the
-    /// user is typing into. No Figma frame for this ordering (derived).
+    /// Precedence: a reply in progress, then an open draft, then the review bar. Replying wins because
+    /// the agent is waiting on it and the reply card owns the keyboard; a draft comes next for the same
+    /// keyboard reason. The last Send's results live in the notes sheet, over whichever of these shows.
+    /// No Figma frame for this ordering (derived).
     public static func resolve(_ inputs: Inputs) -> OverlayChrome {
         if let reply = inputs.replyText {
             // A blank reply tells the agent nothing, same rule as a blank comment
@@ -70,9 +54,6 @@ public enum OverlayChrome: Equatable, Sendable {
         if inputs.isDraftOpen {
             // Whitespace alone isn't a comment worth sending to the agent
             return .composing(canSubmit: !trimmed(inputs.draftComment).isEmpty)
-        }
-        if inputs.isShowingResults && inputs.resultCount > 0 {
-            return .results(count: inputs.resultCount)
         }
         return .review(count: max(inputs.pinCount, 0))
     }
@@ -102,9 +83,6 @@ public enum OverlayChrome: Equatable, Sendable {
     /// Clear-all button in the notes sheet's toolbar. No Figma frame: the bar lost its trash button
     /// (9276:27550), so clearing lives with the list now.
     public static let clearAllTitle = "Clear All"
-    /// Notes sheet section header for the pins not sent yet, shown when the last Send's pins list
-    /// below them. No Figma frame (derived).
-    public static let unsentTitle = "Not sent yet"
     /// Notes sheet row detail for a pin on another frozen screen, which can't open from here. No
     /// Figma frame (derived).
     public static let otherScreenNote = "Another screen"
@@ -119,16 +97,11 @@ public enum OverlayChrome: Equatable, Sendable {
 
     /// Reply field placeholder. No Figma frame (derived).
     public static let replyPlaceholder = "Reply"
-    /// Results card row action on a question. No Figma frame (derived).
+    /// Notes sheet row action on a question. No Figma frame (derived).
     public static let replyAction = "Reply"
     /// Toast after a reply is written for the agent. No Figma frame (derived).
     public static let replySentToast = "Reply sent"
 
-    /// Results card title: "Last Send · 1 note" / "Last Send · N notes". No Figma frame (derived);
-    /// the count wording matches `countTitle` so the bar and the card agree.
-    public static func resultsTitle(_ count: Int) -> String {
-        count == 1 ? "Last Send · 1 note" : "Last Send · \(max(count, 0)) notes"
-    }
 
     /// Reply card header, e.g. "Claude asks about note 2". No Figma frame (derived); the agent's name
     /// goes through `ReviewHint.displayName` so it reads like the hint line.
@@ -136,12 +109,12 @@ public enum OverlayChrome: Equatable, Sendable {
         "\(ReviewHint.displayName(agent)) asks about note \(pin)"
     }
 
-    /// Send (and trash) are live only on the review bar with at least one pin; while composing or
-    /// replying the card's ↑ governs, and the results card replaces the bar, so Send isn't shown.
+    /// Send is live only on the review bar with at least one pin; while composing or replying the
+    /// card's ↑ governs, so Send isn't shown.
     public var canSend: Bool {
         switch self {
         case .review(let count): count > 0
-        case .composing, .replying, .results: false
+        case .composing, .replying: false
         }
     }
 }

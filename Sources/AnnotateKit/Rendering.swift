@@ -45,8 +45,9 @@ enum AnnotateStyle {
     static var action: Color { Color(uiColor: .systemBlue) }
     /// Dim over the frozen screen. Figma 9257:13385 bg-[rgba(0,0,0,0.5)]
     static let dimOpacity: Double = 0.5
-    /// Corner radius the glow follows, matching the phone's screen curve. Figma 9257:13385 rounded-[62px]
-    static let screenCornerRadius: CGFloat = 62
+    /// Corner radius the glow follows. Figma 9257:13385 rounded-[62px]; 2pt tighter on the owner's
+    /// request so the glow sits snug in the screen's corners.
+    static let screenCornerRadius: CGFloat = 60
     /// Glow spread: inset shadow 0 0 62px. Figma 9257:13385
     static let glowBlur: CGFloat = 62
     /// Element box: border-2, rounded-[8px]. Figma 9257:13564

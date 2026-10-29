@@ -1,8 +1,8 @@
-// Pure model of each sent pin's result, as the app's results card shows it. `PinOutcome` turns the
+// Pure model of each sent pin's result, as the app's notes sheet shows it. `PinOutcome` turns the
 // agent's `PinStatus` (from status.json) into what the badge, label and detail line read;
 // `PinResult` pairs it with the pin's comment, subject and intent and builds the card's summary line.
 // `SentPinMark` is what a sent pin's badge shows on the frozen screen after a Send: its number, a
-// spinner while the agent has it, or the outcome's glyph.
+// spinner while the agent has it, or the outcome's glyph. `NoteFilter` is the notes sheet's tags.
 // Views switch on these instead of reading `PinStatus` directly, so the rules stay testable on Linux.
 
 import Foundation
@@ -90,7 +90,7 @@ public enum PinOutcome: Equatable, Sendable {
     }
 }
 
-/// One row of the results card: a sent pin and what the agent reported on it.
+/// One row of the notes sheet: a pin and what the agent reported on it.
 public struct PinResult: Equatable, Sendable, Identifiable {
     public var index: Int
     /// The pin's comment, trimmed.
@@ -191,5 +191,57 @@ public enum SentPinMark: Equatable, Sendable {
         case .sent, .delivered, .received, .working, .question: true
         case .unclaimed, .done, .failed, .notSaved, .noAgent: false
         }
+    }
+}
+
+/// The notes sheet's tags (owner request, no Figma): which notes each one lists.
+public enum NoteFilter: String, CaseIterable, Sendable {
+    /// Saved but not sent yet.
+    case current
+    /// Sent and still with the agent: waiting, asked about, or answered.
+    case inProgress
+    /// The agent resolved it.
+    case resolved
+    /// The agent dismissed it, or its Send failed or couldn't be saved.
+    case failed
+
+    public var title: String {
+        switch self {
+        case .current: "Current"
+        case .inProgress: "In Progress"
+        case .resolved: "Resolved"
+        case .failed: "Failed"
+        }
+    }
+
+    /// What the sheet says when the tag lists nothing. No Figma frame (derived).
+    public var emptyTitle: String {
+        switch self {
+        case .current: OverlayChrome.emptyTitle
+        case .inProgress: "Nothing in progress"
+        case .resolved: "Nothing resolved yet"
+        case .failed: "Nothing failed"
+        }
+    }
+
+    /// Where a sent pin belongs. The agent's report decides first; a pin it hasn't reported on is
+    /// failed only when its whole Send failed or couldn't be written, otherwise still in progress.
+    public static func of(_ outcome: PinOutcome, delivery: DeliveryStage?) -> NoteFilter {
+        switch outcome {
+        case .resolved: return .resolved
+        case .dismissed: return .failed
+        case .question, .answered: return .inProgress
+        case .open:
+            switch delivery {
+            case .failed, .notSaved: return .failed
+            default: return .inProgress
+            }
+        }
+    }
+
+    /// The tag the sheet opens on: the first that lists anything, in tag order, else Current (whose
+    /// empty state says how to add a note).
+    public static func initial(counts: [NoteFilter: Int]) -> NoteFilter {
+        allCases.first { (counts[$0] ?? 0) > 0 } ?? .current
     }
 }

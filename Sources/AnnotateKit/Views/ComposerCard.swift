@@ -2,8 +2,11 @@
 // attachments · 9276:27369 quoting): an optional strip with the element's own text quoted like a
 // message being replied to (236pt wide, two lines at most) and 64pt reference-image thumbnails with
 // white remove badges, the comment field, and the paperclip / intent chip / undo / redo / ↑ row.
-// The intent chip (9276:27109 shows "Fix") picks what the user wants done with the pin (Fix,
-// Question) and the placeholder follows it. Undo and redo step through the strokes drawn since the card opened
+// The intent chip (9276:27109 shows "Fix") opens our own dropdown above it to pick what the user wants
+// done with the pin (Fix, Question), and the placeholder follows it. The dropdown is SwiftUI inside the
+// overlay rather than a system menu: the system one is drawn by UIKit outside this view tree, where the
+// frozen screen's touch-down drag gesture could take a real finger's tap on an item (owner reports on
+// iOS 27 devices; it never reproduced on simulators). Undo and redo step through the strokes drawn since the card opened
 // (StrokeHistory); with nothing left to undo, undo turns into × and discards the pin, and redo dims
 // with nothing to redo. It only lays itself out at the width it is given; OverlayRoot docks it
 // to the keyboard (8pt insets) or, with no keyboard, where the review bar sits (34pt insets). ↑ saves through the controller, which decides via
@@ -21,6 +24,8 @@ struct ComposerCard: View {
 
     @FocusState private var isFocused: Bool
     @State private var pickerItems: [PhotosPickerItem] = []
+    /// The intent dropdown is open above the chip.
+    @State private var isPickingIntent = false
 
     /// Picked images are downscaled to this longest side before they are held in memory; the
     /// bundle stores them as JPEGs and a reference image never needs more.
@@ -54,11 +59,26 @@ struct ComposerCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .annotateGlass(in: RoundedRectangle(cornerRadius: 32, style: .continuous), interactive: true)
-        // Glass alone isn't hit-testable: without this, a tap that misses a button falls through
-        // to the frozen screen and starts a new pin. No tap gesture here: the intent menu opens over
-        // the card, and a card-wide tap gesture took the taps meant for its items (owner report on
-        // iOS 27). The comment field focuses itself when tapped.
-        .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        // Glass alone isn't hit-testable: without a hit shape, a tap that misses a button falls through
+        // to the frozen screen and starts a new pin. The shape sits on a background rather than the
+        // card itself, so the intent dropdown, which rises above the card's top edge, still takes taps.
+        // A tap on the card outside a control closes the dropdown; the comment field focuses itself.
+        .background {
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(Color.clear)
+                .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                .onTapGesture { closeIntentPicker() }
+        }
+        // Outside the glass: glass only takes touches inside its own shape, and the dropdown rises
+        // past the card's top edge. Its bottom-leading corner sits over the chip's top-leading one,
+        // lifted `pickerGap`; an offset moves the hit area along with the drawing
+        .overlay(alignment: .bottomLeading) {
+            if isPickingIntent {
+                intentDropdown(current: intent)
+                    .offset(x: Self.pickerLeading, y: -Self.pickerLift)
+                    .transition(.scale(scale: Self.pickerHiddenScale, anchor: .bottomLeading).combined(with: .opacity))
+            }
+        }
         .onAppear { isFocused = !opensWithoutKeyboard }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
@@ -131,7 +151,7 @@ struct ComposerCard: View {
         let remaining = remaining
         let paperclipStyle: CircleIcon.Style = remaining == 0 ? .dimmed : .plain
         return HStack(alignment: .bottom, spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: Self.rowGroupSpacing) {
                 // 9257:13394/13395
                 PhotosPicker(selection: $pickerItems, maxSelectionCount: max(remaining, 1), matching: .images) {
                     // At the attachment cap the picker is disabled; dim it like ↑ so it reads disabled
@@ -146,7 +166,7 @@ struct ComposerCard: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 6) {
+            HStack(spacing: Self.rowGroupSpacing) {
                 // No Figma: undo / redo sit where Figma's × was (9257:13397/13398, owner request), and
                 // undo turns back into that × once there's nothing left to undo
                 undoOrDiscardButton
@@ -158,8 +178,8 @@ struct ComposerCard: View {
                 submitButton
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Self.rowInset)
+        .padding(.bottom, Self.rowInset)
     }
 
     /// Undo while there are strokes to take back; at the state the card opened with (a new drawing's
@@ -192,22 +212,12 @@ struct ComposerCard: View {
     private static let chipChevronSpacing: CGFloat = 4
     private static let chipChevronSize: CGFloat = 11
 
-    /// Menu of every intent; picking one stores it on the draft through the controller.
+    /// The chip toggles the dropdown above it; picking an intent stores it on the draft through the
+    /// controller and closes the dropdown.
     private var intentChip: some View {
         let intent = intent
-        return Menu {
-            ForEach(AnnotationIntent.allCases, id: \.self) { option in
-                Button {
-                    controller.setIntent(option)
-                } label: {
-                    Label {
-                        Text(option.title)
-                        Text(option.detail)
-                    } icon: {
-                        Image(systemName: option.symbol)
-                    }
-                }
-            }
+        return Button {
+            withAnimation(Self.pickerAnimation) { isPickingIntent.toggle() }
         } label: {
             // 9276:27110 — SF Pro Medium 17 / 22; the chevron is the owner's addition
             HStack(spacing: Self.chipChevronSpacing) {
@@ -216,17 +226,84 @@ struct ComposerCard: View {
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: Self.chipChevronSize, weight: .semibold))
             }
-                .foregroundStyle(.primary)
-                .padding(.horizontal, Self.chipHorizontalPadding)
-                .frame(minWidth: Self.chipMinWidth)
-                .frame(height: CircleIcon.size)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, Self.chipHorizontalPadding)
+            .frame(minWidth: Self.chipMinWidth)
+            .frame(height: CircleIcon.size)
             .background(Capsule().fill(Color.primary.opacity(CircleIcon.fillOpacity)))
             .contentShape(Capsule())
         }
-        .menuStyle(.button)
         .buttonStyle(ChromeButtonStyle())
         .accessibilityLabel("Intent, \(intent.title)")
+        .accessibilityHint("Choose what to do with this note")
     }
+
+    /// No Figma: every intent as a row (symbol, title, what it asks the agent for), the current one
+    /// checked, on glass like the card.
+    private func intentDropdown(current: AnnotationIntent) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Self.pickerRadius, style: .continuous)
+        return VStack(spacing: 0) {
+            ForEach(AnnotationIntent.allCases, id: \.self) { option in
+                Button {
+                    controller.setIntent(option)
+                    closeIntentPicker()
+                } label: {
+                    HStack(spacing: Self.pickerRowSpacing) {
+                        Image(systemName: option.symbol)
+                            .font(.system(size: 17))
+                            .frame(width: Self.pickerSymbolWidth)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.title)
+                                .font(.body)
+                            Text(option.detail)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        if option == current {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, Self.pickerRowHorizontalPadding)
+                    .padding(.vertical, Self.pickerRowVerticalPadding)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .accessibilityAddTraits(option == current ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, Self.pickerVerticalPadding)
+        .frame(width: Self.pickerWidth)
+        .annotateGlass(in: shape)
+        .contentShape(shape)
+    }
+
+    private func closeIntentPicker() {
+        guard isPickingIntent else { return }
+        withAnimation(Self.pickerAnimation) { isPickingIntent = false }
+    }
+
+    /// Intent dropdown geometry (no Figma, derived): wide enough for "Explain it, don't edit" on one
+    /// line, 8pt above the chip, rows like a system menu's.
+    private static let pickerWidth: CGFloat = 248
+    private static let pickerGap: CGFloat = 8
+    private static let pickerRadius: CGFloat = 24
+    private static let pickerVerticalPadding: CGFloat = 6
+    private static let pickerRowHorizontalPadding: CGFloat = 16
+    private static let pickerRowVerticalPadding: CGFloat = 10
+    private static let pickerRowSpacing: CGFloat = 12
+    private static let pickerSymbolWidth: CGFloat = 24
+    private static let pickerHiddenScale: CGFloat = 0.9
+    /// The chip's leading edge from the card's: the row's 8pt inset, the paperclip and the 6pt gap.
+    private static let pickerLeading: CGFloat = rowInset + CircleIcon.size + rowGroupSpacing
+    /// From the card's bottom to `pickerGap` above the chip: the row's 8pt inset and the chip.
+    private static let pickerLift: CGFloat = rowInset + CircleIcon.size + pickerGap
+    /// 9257:13393 — the button row's `pb-8 px-8`, and the 6pt gap inside each group.
+    private static let rowInset: CGFloat = 8
+    private static let rowGroupSpacing: CGFloat = 6
+    private static let pickerAnimation: Animation = .snappy(duration: 0.2)
 
     /// 9257:13399 (empty, dimmed glyph) · 9257:13480 (typed, blue). The state comes from
     /// `chrome`, never from the text. Only `.dimmed` dims; `.disabled` just blocks the tap
@@ -239,6 +316,8 @@ struct ComposerCard: View {
             canSubmit = false
         }
         return CircleIconButton(systemName: "arrow.up", style: canSubmit ? .prominent : .dimmed) {
+            // Let go of the keyboard in the same update the card leaves in, not after it
+            isFocused = false
             controller.submitDraft()
         }
         .disabled(!canSubmit)

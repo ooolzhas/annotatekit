@@ -22,10 +22,10 @@
 // comment card (`setIntent`; new pins start as Fix),
 // and the prompt's detail level comes from `AnnotateOptions.promptDetail`.
 // Agent loop: the last Send's pins are kept (`lastSend`) with the per-pin statuses the agent writes
-// into status.json (`pinStatuses`), shown on the results card (`pinResults`, `isShowingResults`).
+// into status.json (`pinStatuses`), listed in the notes sheet (`pinResults`, `isShowingNotes`).
 // A pin the agent asked about is answered on the device (`beginReply` → `submitReply`): the reply
 // is appended to the session's replies.json off the main thread and shown as answered at once. While
-// a question is open the pill narrates `.question(pin:)`, and annotate mode opens on the results.
+// a question is open the pill narrates `.question(pin:)`, and annotate mode opens on the notes sheet.
 // The launcher is a pill centered horizontally above the home indicator, or above the keyboard
 // while one is up, whether docked or dragged (Figma 9265:14439); a drag moves it vertically only,
 // so it can get out of the way of an app's own bottom bar.
@@ -158,8 +158,6 @@ final class AnnotateController {
     private(set) var lastSend: SentBatch?
     /// The agent's per-pin reports for `lastSend`, from its status.json, with local replies applied.
     private(set) var pinStatuses: [PinStatus] = []
-    /// The results card is up (in place of the review bar).
-    private(set) var isShowingResults = false
     /// Non-nil while the user answers a question; the reply card replaces the other bottom chrome.
     private(set) var replyDraft: ReplyDraft?
     /// A Send from the review bar keeps annotate mode open, and its pins stay drawn on the frozen
@@ -250,9 +248,9 @@ final class AnnotateController {
         observeKeyboard()
         window?.activate()
         warmUpAccessibility()
-        // An agent waiting on an answer: open on the question rather than the review bar
+        // An agent waiting on an answer: open the notes sheet, where the question has its Reply
         if pinResults.contains(where: { $0.outcome.isQuestion }) {
-            isShowingResults = true
+            openNotes()
         }
     }
 
@@ -260,7 +258,6 @@ final class AnnotateController {
         guard isActive else { return }
         finishDraft()
         cancelReply()
-        closeResults()
         closeNotes()
         showsSentPins = false
         selection = nil
@@ -479,15 +476,13 @@ final class AnnotateController {
     // MARK: Draft editing
 
     /// What the overlay shows: the reply card while answering a question, the comment card while a
-    /// pin is open, the results card when opened, the review bar otherwise.
+    /// pin is open, the review bar otherwise.
     var chrome: OverlayChrome {
         OverlayChrome.resolve(.init(
             isDraftOpen: draft != nil,
             draftComment: draft?.annotation.comment ?? "",
             pinCount: annotations.count,
-            replyText: replyDraft?.text,
-            isShowingResults: isShowingResults,
-            resultCount: pinResults.count
+            replyText: replyDraft?.text
         ))
     }
 
@@ -602,8 +597,6 @@ final class AnnotateController {
             cancelReply()
         } else if draft != nil {
             cancelDraft()
-        } else if isShowingResults {
-            closeResults()
         } else if selection != nil {
             selection = nil
         } else {
@@ -671,15 +664,6 @@ final class AnnotateController {
     func deleteNote(_ id: UUID) {
         if draft?.annotation.id == id { clearDraft() }
         removeAnnotation(id: id)
-    }
-
-    func openResults() {
-        guard !pinResults.isEmpty else { return }
-        isShowingResults = true
-    }
-
-    func closeResults() {
-        isShowingResults = false
     }
 
     /// Opens the reply card for a pin the agent asked about; any other pin is ignored.
@@ -806,7 +790,7 @@ final class AnnotateController {
         localReplies.removeAll()
         updateReportedStatuses([])
         cancelReply()
-        closeResults()
+        closeNotes()
         annotations.removeAll()
         attachmentImages.removeAll()
         if keepAnnotating {
@@ -889,7 +873,7 @@ final class AnnotateController {
     /// Extra touch slop around the pill on every side, so a near miss still opens annotate mode.
     static let launcherHitSlop: CGFloat = 4
 
-    /// Lowest y the keyboard-docked chrome (comment and reply cards, results card, toasts, the
+    /// Lowest y the keyboard-docked chrome (comment and reply cards, toasts, the
     /// launcher) may reach: above the home indicator, or above the keyboard while it's up.
     var chromeBottom: CGFloat {
         keyboardTop.map { min($0, screenChromeBottom) } ?? screenChromeBottom
@@ -1284,7 +1268,7 @@ final class AnnotateController {
                 return Date().timeIntervalSince(status.updatedAt) < Self.resumeFinalWindow ? resumed : nil
             }.value
             guard let self, let resumable, self.deliveryTask == nil, self.delivery == nil else { return }
-            // The results card and replies work on the resumed Send as on a fresh one
+            // The notes sheet and replies work on the resumed Send as on a fresh one
             let session = resumable.session
             self.lastSend = SentBatch(sessionID: session.id, output: output, pins: session.annotations)
             self.localReplies.removeAll()

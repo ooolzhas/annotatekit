@@ -1,10 +1,11 @@
 // The note list behind the review bar's count (no Figma: owner request). A sheet that opens at a
-// small detent and drags up to full height. It lists the pins waiting to be sent, numbered like their
-// badges: a tap opens one on the comment card (pins on another screen can't open here, so they only
-// list), a swipe deletes one (a trash icon, no label), and Clear All clears them all after asking.
-// With nothing to list it shows an empty state that says how to add a note. Below them come the last
-// Send's pins with what the agent reported, the same spinner / glyph / number as their badges, and
-// Reply on a question. Row copy comes from `PinResult` and `PinOutcome` in AnnotateCore.
+// small detent and drags up to full height, with tags at the top of the list that pick what it lists:
+// Current (pins waiting to be sent), In Progress, Resolved and Failed (the last Send's pins, sorted by
+// `NoteFilter`), each with its count. Current rows open on the comment card with a tap (pins on another
+// screen can't open here, so they only list) and delete with a swipe (a trash icon, no label); Clear
+// All clears them after asking. Sent rows show the same spinner / glyph / number as their badges, with
+// Reply on a question. A tag with nothing in it shows an empty state. Row copy comes from `PinResult`
+// and `PinOutcome` in AnnotateCore.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -15,64 +16,73 @@ struct NotesSheet: View {
 
     @State private var detent: PresentationDetent = Self.compactDetent
     @State private var isConfirmingClear = false
+    /// The tag picked by the user; nil until they pick one, so the sheet opens on the first tag with notes.
+    @State private var pickedFilter: NoteFilter?
 
-    /// The small detent the sheet opens at: the title and about three rows, so the frozen screen
+    /// The small detent the sheet opens at: the title, the tags and about two rows, so the frozen screen
     /// stays mostly visible. Dragging up gives the full-height list.
     static let compactDetent: PresentationDetent = .fraction(0.4)
-    /// Badge to text gap, and title to subtitle gap (the results card's 12 / 2).
+    /// Badge to text gap, and title to subtitle gap.
     static let rowSpacing: CGFloat = 12
     static let textSpacing: CGFloat = 2
+    /// Tags: 8pt apart, inset like the list's rows, with a little air above and below.
+    static let tagSpacing: CGFloat = 8
+    static let tagBarHorizontalPadding: CGFloat = 16
+    static let tagBarVerticalPadding: CGFloat = 8
+    static let tagChange: Animation = .snappy(duration: 0.2)
 
     var body: some View {
         let pending = PinResult.results(for: controller.annotations, statuses: [])
-        let sent = controller.pinResults
+        let sent = Dictionary(grouping: controller.pinResults) {
+            NoteFilter.of($0.outcome, delivery: controller.delivery)
+        }
+        let counts = Dictionary(uniqueKeysWithValues: NoteFilter.allCases.map { filter in
+            (filter, filter == .current ? pending.count : sent[filter]?.count ?? 0)
+        })
+        let filter = pickedFilter ?? NoteFilter.initial(counts: counts)
 
         NavigationStack {
             List {
-                if !pending.isEmpty {
-                    Section {
-                        ForEach(pending) { note in
-                            pendingRow(note)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        if let id = annotationID(for: note.index) { controller.deleteNote(id) }
-                                    } label: {
-                                        // Icon only (owner request); VoiceOver still hears the action
-                                        Image(systemName: "trash")
-                                    }
-                                    .accessibilityLabel(OverlayChrome.clearAction)
+                // The first row rather than a bar over the list: a safe-area bar renders its content
+                // vibrant, which washed the picked tag out to gray
+                tags(selected: filter, counts: counts)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                if filter == .current {
+                    ForEach(pending) { note in
+                        pendingRow(note)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    if let id = annotationID(for: note.index) { controller.deleteNote(id) }
+                                } label: {
+                                    // Icon only (owner request); VoiceOver still hears the action
+                                    Image(systemName: "trash")
                                 }
-                        }
-                    } header: {
-                        if !sent.isEmpty { Text(OverlayChrome.unsentTitle) }
+                                .accessibilityLabel(OverlayChrome.clearAction)
+                            }
+                    }
+                } else {
+                    ForEach(sent[filter] ?? []) { result in
+                        sentRow(result)
                     }
                 }
-                if !sent.isEmpty {
-                    Section {
-                        ForEach(sent) { result in
-                            sentRow(result)
-                        }
-                    } header: {
-                        Text(OverlayChrome.resultsTitle(sent.count))
-                    } footer: {
-                        if let summary = PinResult.summary(sent) { Text(summary) }
-                    }
-                }
-            }
-            .overlay {
-                if pending.isEmpty, sent.isEmpty {
+                // A row under the tags rather than an overlay on the list, which would sit on them
+                if counts[filter] == 0 {
                     ContentUnavailableView {
-                        Label(OverlayChrome.emptyTitle, systemImage: "note.text")
+                        Label(filter.emptyTitle, systemImage: Self.emptySymbol(filter))
                     } description: {
-                        Text(ReviewHint.gestures.headline)
+                        if filter == .current { Text(ReviewHint.gestures.headline) }
                     }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
             }
             .navigationTitle(controller.reviewTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if !pending.isEmpty {
+                    if filter == .current, !pending.isEmpty {
                         Button(OverlayChrome.clearAllTitle, role: .destructive) { isConfirmingClear = true }
                             .tint(.red)
                     }
@@ -96,6 +106,32 @@ struct NotesSheet: View {
         }
         .presentationDetents([Self.compactDetent, .large], selection: $detent)
         .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Tags
+
+    private func tags(selected: NoteFilter, counts: [NoteFilter: Int]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Self.tagSpacing) {
+                ForEach(NoteFilter.allCases, id: \.self) { filter in
+                    NoteTag(filter: filter, count: counts[filter] ?? 0, isSelected: filter == selected) {
+                        withAnimation(Self.tagChange) { pickedFilter = filter }
+                    }
+                }
+            }
+            .padding(.horizontal, Self.tagBarHorizontalPadding)
+            .padding(.vertical, Self.tagBarVerticalPadding)
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+    }
+
+    private static func emptySymbol(_ filter: NoteFilter) -> String {
+        switch filter {
+        case .current: "note.text"
+        case .inProgress: "hourglass"
+        case .resolved: "checkmark.circle"
+        case .failed: "xmark.circle"
+        }
     }
 
     // MARK: - Rows
@@ -215,6 +251,45 @@ private struct NoteBadge: View {
         case .muted: Color(uiColor: .systemGray)
         case .attention: Color(uiColor: .systemOrange)
         }
+    }
+}
+/// One tag: its title and count in a capsule, filled with the label color while picked.
+private struct NoteTag: View {
+    let filter: NoteFilter
+    let count: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    static let height: CGFloat = 32
+    static let horizontalPadding: CGFloat = 12
+    static let countSpacing: CGFloat = 4
+    /// The count reads after the title, quieter.
+    static let countOpacity: Double = 0.6
+    /// The picked tag inverts the label colors. Explicit UIColors: `Color.primary` renders washed
+    /// out to gray on the sheet's glass.
+    static let selectedFill = Color(uiColor: .label)
+    static let selectedText = Color(uiColor: .systemBackground)
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Self.countSpacing) {
+                Text(filter.title)
+                if count > 0 {
+                    Text("\(count)")
+                        .monospacedDigit()
+                        .opacity(Self.countOpacity)
+                }
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(isSelected ? Self.selectedText : .primary)
+            .padding(.horizontal, Self.horizontalPadding)
+            .frame(height: Self.height)
+            .background(Capsule().fill(isSelected ? Self.selectedFill : Color(uiColor: .tertiarySystemFill)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(count > 0 ? "\(filter.title), \(count)" : filter.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 #endif
