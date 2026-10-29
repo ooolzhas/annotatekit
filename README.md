@@ -75,7 +75,8 @@ Add `.annotate/` to your `.gitignore`.
 **2. The CLI** (skip this if you use the Claude Code plugin):
 
 ```sh
-brew install ooolzhas/tap/annotate      # or: mint install ooolzhas/annotatekit
+brew install ooolzhas/tap/annotate      # or: npm install -g annotate-ios
+                                        # or: mint install ooolzhas/annotatekit
 ```
 
 **3. Connect your agent.** Pick one:
@@ -102,6 +103,9 @@ The server is `annotate mcp` over stdio, run from the project root.
 // Claude Code without the plugin: claude mcp add annotate --scope project -- annotate mcp
 // Cursor — .cursor/mcp.json
 { "mcpServers": { "annotate": { "command": "annotate", "args": ["mcp"] } } }
+
+// Nothing installed? npx fetches the CLI on first run (macOS)
+{ "mcpServers": { "annotate": { "command": "npx", "args": ["-y", "annotate-ios", "mcp"] } } }
 
 // VS Code — .vscode/mcp.json
 { "servers": { "annotate": { "type": "stdio", "command": "annotate", "args": ["mcp"] } } }

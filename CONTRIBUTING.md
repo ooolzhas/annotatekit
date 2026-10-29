@@ -53,10 +53,12 @@ why when it isn't obvious.
 ## Releasing (maintainers)
 
 1. Move **Unreleased** notes in CHANGELOG.md under the new version.
-2. Bump `ChannelServer.version` and the versions in `.claude-plugin/plugin.json` and
-   `.claude-plugin/marketplace.json`.
+2. Bump `ChannelServer.version`, `VERSION` in `bin/annotate`, and the versions in
+   `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` and `packaging/npm/package.json`.
 3. Tag `vX.Y.Z` and push the tag. The release workflow builds a universal `annotate` binary,
-   attaches it with its SHA-256 to a GitHub Release, and prints the values for the Homebrew formula.
+   attaches it with its SHA-256 to a GitHub Release, prints the values for the Homebrew formula, and
+   publishes the npm package `annotate-ios` (a launcher that downloads that binary) when the
+   `NPM_TOKEN` secret is set.
 4. Update `Formula/annotate.rb` in the tap (see `packaging/homebrew/annotate.rb`) with the new URL
    and SHA-256.
 

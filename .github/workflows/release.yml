@@ -30,6 +30,7 @@ jobs:
           grep -q "\"version\": \"$VERSION\"" .claude-plugin/plugin.json || { echo "plugin.json version != $VERSION"; exit 1; }
           grep -q "static let version = \"$VERSION\"" Sources/AnnotateAgent/ChannelServer.swift || { echo "ChannelServer.version != $VERSION"; exit 1; }
           grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG has no $VERSION section"; exit 1; }
+          grep -q "\"version\": \"$VERSION\"" packaging/npm/package.json || { echo "npm package version != $VERSION"; exit 1; }
       - name: Build (arm64 + x86_64)
         run: swift build -c release --product annotate --arch arm64 --arch x86_64
       - name: Package
@@ -60,3 +61,27 @@ jobs:
           echo "### Homebrew formula" >> "$GITHUB_STEP_SUMMARY"
           echo "url \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${{ steps.package.outputs.archive }}\"" >> "$GITHUB_STEP_SUMMARY"
           echo "sha256 \"${{ steps.package.outputs.sha256 }}\"" >> "$GITHUB_STEP_SUMMARY"
+
+  npm:
+    name: npm package (annotate-ios)
+    needs: cli
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # A launcher only: it downloads the binary the cli job just published, so it goes out after it
+      - name: Publish (skipped until the NPM_TOKEN secret is set)
+        if: env.NODE_AUTH_TOKEN != ''
+        run: |
+          mkdir -p packaging/npm/bin
+          cp bin/annotate packaging/npm/bin/annotate
+          cp LICENSE packaging/npm/LICENSE
+          cd packaging/npm && npm publish --access public --provenance

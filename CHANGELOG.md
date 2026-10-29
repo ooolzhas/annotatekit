@@ -40,6 +40,8 @@ from a physical iPhone, and a launcher pill that narrates each Send and keeps of
   lifting above it or moving to a side. A dragged pill stays put, and the keyboard dock still wins.
 - **`.annotateAvoid()`:** tags a view the launcher should keep off, for bars SwiftUI draws itself.
   An empty stub in Release.
+- **npm package `annotate-ios`:** `npx -y annotate-ios mcp` runs the MCP server with nothing
+  installed; it downloads the release's checksum-verified binary on first run (macOS).
 - **Reference images:** the paperclip attaches up to 4 photos per note
   (`attachments/<pin>-<n>.jpg`, listed in `prompt.md`).
 - **Pins follow scrolled content:** back in annotate mode after scrolling, pins move with the scroll
@@ -76,6 +78,8 @@ from a physical iPhone, and a launcher pill that narrates each Send and keeps of
 - The Move intent; a saved `move` loads as Fix.
 
 ### Fixed
+- The plugin launcher (`bin/annotate`) resolves symlinks before skipping itself on PATH, so a
+  linked copy (as npm installs it) can't exec itself in a loop.
 - `annotate mcp` no longer swallows Sends. Claude Code drops channel events silently without
   channels enabled, yet each session was marked delivered: a push now counts only once Claude acts
   on it, an unanswered push is handed back after 45 s, and other MCP clients no longer get sessions
