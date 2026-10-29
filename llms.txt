@@ -4,7 +4,7 @@
 
 Website: https://annotatekit.com
 
-Swift package: https://github.com/ooolzhas/annotatekit (product `AnnotateKit`, iOS 17+). Claude Code plugin: `/plugin marketplace add ooolzhas/annotatekit`, then `/plugin install annotate@annotatekit`. MCP server: `annotate mcp` (stdio), or `npx -y annotate-ios mcp` with nothing installed.
+Swift package: https://github.com/ooolzhas/annotatekit (product `AnnotateKit`, iOS 17+). Claude Code plugin: `/plugin marketplace add ooolzhas/annotatekit`, then `/plugin install annotate@annotatekit`. MCP server: `annotate mcp` (stdio), or `npx -y annotatekit mcp` with nothing installed.
 
 ## Using it
 
