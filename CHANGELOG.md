@@ -86,10 +86,17 @@ All notable changes to this project are documented here. The format is based on
     chrome has soft blue pools drifting sideways. Reduce Motion holds both still.
   - Entering and leaving annotate mode fades the dim, glow and frost over the same 0.3s the bar
     takes to rise, on an ease so it reads as a fade rather than a pop.
+  - **48 hours of notes:** the notes sheet lists every Send of the last 48 hours under "Sent 2 hours
+    ago" headers, read back from their session folders with the agent's latest status, so it
+    survives relaunches; pruning never removes a session that young. A note the agent never
+    reported on follows its Send: resolved once the Send is done, failed when it failed.
+  - Sending from a card with the keyboard up hides the card at once and saves once the keyboard has
+    slid away, so the keyboard keeps its slide. Clear All asks with a centered alert. The tag bar
+    sits right under the toolbar.
   - The intent chip opens our own dropdown above it instead of a system menu: on iOS 27 devices a
     tap on a system menu item could be taken by the frozen screen's drawing gesture.
   - The review bar's back, count and ↑ share one glass container, so a pressed one swells into its
-    neighbours. The edge glow's corners are 2pt tighter (60pt).
+    neighbours. The edge glow's corners are 4pt tighter (58pt).
 
 ### Added
 - **Agent loop** (ideas from Agentation):
