@@ -80,6 +80,19 @@ final class AnnotateController {
         let sessionID: String
         let output: URL
         let pins: [Annotation]
+        let sentAt: Date
+    }
+
+    /// An earlier Send inside `SessionInbox.historyWindow`, with what the agent last reported for
+    /// each of its pins, as read from its session folder.
+    struct PastSend: Equatable, Sendable, Identifiable {
+        let sessionID: String
+        let sentAt: Date
+        let results: [PinResult]
+        /// Where the Send got to, from its status.json; nil when nobody picked it up.
+        let stage: DeliveryStage?
+
+        var id: String { sessionID }
     }
 
     /// An answer being written to the agent's question about one sent pin.
@@ -165,6 +178,11 @@ final class AnnotateController {
     private(set) var showsSentPins = false
     /// The notes sheet is up (the review bar's count opens it).
     private(set) var isShowingNotes = false
+    /// Earlier Sends of the last 48 hours, newest first (`refreshHistory`); `lastSend` isn't among them.
+    private(set) var history: [PastSend] = []
+    /// Where `lastSend` got to. Unlike `delivery`, which the pill clears after its final hold, it
+    /// keeps the last stage, so the notes sheet can file a finished Send's notes for good.
+    private(set) var lastSendStage: DeliveryStage?
 
     @ObservationIgnored private var screens: [Int: CapturedScreen] = [:]
     /// Saved pins' reference images in pick order. Kept off `Annotation` so pins stay Codable and
@@ -653,7 +671,37 @@ final class AnnotateController {
     /// Opens the notes sheet, empty or not: with nothing to list it says how to add a note.
     func openNotes() {
         finishDraft()
+        refreshHistory()
         isShowingNotes = true
+    }
+
+    /// Reads the earlier Sends of the last 48 hours (`SessionInbox.historyWindow`) back from their
+    /// session folders off the main thread, newest first, each with the agent's latest per-pin
+    /// status; the notes sheet lists them after the last Send. Reading from disk means they survive
+    /// relaunches, and a status the agent wrote since shows on the next read.
+    func refreshHistory() {
+        let output = outputDirectory()
+        let latest = lastSend?.sessionID
+        Task { [weak self] in
+            let past = await Task.detached(priority: .utility) { () -> [PastSend] in
+                SessionInbox.sessionIDs(in: output, since: SessionInbox.historyCutoffID())
+                    .filter { $0 != latest }
+                    .reversed()
+                    .compactMap { id in
+                        guard let session = try? SessionInbox.loadSession(id: id, in: output) else { return nil }
+                        let status = SessionInbox.readStatus(id: id, in: output)
+                        let statuses = status?.pins ?? []
+                        return PastSend(
+                            sessionID: id,
+                            sentAt: session.createdAt,
+                            results: PinResult.results(for: session.annotations, statuses: statuses),
+                            stage: status.map { Self.stage(for: $0, pins: statuses) }
+                        )
+                    }
+            }.value
+            guard let self, self.history != past else { return }
+            self.history = past
+        }
     }
 
     func closeNotes() {
@@ -786,7 +834,9 @@ final class AnnotateController {
         )
 
         // These pins are the ones the agent will report on; the previous Send's results are gone
-        lastSend = SentBatch(sessionID: job.sessionID, output: job.outputDirectory, pins: outgoing)
+        lastSend = SentBatch(sessionID: job.sessionID, output: job.outputDirectory, pins: outgoing, sentAt: Date())
+        // The Send this replaces is history now
+        refreshHistory()
         localReplies.removeAll()
         updateReportedStatuses([])
         cancelReply()
@@ -810,6 +860,7 @@ final class AnnotateController {
         noticeFeedback.prepare()
         // Set before the write so the pill answers the tap immediately (Figma 9265:14691)
         delivery = .sent(count: outgoing.count)
+        lastSendStage = delivery
         deliveryStartedAt = Date()
 
         deliveryWrite = Task { [weak self] in
@@ -827,6 +878,7 @@ final class AnnotateController {
             if outcome.error != nil {
                 // The prompt is on the clipboard already; the pill says so instead of a toast
                 self.delivery = .notSaved
+                self.lastSendStage = .notSaved
                 self.clearDelivery(ifStill: .notSaved, after: LauncherStatus.finalHold)
                 return
             }
@@ -834,6 +886,7 @@ final class AnnotateController {
                 // Nothing is listening: say so now rather than after `unclaimedAfter`. Tracking still
                 // runs, so an agent that connects in time picks it up and narrates over this.
                 self.delivery = .noAgent
+                self.lastSendStage = .noAgent
                 self.clearDelivery(ifStill: .noAgent, after: LauncherStatus.finalHold)
             }
             self.trackDelivery(id: job.sessionID, in: job.outputDirectory)
@@ -877,6 +930,11 @@ final class AnnotateController {
     /// launcher) may reach: above the home indicator, or above the keyboard while it's up.
     var chromeBottom: CGFloat {
         keyboardTop.map { min($0, screenChromeBottom) } ?? screenChromeBottom
+    }
+
+    /// A keyboard is up under the cards (`chromeBottom` sits above the home indicator).
+    var isKeyboardUp: Bool {
+        chromeBottom < screenChromeBottom
     }
 
     /// The review bar's bottom: above the home indicator whether or not a keyboard is up, so the bar
@@ -1239,6 +1297,7 @@ final class AnnotateController {
                 self.deliveryHold?.cancel()
                 self.deliveryHold = nil
                 self.delivery = stage
+                if self.lastSend?.sessionID == id { self.lastSendStage = stage }
                 if stage.isFinal {
                     try? await Task.sleep(for: .seconds(LauncherStatus.finalHold))
                     // Cancelled means a newer Send owns the pill; leave it alone
@@ -1270,7 +1329,8 @@ final class AnnotateController {
             guard let self, let resumable, self.deliveryTask == nil, self.delivery == nil else { return }
             // The notes sheet and replies work on the resumed Send as on a fresh one
             let session = resumable.session
-            self.lastSend = SentBatch(sessionID: session.id, output: output, pins: session.annotations)
+            self.lastSend = SentBatch(sessionID: session.id, output: output, pins: session.annotations,
+                                      sentAt: session.createdAt)
             self.localReplies.removeAll()
             self.updateReportedStatuses(resumable.pins)
             self.deliveryStartedAt = session.createdAt
@@ -1280,7 +1340,7 @@ final class AnnotateController {
 
     /// A final state maps to its final stage. Otherwise an open question (lowest pin first) wins over
     /// the session state, since the agent is blocked on the user; else the state maps as is.
-    private static func stage(for status: SessionStatus, pins: [PinStatus]) -> DeliveryStage {
+    nonisolated private static func stage(for status: SessionStatus, pins: [PinStatus]) -> DeliveryStage {
         if !status.isFinal, let asked = pins.filter({ $0.state == .question }).map(\.index).min() {
             return .question(pin: asked)
         }

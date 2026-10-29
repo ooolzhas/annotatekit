@@ -224,8 +224,9 @@ public enum NoteFilter: String, CaseIterable, Sendable {
         }
     }
 
-    /// Where a sent pin belongs. The agent's report decides first; a pin it hasn't reported on is
-    /// failed only when its whole Send failed or couldn't be written, otherwise still in progress.
+    /// Where a sent pin belongs. The agent's report decides first. A pin it never reported on follows
+    /// its whole Send: resolved once the agent finished it, failed when it failed or couldn't be
+    /// written, otherwise still in progress.
     public static func of(_ outcome: PinOutcome, delivery: DeliveryStage?) -> NoteFilter {
         switch outcome {
         case .resolved: return .resolved
@@ -233,6 +234,7 @@ public enum NoteFilter: String, CaseIterable, Sendable {
         case .question, .answered: return .inProgress
         case .open:
             switch delivery {
+            case .done: return .resolved
             case .failed, .notSaved: return .failed
             default: return .inProgress
             }

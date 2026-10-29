@@ -105,6 +105,43 @@ struct ChromeButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - Sending from a card
+
+/// Sending from the comment or reply card (owner request): the card vanishes at once but stays in
+/// place while its field lets go of the keyboard, and only once the keyboard has slid away does `send`
+/// run and take the card out for real. Taking the field out with the keyboard still up made iOS drop
+/// the keyboard without its slide. Callers send directly when no keyboard is up.
+struct SendAfterKeyboard: ViewModifier {
+    @Binding var isLeaving: Bool
+    let send: () -> Void
+
+    /// If iOS never reports the keyboard gone, the card leaves anyway after this; longer than the
+    /// keyboard's own slide.
+    static let timeout: Duration = .milliseconds(600)
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isLeaving ? 0 : 1)
+            .allowsHitTesting(!isLeaving)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+                finish()
+            }
+            .task(id: isLeaving) {
+                guard isLeaving else { return }
+                try? await Task.sleep(for: Self.timeout)
+                finish()
+            }
+    }
+
+    private func finish() {
+        guard isLeaving else { return }
+        // Stays hidden through its own removal: un-hiding in the same update faded a ghost of the
+        // card in under the arriving bar. The ↑ that started this only works when a send can go
+        // through, so the card always leaves here.
+        send()
+    }
+}
+
 // MARK: - Glass
 
 extension View {

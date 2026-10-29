@@ -276,9 +276,14 @@ import Testing
         #expect(NoteFilter.of(.open, delivery: delivery) == .failed)
     }
 
+    @Test("an unreported pin of a finished Send counts as resolved")
+    func openPinResolvesWithItsSend() {
+        #expect(NoteFilter.of(.open, delivery: .done(message: "Shipped")) == .resolved)
+    }
+
     @Test("an unreported pin is otherwise in progress",
           arguments: [DeliveryStage?.none, .sent(count: 1), .unclaimed, .delivered, .received,
-                      .working(message: nil), .question(pin: 1), .done(message: nil), .noAgent])
+                      .working(message: nil), .question(pin: 1), .noAgent])
     func openPinInProgress(delivery: DeliveryStage?) {
         #expect(NoteFilter.of(.open, delivery: delivery) == .inProgress)
     }

@@ -14,6 +14,8 @@ struct ReplyCard: View {
     let reply: AnnotateController.ReplyDraft
 
     @FocusState private var isFocused: Bool
+    /// ↑ was tapped with the keyboard up: the card is hidden, waiting for the keyboard to slide away.
+    @State private var isLeaving = false
 
     /// No Figma: derived. The orange matches `ReviewHint.Dot.attention`, the question's tone
     /// elsewhere in the overlay, so the card reads as the answer to that hint.
@@ -59,6 +61,7 @@ struct ReplyCard: View {
         // to the frozen screen and starts a new pin. No card-wide tap gesture, as ComposerCard: it
         // can take taps meant for a menu drawn over the card.
         .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .modifier(SendAfterKeyboard(isLeaving: $isLeaving) { controller.submitReply() })
         .onAppear { isFocused = true }
     }
 
@@ -130,9 +133,13 @@ struct ReplyCard: View {
                 // Only `.dimmed` dims; `.disabled` just blocks the tap (submitReply no-ops anyway
                 // when it can't submit)
                 CircleIconButton(systemName: "arrow.up", style: canSubmit ? .prominent : .dimmed) {
-                    // Let go of the keyboard in the same update the card leaves in, not after it
+                    guard controller.isKeyboardUp else {
+                        controller.submitReply()
+                        return
+                    }
+                    // Hide now, let the keyboard slide away, then send (SendAfterKeyboard)
+                    isLeaving = true
                     isFocused = false
-                    controller.submitReply()
                 }
                 .disabled(!canSubmit)
                 .accessibilityLabel("Send reply")

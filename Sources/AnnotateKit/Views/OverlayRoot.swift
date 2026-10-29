@@ -126,7 +126,7 @@ private struct BottomChrome: View {
         // own, so a card leaving with the keyboard and the bar arriving at the home indicator overlap
         // correctly while they swap
         let belowBar = max(bounds.maxY - controller.screenChromeBottom, 0)
-        let isKeyboardUp = controller.chromeBottom < controller.screenChromeBottom
+        let isKeyboardUp = controller.isKeyboardUp
         let cardSides = isKeyboardUp ? Self.keyboardInset : Self.screenInset
         let belowCard = max(bounds.maxY - controller.chromeBottom, 0) + (isKeyboardUp ? Self.keyboardInset : 0)
 
@@ -216,8 +216,8 @@ private struct BottomChrome: View {
             .combined(with: .opacity)
     }
 
-    /// The comment and reply cards slide in like the bar, but leave at once (owner request): a card
-    /// still sliding out keeps its field, and with it the keyboard, until it's gone.
+    /// The comment and reply cards slide in like the bar, but leave at once (owner request): by the
+    /// time one goes, a send has already hidden it while the keyboard slid away (SendAfterKeyboard).
     private var cardTransition: AnyTransition {
         .asymmetric(insertion: swapTransition, removal: .identity)
     }
@@ -271,6 +271,9 @@ private struct ActiveOverlay: View {
                     strokes: annotation.sketchInScreenPoints,
                     bounds: bounds
                 )
+                // Saving swaps the open draft's marker for this one; a fade-in here blinked the
+                // strokes out for a frame. Badges still animate
+                .transition(.identity)
             }
 
             if let draft = controller.draft {

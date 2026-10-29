@@ -293,14 +293,25 @@ public enum SessionInbox {
         return true
     }
 
-    /// Deletes the oldest session folders beyond the newest `keeping`, so `.annotate/` stays small.
-    /// Incomplete folders count too (a crashed write shouldn't linger). Returns the removed ids.
+    /// How long the app's notes sheet remembers a Send (owner request); pruning never removes one younger.
+    public static let historyWindow: TimeInterval = 48 * 3600
+
+    /// The lowest session id inside the history window that ends at `now`. Ids are UTC timestamps,
+    /// so every Send at or after `now - historyWindow` sorts at or after it.
+    public static func historyCutoffID(now: Date = Date()) -> String {
+        SessionWriter.makeSessionID(date: now.addingTimeInterval(-historyWindow), suffix: "")
+    }
+
+    /// Deletes the oldest session folders beyond the newest `keeping`, so `.annotate/` stays small,
+    /// but never one inside the history window. Incomplete folders count too (a crashed write
+    /// shouldn't linger). Returns the removed ids.
     @discardableResult
-    public static func prune(keeping: Int, in outputDirectory: URL, fileManager: FileManager = .default) -> [String] {
+    public static func prune(keeping: Int, in outputDirectory: URL, now: Date = Date(), fileManager: FileManager = .default) -> [String] {
         guard keeping >= 0 else { return [] }
         let sessions = outputDirectory.appendingPathComponent(SessionWriter.sessionsFolder, isDirectory: true)
         let ids = ((try? fileManager.contentsOfDirectory(atPath: sessions.path)) ?? []).filter(isValidSessionID).sorted()
-        let doomed = ids.dropLast(keeping)
+        let cutoff = historyCutoffID(now: now)
+        let doomed = ids.dropLast(keeping).filter { $0 < cutoff }
         for id in doomed {
             try? fileManager.removeItem(at: sessions.appendingPathComponent(id, isDirectory: true))
         }

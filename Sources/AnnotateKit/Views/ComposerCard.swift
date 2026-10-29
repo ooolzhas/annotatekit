@@ -26,6 +26,8 @@ struct ComposerCard: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     /// The intent dropdown is open above the chip.
     @State private var isPickingIntent = false
+    /// ↑ was tapped with the keyboard up: the card is hidden, waiting for the keyboard to slide away.
+    @State private var isLeaving = false
 
     /// Picked images are downscaled to this longest side before they are held in memory; the
     /// bundle stores them as JPEGs and a reference image never needs more.
@@ -79,6 +81,7 @@ struct ComposerCard: View {
                     .transition(.scale(scale: Self.pickerHiddenScale, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
+        .modifier(SendAfterKeyboard(isLeaving: $isLeaving) { controller.submitDraft() })
         .onAppear { isFocused = !opensWithoutKeyboard }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
@@ -316,9 +319,13 @@ struct ComposerCard: View {
             canSubmit = false
         }
         return CircleIconButton(systemName: "arrow.up", style: canSubmit ? .prominent : .dimmed) {
-            // Let go of the keyboard in the same update the card leaves in, not after it
+            guard controller.isKeyboardUp else {
+                controller.submitDraft()
+                return
+            }
+            // Hide now, let the keyboard slide away, then save (SendAfterKeyboard)
+            isLeaving = true
             isFocused = false
-            controller.submitDraft()
         }
         .disabled(!canSubmit)
     }

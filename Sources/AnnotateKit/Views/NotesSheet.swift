@@ -1,10 +1,11 @@
 // The note list behind the review bar's count (no Figma: owner request). A sheet that opens at a
-// small detent and drags up to full height, with tags at the top of the list that pick what it lists:
+// small detent and drags up to full height, with tags in a bar under its toolbar that pick what it lists:
 // Current (pins waiting to be sent), In Progress, Resolved and Failed (the last Send's pins, sorted by
-// `NoteFilter`), each with its count. Current rows open on the comment card with a tap (pins on another
+// `NoteFilter`, from the last Send and every earlier one of the last 48 hours, grouped by Send),
+// each with its count. Current rows open on the comment card with a tap (pins on another
 // screen can't open here, so they only list) and delete with a swipe (a trash icon, no label); Clear
-// All clears them after asking. Sent rows show the same spinner / glyph / number as their badges, with
-// Reply on a question. A tag with nothing in it shows an empty state. Row copy comes from `PinResult`
+// All clears them after an alert asks. Sent rows show the same spinner / glyph / number as their badges, with
+// Reply on a question of the last Send. A tag with nothing in it shows an empty state. Row copy comes from `PinResult`
 // and `PinOutcome` in AnnotateCore.
 
 #if DEBUG && canImport(UIKit)
@@ -25,16 +26,21 @@ struct NotesSheet: View {
     /// Badge to text gap, and title to subtitle gap.
     static let rowSpacing: CGFloat = 12
     static let textSpacing: CGFloat = 2
-    /// Tags: 8pt apart, inset like the list's rows, with a little air above and below.
+    /// Tags: 8pt apart, inset like the list's cards, snug under the toolbar.
     static let tagSpacing: CGFloat = 8
     static let tagBarHorizontalPadding: CGFloat = 16
-    static let tagBarVerticalPadding: CGFloat = 8
+    static let tagBarTopPadding: CGFloat = 4
+    static let tagBarBottomPadding: CGFloat = 8
+    /// Space between the tag bar and the first card.
+    static let listTopMargin: CGFloat = 8
     static let tagChange: Animation = .snappy(duration: 0.2)
 
     var body: some View {
         let pending = PinResult.results(for: controller.annotations, statuses: [])
-        let sent = Dictionary(grouping: controller.pinResults) {
-            NoteFilter.of($0.outcome, delivery: controller.delivery)
+        // The last Send first, then earlier ones newest first, each in pin order. Grouping keeps that
+        // order inside every tag. Only the last Send has a live delivery stage
+        let sent = Dictionary(grouping: sentNotes) {
+            NoteFilter.of($0.result.outcome, delivery: $0.stage)
         }
         let counts = Dictionary(uniqueKeysWithValues: NoteFilter.allCases.map { filter in
             (filter, filter == .current ? pending.count : sent[filter]?.count ?? 0)
@@ -43,12 +49,6 @@ struct NotesSheet: View {
 
         NavigationStack {
             List {
-                // The first row rather than a bar over the list: a safe-area bar renders its content
-                // vibrant, which washed the picked tag out to gray
-                tags(selected: filter, counts: counts)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
                 if filter == .current {
                     ForEach(pending) { note in
                         pendingRow(note)
@@ -63,8 +63,15 @@ struct NotesSheet: View {
                             }
                     }
                 } else {
-                    ForEach(sent[filter] ?? []) { result in
-                        sentRow(result)
+                    ForEach(Self.sends(sent[filter] ?? [])) { send in
+                        Section {
+                            ForEach(send.notes) { note in
+                                sentRow(note)
+                            }
+                        } header: {
+                            // No Figma (derived): "Sent 2 hours ago"
+                            Text("Sent \(send.sentAt.formatted(.relative(presentation: .named)))")
+                        }
                     }
                 }
                 // A row under the tags rather than an overlay on the list, which would sit on them
@@ -77,6 +84,11 @@ struct NotesSheet: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 }
+            }
+            // The grouped list's own top inset doubled the gap under the tags
+            .contentMargins(.top, Self.listTopMargin, for: .scrollContent)
+            .tagBar {
+                tags(selected: filter, counts: counts)
             }
             .navigationTitle(controller.reviewTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -96,12 +108,13 @@ struct NotesSheet: View {
                     .accessibilityLabel("Close")
                 }
             }
-            .confirmationDialog(OverlayChrome.clearTitle(pending.count), isPresented: $isConfirmingClear,
-                                titleVisibility: .visible) {
+            // An alert in the middle of the screen (owner request), not a popover off the button
+            .alert(OverlayChrome.clearTitle(pending.count), isPresented: $isConfirmingClear) {
                 Button(OverlayChrome.clearAction, role: .destructive) {
                     controller.clearAll()
                     controller.closeNotes()
                 }
+                Button("Cancel", role: .cancel) {}
             }
         }
         .presentationDetents([Self.compactDetent, .large], selection: $detent)
@@ -120,7 +133,8 @@ struct NotesSheet: View {
                 }
             }
             .padding(.horizontal, Self.tagBarHorizontalPadding)
-            .padding(.vertical, Self.tagBarVerticalPadding)
+            .padding(.top, Self.tagBarTopPadding)
+            .padding(.bottom, Self.tagBarBottomPadding)
         }
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     }
@@ -176,9 +190,10 @@ struct NotesSheet: View {
     }
 
     /// A pin from the last Send: what the agent reported and the comment, with Reply on a question.
-    private func sentRow(_ result: PinResult) -> some View {
+    private func sentRow(_ note: SentNote) -> some View {
+        let result = note.result
         let outcome = result.outcome
-        let mark = SentPinMark.resolve(outcome: outcome, delivery: controller.delivery)
+        let mark = SentPinMark.resolve(outcome: outcome, delivery: note.isLatest ? controller.delivery : nil)
         return HStack(spacing: Self.rowSpacing) {
             HStack(spacing: Self.rowSpacing) {
                 NoteBadge(number: result.index, mark: mark)
@@ -196,7 +211,8 @@ struct NotesSheet: View {
             }
             .accessibilityElement(children: .combine)
 
-            if outcome.isQuestion {
+            // Replies go to the last Send, the one the agent is waiting on
+            if outcome.isQuestion, note.isLatest {
                 Button(OverlayChrome.replyAction) {
                     controller.closeNotes()
                     controller.beginReply(pin: result.index)
@@ -209,9 +225,61 @@ struct NotesSheet: View {
         }
     }
 
+    /// The last Send's notes, then every earlier Send's of the last 48 hours, newest first.
+    private var sentNotes: [SentNote] {
+        let latest = controller.lastSend.map { send in
+            controller.pinResults.map {
+                SentNote(sessionID: send.sessionID, sentAt: send.sentAt, result: $0,
+                         stage: controller.lastSendStage, isLatest: true)
+            }
+        } ?? []
+        let earlier = controller.history.flatMap { send in
+            send.results.map {
+                SentNote(sessionID: send.sessionID, sentAt: send.sentAt, result: $0, stage: send.stage, isLatest: false)
+            }
+        }
+        return latest + earlier
+    }
+
+    /// `notes` split into one group per Send, keeping their order.
+    private static func sends(_ notes: [SentNote]) -> [SendGroup] {
+        var groups: [SendGroup] = []
+        for note in notes {
+            if groups.last?.sessionID == note.sessionID {
+                groups[groups.count - 1].notes.append(note)
+            } else {
+                groups.append(SendGroup(sessionID: note.sessionID, sentAt: note.sentAt, notes: [note]))
+            }
+        }
+        return groups
+    }
+
     private func annotationID(for index: Int) -> UUID? {
         controller.annotations.first { $0.index == index }?.id
     }
+}
+
+/// One sent note: a pin of the last Send, or of an earlier one from the last 48 hours.
+private struct SentNote: Identifiable {
+    let sessionID: String
+    let sentAt: Date
+    let result: PinResult
+    /// Where its Send got to (kept after the pill's hold), which files a note the agent never
+    /// reported on (`NoteFilter.of`).
+    let stage: DeliveryStage?
+    /// The last Send: its delivery stage is live and its questions can be answered here.
+    let isLatest: Bool
+
+    var id: String { "\(sessionID)#\(result.index)" }
+}
+
+/// One Send's notes inside a tag, under a "Sent 2 hours ago" header.
+private struct SendGroup: Identifiable {
+    let sessionID: String
+    let sentAt: Date
+    var notes: [SentNote]
+
+    var id: String { sessionID }
 }
 
 /// A row's badge: the pin's number, a spinner while the agent has it, or its outcome's glyph, the
@@ -290,6 +358,22 @@ private struct NoteTag: View {
         .buttonStyle(.plain)
         .accessibilityLabel(count > 0 ? "\(filter.title), \(count)" : filter.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+private extension View {
+    /// The tags sit in a bar under the toolbar that stays put while the list scrolls: on iOS 26 a
+    /// safe-area bar, which gets the system's scroll edge effect; before, an inset on the bar material.
+    @ViewBuilder
+    func tagBar<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            safeAreaBar(edge: .top) { content() }
+        } else {
+            safeAreaInset(edge: .top, spacing: 0) { content().background(.bar) }
+        }
+        #else
+        safeAreaInset(edge: .top, spacing: 0) { content().background(.bar) }
+        #endif
     }
 }
 #endif
