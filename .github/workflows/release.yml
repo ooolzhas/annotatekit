@@ -65,23 +65,26 @@ jobs:
   npm:
     name: npm package (annotatekit)
     needs: cli
+    # Trusted Publishing: npm trusts this workflow through GitHub's OIDC token, so no secret is
+    # stored. Skipped until the package exists and its Trusted Publisher is set on npmjs.com
+    # (repo variable NPM_TRUSTED_PUBLISHING=true). The package is a launcher that downloads the
+    # binary the cli job just published, so it goes out after it.
+    if: vars.NPM_TRUSTED_PUBLISHING == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # npm provenance
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      id-token: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
-      # A launcher only: it downloads the binary the cli job just published, so it goes out after it
-      - name: Publish (skipped until the NPM_TOKEN secret is set)
-        if: env.NODE_AUTH_TOKEN != ''
+      # Trusted Publishing needs npm 11.5.1 or later
+      - run: npm install -g npm@latest
+      - name: Publish (provenance is automatic with Trusted Publishing)
         run: |
           mkdir -p packaging/npm/bin
           cp bin/annotate packaging/npm/bin/annotate
           cp LICENSE packaging/npm/LICENSE
-          cd packaging/npm && npm publish --access public --provenance
+          cd packaging/npm && npm publish --access public
