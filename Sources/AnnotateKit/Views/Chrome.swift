@@ -454,6 +454,8 @@ struct ReviewHintLine: View {
     static let changeAnimation: Animation = .snappy(duration: 0.25)
     /// The elapsed counts whole seconds ("1s", "2s", 9273:18007 / 18102), so it ticks once a second.
     static let tickInterval: TimeInterval = 1
+    /// Not in Figma: the digit roll on each tick, well inside the second between ticks.
+    static let tickAnimation: Animation = .snappy(duration: 0.3)
     /// The detail and the elapsed sit at half the headline's strength (Figma 9276:27749 / 9276:28049
     /// `opacity-50`).
     static let secondaryOpacity: Double = 0.5
@@ -504,6 +506,9 @@ struct ReviewHintLine: View {
                         .monospacedDigit()
                         .modifier(HintTextStyle())
                         .opacity(Self.secondaryOpacity)
+                        // Each tick rolls the digits that changed (owner request)
+                        .contentTransition(.numericText(countsDown: false))
+                        .animation(Self.tickAnimation, value: elapsed)
                         // A long agent message truncates first; the elapsed always shows in full
                         .layoutPriority(1)
                 }

@@ -4,7 +4,7 @@
 // `NoteFilter`, from the last Send and every earlier one of the last 48 hours, grouped by Send),
 // each with its count. Current rows open on the comment card with a tap (pins on another
 // screen can't open here, so they only list) and delete with a swipe (a trash icon, no label); Clear
-// All clears them after an alert asks. Sent rows show the same spinner / glyph / number as their badges, with
+// All (a trash icon) clears them after an alert asks. Sent rows show the same spinner / glyph / number as their badges, with
 // Reply on a question of the last Send. A tag with nothing in it shows an empty state. Row copy comes from `PinResult`
 // and `PinOutcome` in AnnotateCore.
 
@@ -95,8 +95,14 @@ struct NotesSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if filter == .current, !pending.isEmpty {
-                        Button(OverlayChrome.clearAllTitle, role: .destructive) { isConfirmingClear = true }
-                            .tint(.red)
+                        // Just the icon (owner request); VoiceOver reads it as Clear All
+                        Button(role: .destructive) {
+                            isConfirmingClear = true
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .tint(.red)
+                        .accessibilityLabel(OverlayChrome.clearAllTitle)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
