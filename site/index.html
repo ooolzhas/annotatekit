@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnnotateKit: visual feedback for iOS, straight to your coding agent</title>
+<meta name="description" content="Tap, draw and comment on your running iOS app. Hit Send. Claude Code, Cursor or any MCP agent gets the screenshots, exact coordinates and your notes.">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<meta property="og:title" content="AnnotateKit">
+<meta property="og:description" content="Visual feedback for iOS apps that goes straight to your coding agent.">
+<meta property="og:image" content="https://annotatekit.com/icon.png">
+<meta property="og:url" content="https://annotatekit.com">
+<meta name="twitter:card" content="summary">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f5f6f8;
+    --text: #0b0c0f;
+    --muted: #5b6070;
+    --line: rgba(11, 12, 15, 0.09);
+    --accent: #0a84ff;
+    --accent-soft: rgba(10, 132, 255, 0.10);
+    --code-bg: #0f1115;
+    --code-text: #e7e9ee;
+    --card: #ffffff;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0c0f;
+      --bg-soft: #13151a;
+      --text: #f2f3f5;
+      --muted: #9aa0ad;
+      --line: rgba(255, 255, 255, 0.09);
+      --accent: #3d9bff;
+      --accent-soft: rgba(61, 155, 255, 0.14);
+      --code-bg: #15181e;
+      --card: #13151a;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  /* Header */
+  header { position: sticky; top: 0; z-index: 10; backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px); background: color-mix(in srgb, var(--bg) 78%, transparent);
+    border-bottom: 1px solid var(--line); }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; color: var(--text); }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  .nav-links { display: flex; gap: 22px; font-size: 15px; }
+  .nav-links a { color: var(--muted); }
+  .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+  /* Hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 56px; align-items: center;
+    padding-top: 72px; padding-bottom: 64px; }
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--accent);
+    background: var(--accent-soft); padding: 5px 11px; border-radius: 999px; margin-bottom: 18px; }
+  h1 { font-size: clamp(36px, 5.2vw, 56px); line-height: 1.05; letter-spacing: -0.025em; margin: 0 0 18px; font-weight: 750; }
+  .lede { font-size: 19px; color: var(--muted); margin: 0 0 28px; max-width: 34em; }
+  .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 20px; border-radius: 999px;
+    font-weight: 600; font-size: 16px; border: 1px solid var(--line); color: var(--text); background: var(--card); }
+  .btn:hover { text-decoration: none; border-color: color-mix(in srgb, var(--text) 25%, transparent); }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .meta { margin-top: 22px; font-size: 14px; color: var(--muted); }
+
+  /* Phone */
+  .phone-stage { display: flex; justify-content: center; }
+  .phone { position: relative; width: 300px; height: 620px; border-radius: 52px; padding: 12px;
+    background: linear-gradient(145deg, #2a2d34, #0d0e11); box-shadow: 0 30px 80px rgba(10,132,255,.18), 0 18px 40px rgba(0,0,0,.25); }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 41px; overflow: hidden; background: #f4f5f7; }
+  .island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 92px; height: 27px;
+    background: #000; border-radius: 20px; z-index: 5; }
+  .app { position: absolute; inset: 0; padding: 58px 18px 0; font-size: 12px; color: #111; }
+  .app h3 { margin: 0 0 12px; font-size: 22px; letter-spacing: -0.02em; }
+  .app .card { background: #fff; border-radius: 18px; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .app .row { display: flex; justify-content: space-between; align-items: center; }
+  .app .pill { background: #111; color: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 11px; }
+  .app .muted { color: #8a8f99; }
+  .bar { height: 8px; border-radius: 4px; background: #e6e8ec; margin-top: 8px; }
+  .bar.short { width: 60%; }
+  .dim { position: absolute; inset: 0; background: rgba(0,0,0,.42); box-shadow: inset 0 0 40px rgba(10,132,255,.75); border-radius: 41px; }
+  .sketch { position: absolute; left: 12px; top: 150px; width: 250px; height: 120px; overflow: visible; }
+  .badge { position: absolute; left: 232px; top: 140px; width: 24px; height: 24px; border-radius: 50%; background: #fff;
+    color: #000; font: 600 13px/24px -apple-system, sans-serif; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+  .hint { position: absolute; left: 0; right: 0; bottom: 92px; text-align: center; color: #fff; font-size: 12.5px;
+    font-weight: 500; text-shadow: 0 2px 4px rgba(0,0,0,.25); }
+  .hint .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #34c759; margin-right: 6px;
+    vertical-align: 1px; animation: pulse 2s ease-in-out infinite; }
+  .hint .faint { opacity: .55; margin-left: 4px; }
+  @keyframes pulse { 50% { opacity: .4; } }
+  .review { position: absolute; left: 22px; right: 22px; bottom: 34px; display: flex; gap: 8px; }
+  .glass { height: 42px; border-radius: 999px; background: rgba(255,255,255,.72); backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; color: #111;
+    font-weight: 600; font-size: 13px; box-shadow: inset 0 0 0 .5px rgba(255,255,255,.6); }
+  .glass.round { width: 42px; flex: none; }
+  .glass.wide { flex: 1; }
+  .glass.send { background: #0a84ff; color: #fff; }
+
+  /* Sections */
+  section { padding: 72px 0; }
+  .soft { background: var(--bg-soft); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  h2 { font-size: clamp(28px, 3.4vw, 38px); letter-spacing: -0.02em; line-height: 1.12; margin: 0 0 12px; }
+  .section-lede { color: var(--muted); margin: 0 0 40px; max-width: 40em; }
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; counter-reset: step; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 26px; box-shadow: var(--shadow); }
+  .step::before { counter-increment: step; content: counter(step); display: inline-grid; place-items: center; width: 30px; height: 30px;
+    border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 15px; margin-bottom: 14px; }
+  .step h3, .feature h3 { margin: 0 0 6px; font-size: 18px; }
+  .step p, .feature p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 32px; }
+  .feature { border-top: 1px solid var(--line); padding-top: 18px; }
+  kbd, code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; }
+  p code, li code { background: var(--accent-soft); color: var(--text); padding: 1px 6px; border-radius: 6px; }
+
+  /* Install */
+  .install { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 24px; box-shadow: var(--shadow); min-width: 0; }
+  .panel h3 { margin: 0 0 4px; font-size: 18px; }
+  .panel p { margin: 0 0 14px; color: var(--muted); font-size: 15px; }
+  .code { position: relative; background: var(--code-bg); color: var(--code-text); border-radius: 14px; padding: 14px 16px; margin: 10px 0 0;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13.5px; line-height: 1.6; overflow-x: auto; white-space: pre; }
+  .code .c { color: #7d8597; }
+  .code .k { color: #ff7ab2; }
+  .code .s { color: #ff8170; }
+  .code.copyable { padding-right: 76px; }
+  .copy { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,.08); color: #c9ccd4; border: 0; border-radius: 8px;
+    font: 600 12px -apple-system, sans-serif; padding: 5px 9px; cursor: pointer; }
+  .copy:hover { background: rgba(255,255,255,.16); }
+  .agents { margin-top: 20px; font-size: 15px; color: var(--muted); }
+
+  footer { padding: 40px 0 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
+  .foot { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .foot a { color: var(--muted); }
+
+  @media (max-width: 880px) {
+    .hero { grid-template-columns: minmax(0, 1fr); gap: 44px; padding-top: 48px; padding-bottom: 40px; }
+    .steps, .features, .install { grid-template-columns: minmax(0, 1fr); }
+    .nav-links a.hide-sm { display: none; }
+    section { padding: 56px 0; }
+  }
+  @media (max-width: 360px) {
+    .phone { transform: scale(.9); transform-origin: top center; margin-bottom: -60px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .hint .dot { animation: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="/"><img src="icon.png" alt="" width="28" height="28">AnnotateKit</a>
+    <nav class="nav-links">
+      <a class="hide-sm" href="#how">How it works</a>
+      <a class="hide-sm" href="#install">Install</a>
+      <a href="https://github.com/ooolzhas/annotatekit">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <span class="eyebrow">Open source · MIT · iOS 17+</span>
+      <h1>Point at your app. Your agent fixes it.</h1>
+      <p class="lede">Tap, draw and comment on your running iOS app, then hit Send. Claude Code, Cursor or any MCP agent gets
+        the screenshots, the exact coordinates and your notes, and narrates its progress right back on the device.</p>
+      <div class="ctas">
+        <a class="btn primary" href="#install">Get started</a>
+        <a class="btn" href="https://github.com/ooolzhas/annotatekit">View on GitHub</a>
+      </div>
+      <p class="meta">SwiftUI and UIKit · Simulator and real iPhone · compiled out of Release builds</p>
+    </div>
+    <div class="phone-stage" aria-hidden="true">
+      <div class="phone">
+        <div class="screen">
+          <div class="island"></div>
+          <div class="app">
+            <h3>Today</h3>
+            <div class="card"><div class="row"><b>Morning run</b><span class="pill">Start</span></div><div class="bar"></div><div class="bar short"></div></div>
+            <div class="card"><div class="row"><b>Focus</b><span class="muted">2h 15m</span></div><div class="bar"></div></div>
+            <div class="card"><div class="row"><b>Hydration</b><span class="muted">5 of 8</span></div><div class="bar short"></div></div>
+            <div class="card"><div class="row"><b>Sleep</b><span class="muted">7h 40m</span></div><div class="bar"></div></div>
+          </div>
+          <div class="dim"></div>
+          <svg class="sketch" viewBox="0 0 250 120" fill="none">
+            <path d="M16 22 C 64 4, 186 6, 234 20 C 249 40, 244 78, 230 96 C 176 116, 64 114, 20 100 C 5 82, 4 44, 16 22 Z"
+                  stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="badge">1</div>
+          <div class="hint"><span class="dot"></span>Claude is working…<span class="faint">12s</span></div>
+          <div class="review">
+            <div class="glass round">‹</div>
+            <div class="glass wide">1 note sent</div>
+            <div class="glass round send">↑</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section id="how" class="soft">
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p class="section-lede">AnnotateKit runs inside your DEBUG build, so it reads the real view and accessibility tree.
+        There's nothing to tag, and nothing to copy and paste.</p>
+      <div class="steps">
+        <div class="step"><h3>Annotate</h3><p>Tap the Annotate pill and the screen freezes. Draw around anything, tap an element to
+          select it, or hold to pin an exact spot. Say what should change.</p></div>
+        <div class="step"><h3>Send</h3><p>Hit ↑. Every screen you marked goes out as one bundle: 1x screenshots where pixel equals
+          point, crops, coordinates, nearby text and a ready-to-run prompt.</p></div>
+        <div class="step"><h3>Watch it land</h3><p>Your agent picks it up, makes the change and reports each note back. The device
+          narrates every step and checks off each note as it's done.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Built for the loop with your agent</h2>
+      <p class="section-lede">Feedback that's precise enough to act on, and a channel back so you know what happened.</p>
+      <div class="features">
+        <div class="feature"><h3>Exact coordinates</h3><p>Every note has a frame, an anchor and the labels around it, in the same
+          points your code uses. Agents grep their way to the right view.</p></div>
+        <div class="feature"><h3>Any agent</h3><p>Pushed into Claude Code the moment you hit Send. Cursor, Codex, VS Code and any
+          MCP client get it through <code>annotation_wait</code>.</p></div>
+        <div class="feature"><h3>Questions both ways</h3><p>Pick Fix or Question per note. When something's unclear, the agent asks,
+          and you answer on the phone.</p></div>
+        <div class="feature"><h3>From a real iPhone</h3><p>Annotate on your phone with no setup in the app. Sends travel over the
+          same developer connection Xcode uses.</p></div>
+        <div class="feature"><h3>Stays out of your way</h3><p>The launcher keeps clear of your tab bar and toolbars. Nothing heavy
+          runs until you annotate.</p></div>
+        <div class="feature"><h3>Zero cost in Release</h3><p>Every overlay type sits behind <code>#if DEBUG</code>. Release builds
+          get empty stubs, and the package has no dependencies.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" class="soft">
+    <div class="wrap">
+      <h2>Install</h2>
+      <p class="section-lede">Let your agent set it up, or add it by hand in a couple of minutes.</p>
+      <div class="install">
+        <div class="panel">
+          <h3>With Claude Code</h3>
+          <p>The plugin brings the setup skill, the MCP server and the CLI. Then ask Claude to set it up.</p>
+          <div class="code copyable"><button class="copy" type="button">Copy</button>/plugin install annotate --marketplace ooolzhas/annotatekit</div>
+          <div class="code"><span class="c">&gt;</span> Set up AnnotateKit in this app.</div>
+        </div>
+        <div class="panel">
+          <h3>By hand</h3>
+          <p>Add the Swift package <a href="https://github.com/ooolzhas/annotatekit">ooolzhas/annotatekit</a>, then install it at launch
+            and get the CLI.</p>
+          <div class="code"><span class="k">import</span> AnnotateKit
+
+<span class="k">init</span>() {
+    Annotate.install()  <span class="c">// DEBUG only</span>
+}</div>
+          <div class="code copyable"><button class="copy" type="button">Copy</button>brew install ooolzhas/tap/annotate</div>
+        </div>
+      </div>
+      <p class="agents">Then connect your agent: channels push Sends into Claude Code, <code>/annotate-watch</code> works without flags,
+        and every other MCP client uses <code>annotate mcp</code>. All the details are in the
+        <a href="https://github.com/ooolzhas/annotatekit#readme">README</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>AnnotateKit is open source under the MIT license.</span>
+    <span><a href="https://github.com/ooolzhas/annotatekit">GitHub</a> ·
+      <a href="https://github.com/ooolzhas/annotatekit/releases">Releases</a> ·
+      <a href="https://github.com/ooolzhas/annotatekit/blob/main/CHANGELOG.md">Changelog</a></span>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('.copy').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var text = button.parentElement.textContent.replace(button.textContent, '').trim();
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(text).then(function () {
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = 'Copy'; }, 1400);
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -63,7 +63,7 @@ jobs:
           echo "sha256 \"${{ steps.package.outputs.sha256 }}\"" >> "$GITHUB_STEP_SUMMARY"
 
   npm:
-    name: npm package (annotate-ios)
+    name: npm package (annotatekit)
     needs: cli
     runs-on: ubuntu-latest
     permissions:

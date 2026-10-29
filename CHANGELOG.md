@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- The npm package is named `annotatekit` (it was announced as `annotate-ios`, which was never
+  published), matching the repo and annotatekit.com: `npx -y annotatekit mcp`.
+
 ## [0.2.1] - 2026-10-29
 
 ### Added
