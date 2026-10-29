@@ -75,7 +75,7 @@ Add `.annotate/` to your `.gitignore`.
 **2. The CLI** (skip this if you use the Claude Code plugin):
 
 ```sh
-brew install ooolzhas/tap/annotate      # or: npm install -g annotatekit
+brew install ooolzhas/tap/annotate      # or: npm install -g annotate-ios
                                         # or: mint install ooolzhas/annotatekit
 ```
 
@@ -105,7 +105,7 @@ The server is `annotate mcp` over stdio, run from the project root.
 { "mcpServers": { "annotate": { "command": "annotate", "args": ["mcp"] } } }
 
 // Nothing installed? npx fetches the CLI on first run (macOS)
-{ "mcpServers": { "annotate": { "command": "npx", "args": ["-y", "annotatekit", "mcp"] } } }
+{ "mcpServers": { "annotate": { "command": "npx", "args": ["-y", "annotate-ios", "mcp"] } } }
 
 // VS Code — .vscode/mcp.json
 { "servers": { "annotate": { "type": "stdio", "command": "annotate", "args": ["mcp"] } } }
@@ -305,7 +305,7 @@ Sources/AnnotateAgent   Mac side: session discovery/claims, MCP channel server, 
 Sources/AnnotateCLI     the `annotate` executable
 skills/                 annotate-setup and annotate-watch (Agent Skills format)
 .claude-plugin/         Claude Code plugin + marketplace; bin/annotate is the plugin's launcher
-packaging/              Homebrew formula template and the npm package (`annotatekit`)
+packaging/              Homebrew formula template and the npm package (`annotate-ios`)
 site/                   annotatekit.com, deployed to GitHub Pages by .github/workflows/pages.yml
 ```
 

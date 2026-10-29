@@ -57,7 +57,7 @@ why when it isn't obvious.
    `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` and `packaging/npm/package.json`.
 3. Tag `vX.Y.Z` and push the tag. The release workflow builds a universal `annotate` binary,
    attaches it with its SHA-256 to a GitHub Release, prints the values for the Homebrew formula, and
-   publishes the npm package `annotatekit` (a launcher that downloads that binary) through npm
+   publishes the npm package `annotate-ios` (a launcher that downloads that binary) through npm
    Trusted Publishing, with no token: the package's Trusted Publisher on npmjs.com names
    `ooolzhas/annotatekit` and `release.yml`, and the repo variable `NPM_TRUSTED_PUBLISHING` is
    `true`.
