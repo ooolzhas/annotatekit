@@ -4,9 +4,14 @@
 // Geometry is an iPhone in portrait: 393×852 with the dock 34pt above the bottom edge.
 
 @testable import AnnotateCore
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import Testing
+
+// Edges through AnnotateCore's own CGRect helpers (`top`, `left`, `clipped`, `padded`): Linux's
+// Foundation lacks most CoreGraphics rect extensions.
 
 @Suite struct LauncherAvoidanceTests {
     private static let layout = LauncherAvoidance.Layout(
@@ -22,7 +27,7 @@ import Testing
     /// A mini player sitting on the tab bar.
     private static let miniPlayer = CGRect(x: 8, y: 700, width: 377, height: 56)
     /// A centered column of round buttons that climbs out of the band.
-    private static let column = [760, 690, 620, 550].map { CGRect(x: 166, y: $0, width: 60, height: 60) }
+    private static let column = ([760, 690, 620, 550] as [CGFloat]).map { CGRect(x: 166, y: $0, width: 60, height: 60) }
 
     private static func place(_ obstacles: [CGRect], layout: LauncherAvoidance.Layout = layout) -> LauncherSpot {
         LauncherAvoidance.place(layout, obstacles: obstacles)
@@ -47,15 +52,15 @@ import Testing
 
     @Test("a tab bar lifts the pill to clearance above its top")
     func liftsAboveTabBar() {
-        #expect(Self.place([Self.tabBar]) == .lifted(bottom: Self.tabBar.minY - LauncherAvoidance.clearance))
+        #expect(Self.place([Self.tabBar]) == .lifted(bottom: Self.tabBar.top - LauncherAvoidance.clearance))
     }
 
     @Test("stacked chrome lifts the pill above the highest piece")
     func liftsAboveStack() {
         let spot = Self.place([Self.tabBar, Self.miniPlayer])
-        #expect(spot == .lifted(bottom: Self.miniPlayer.minY - LauncherAvoidance.clearance))
+        #expect(spot == .lifted(bottom: Self.miniPlayer.top - LauncherAvoidance.clearance))
         let frame = LauncherAvoidance.frame(for: spot, in: Self.layout)
-        #expect(!frame.intersects(Self.miniPlayer.insetBy(dx: -7, dy: -7)))
+        #expect(frame.clipped(to: Self.miniPlayer.padded(by: 7)).area == 0)
     }
 
     @Test("a lift that would leave the band goes trailing at dock height")
@@ -101,12 +106,12 @@ import Testing
     func frames() {
         let dock = LauncherAvoidance.frame(for: .dock, in: Self.layout)
         #expect(dock == CGRect(x: 136.5, y: 774, width: 120, height: 44))
-        #expect(LauncherAvoidance.frame(for: .leading, in: Self.layout).minX == 34)
-        #expect(LauncherAvoidance.frame(for: .trailing, in: Self.layout).maxX == 359)
+        #expect(LauncherAvoidance.frame(for: .leading, in: Self.layout).left == 34)
+        #expect(LauncherAvoidance.frame(for: .trailing, in: Self.layout).right == 359)
         var wide = Self.layout
         wide.pillSize.width = 500
         let insetWidth: CGFloat = 393 - 68
-        #expect(LauncherAvoidance.frame(for: .dock, in: wide).width == insetWidth)
+        #expect(LauncherAvoidance.frame(for: .dock, in: wide).size.width == insetWidth)
     }
 
     // MARK: update
