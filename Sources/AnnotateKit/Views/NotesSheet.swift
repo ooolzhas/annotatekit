@@ -1,4 +1,4 @@
-// The note list behind the review bar's count (no Figma: owner request). A sheet that opens at a
+// The note list behind the review bar's count (no Figma frame: a design choice). A sheet that opens at a
 // small detent and drags up to full height, with tags in a bar under its toolbar that pick what it lists:
 // Current (pins waiting to be sent), In Progress, Resolved and Failed (the last Send's pins, sorted by
 // `NoteFilter`, from the last Send and every earlier one of the last 48 hours, grouped by Send),
@@ -58,7 +58,7 @@ struct NotesSheet: View {
                                 Button(role: .destructive) {
                                     if let id = annotationID(for: note.index) { controller.deleteNote(id) }
                                 } label: {
-                                    // Icon only (owner request); VoiceOver still hears the action
+                                    // Icon only (design choice); VoiceOver still hears the action
                                     Image(systemName: "trash")
                                 }
                                 .accessibilityLabel(OverlayChrome.clearAction)
@@ -82,7 +82,7 @@ struct NotesSheet: View {
                         Label {
                             Text(filter.emptyTitle)
                         } icon: {
-                            // One box for every tag's symbol, so the empty states line up (owner request)
+                            // One box for every tag's symbol, so the empty states line up (design choice)
                             Image(systemName: Self.emptySymbol(filter))
                                 .resizable()
                                 .scaledToFit()
@@ -105,7 +105,7 @@ struct NotesSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if filter == .current, !pending.isEmpty {
-                        // Just the icon (owner request); VoiceOver reads it as Clear All
+                        // Just the icon (design choice); VoiceOver reads it as Clear All
                         Button(role: .destructive) {
                             isConfirmingClear = true
                         } label: {
@@ -124,7 +124,7 @@ struct NotesSheet: View {
                     .accessibilityLabel("Close")
                 }
             }
-            // An alert in the middle of the screen (owner request), not a popover off the button
+            // An alert in the middle of the screen (design choice), not a popover off the button
             .alert(OverlayChrome.clearTitle(pending.count), isPresented: $isConfirmingClear) {
                 Button(OverlayChrome.clearAction, role: .destructive) {
                     controller.clearAll()
@@ -157,7 +157,7 @@ struct NotesSheet: View {
 
     private static func emptySymbol(_ filter: NoteFilter) -> String {
         switch filter {
-        // Owner picks: one speech-bubble family, and the system spinner glyph for work under way
+        // One speech-bubble family, and the system spinner glyph for work under way
         case .current: "text.bubble"
         case .inProgress: "progress.indicator"
         case .resolved: "checkmark.bubble"
@@ -359,7 +359,7 @@ private struct NoteTag: View {
         Button(action: action) {
             HStack(spacing: Self.countSpacing) {
                 Text(filter.title)
-                // Every tag shows its count, 0 included (owner request)
+                // Every tag shows its count, 0 included (design choice)
                 Text("\(count)")
                     .monospacedDigit()
                     .opacity(Self.countOpacity)

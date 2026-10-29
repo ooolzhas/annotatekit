@@ -221,7 +221,7 @@ private struct BottomChrome: View {
             .combined(with: .opacity)
     }
 
-    /// The comment and reply cards slide in like the bar, but leave at once (owner request): by the
+    /// The comment and reply cards slide in like the bar, but leave at once (design choice): by the
     /// time one goes, a send has already hidden it while the keyboard slid away (SendAfterKeyboard).
     private var cardTransition: AnyTransition {
         .asymmetric(insertion: swapTransition, removal: .identity)
@@ -235,7 +235,7 @@ private struct ActiveOverlay: View {
     /// here. Nil until the first layout pass.
     let chromeTop: CGFloat?
 
-    /// Not in Figma (owner request): pins' badges scale up from their own center on a spring.
+    /// Not in Figma (design choice): pins' badges scale up from their own center on a spring.
     static let badgeAppearance: AnyTransition = .scale(scale: 0.3).combined(with: .opacity)
         .animation(.spring(duration: 0.45, bounce: 0.35))
     /// The glow and frost's blue ↔ green crossfade when Claude starts or stops working.
@@ -263,8 +263,8 @@ private struct ActiveOverlay: View {
                 .allowsHitTesting(false)
 
             // Figma 9257:13546: the Overlay layer (dim + glow, 9257:13547) sits below every marker
-            // and badge, so pins near the edge stay pure white. Green while Claude works (owner
-            // request): one glow per palette, crossfading, so only one renders at rest
+            // and badge, so pins near the edge stay pure white. Green while Claude works (design
+            // choice): one glow per palette, crossfading, so only one renders at rest
             ZStack {
                 if controller.isAgentWorking {
                     ScreenGlow(palette: .working).transition(.opacity)
@@ -372,7 +372,7 @@ private struct ActiveOverlay: View {
     }
 }
 
-/// The frost behind the bottom chrome, made fluid (owner request; Figma draws one even gradient,
+/// The frost behind the bottom chrome, made fluid (design choice; Figma draws one even gradient,
 /// `from-[rgba(0,136,255,0)] to-[rgba(0,136,255,0.5)]`): a softer even wash plus a few soft blue blobs
 /// that drift sideways at their own pace, so the color pools and thins along the bottom like liquid.
 /// The whole thing fades to clear toward its top, as Figma's does. Blobs are elliptical gradients,
@@ -440,7 +440,7 @@ private struct BottomFrost: View {
 }
 
 /// The colors the edge glow and the frost are mixed from: Accents/Blue with cyan and indigo passages
-/// normally, green with mint and teal while Claude works (owner request).
+/// normally, green with mint and teal while Claude works (design choice).
 struct GlowPalette {
     let main: Color
     let light: Color
@@ -571,7 +571,7 @@ private struct SpotMarker: View {
 }
 
 /// Blue glow along the screen's rounded edge while annotating (Figma 9257:13385: `rounded-[62px]`,
-/// `shadow-[inset_0_0_62px_0_rgba(0,136,255,0.5)]`), made fluid (owner request): rather than one even
+/// `shadow-[inset_0_0_62px_0_rgba(0,136,255,0.5)]`), made fluid (design choice): rather than one even
 /// band, two edge bands of different depth are each lit by a slowly turning ring of uneven blues, in
 /// opposite directions, so the glow swells, thins and runs along the edge like liquid. SwiftUI has no
 /// inset shadow, so each band is a wide stroke blurred and masked back inside the screen shape. The

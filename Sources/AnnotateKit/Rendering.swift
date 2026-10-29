@@ -16,7 +16,7 @@ import UIKit
 
 enum AnnotateStyle {
     // Computed rather than stored: no global-state isolation questions for the Canvas renderer.
-    // The live overlay is white-on-dim (Figma PVX9n74hzo5BWauvymG141, group 9257:13754): the
+    // The live overlay is white-on-dim (Figma group 9257:13754): the
     // screen is dimmed, so white markers read on any app. The bundle PNGs are not dimmed, so they
     // keep blue boxes and red strokes for contrast on any app.
     // Three blues: `accent` for strokes and outlines, `accentFill` under white text (pins, chips,
@@ -45,8 +45,8 @@ enum AnnotateStyle {
     static var action: Color { Color(uiColor: .systemBlue) }
     /// Dim over the frozen screen. Figma 9257:13385 bg-[rgba(0,0,0,0.5)]
     static let dimOpacity: Double = 0.5
-    /// Corner radius the glow follows. Figma 9257:13385 rounded-[62px]; 4pt tighter on the owner's
-    /// request (two 2pt steps) so the glow sits snug in the screen's corners.
+    /// Corner radius the glow follows. Figma 9257:13385 rounded-[62px]; 4pt tighter (two 2pt
+    /// steps) so the glow sits snug in the screen's corners.
     static let screenCornerRadius: CGFloat = 58
     /// Glow spread: inset shadow 0 0 62px. Figma 9257:13385
     static let glowBlur: CGFloat = 62

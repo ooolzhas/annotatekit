@@ -194,7 +194,7 @@ public enum SentPinMark: Equatable, Sendable {
     }
 }
 
-/// The notes sheet's tags (owner request, no Figma): which notes each one lists.
+/// The notes sheet's tags (a design choice, no Figma frame): which notes each one lists.
 public enum NoteFilter: String, CaseIterable, Sendable {
     /// Saved but not sent yet.
     case current

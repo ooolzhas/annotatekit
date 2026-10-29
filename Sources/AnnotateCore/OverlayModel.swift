@@ -1,4 +1,4 @@
-// Pure state model for the annotate overlay (Figma PVX9n74hzo5BWauvymG141, group 9272:17592).
+// Pure state model for the annotate overlay (Figma group 9272:17592).
 // `OverlayChrome` decides which bottom chrome shows (the review bar, the comment card, or the reply card
 // for an agent's question about one sent pin) and the copy it carries,
 // including whether the open pin can be saved (it needs a comment); `ReviewHint` decides the
@@ -80,7 +80,7 @@ public enum OverlayChrome: Equatable, Sendable {
     }
     /// Destructive button in the clear-all confirmation.
     public static let clearAction = "Delete"
-    /// The notes sheet's title. No Figma frame (owner copy).
+    /// The notes sheet's title. No Figma frame.
     public static let notesSheetTitle = "My Notes"
     /// Clear-all button in the notes sheet's toolbar. No Figma frame: the bar lost its trash button
     /// (9276:27550), so clearing lives with the list now.
@@ -124,7 +124,7 @@ public enum OverlayChrome: Equatable, Sendable {
 /// The line above the review bar (Figma 9272:17592: 9272:17121 / 9272:17215 / 9272:17309).
 /// Figma shows the gestures hint and the connected line with the same agent state, so which one shows
 /// is a timing rule: annotate mode opens on the gestures hint for `introHold` seconds, then the line
-/// settles on the connection, "Claude connected" or "Agent offline", and stays there (owner request).
+/// settles on the connection, "Claude connected" or "Agent offline", and stays there (design choice).
 /// While a Send is being tracked, the line narrates its delivery instead (Figma 9273:17925 / 9273:18020 /
 /// 9273:18115): the launcher pill is hidden in annotate mode, so this is the only place the progress shows.
 public enum ReviewHint: Equatable, Sendable {
@@ -132,7 +132,7 @@ public enum ReviewHint: Equatable, Sendable {
     case gestures
     /// Figma 9272:17134: "Claude connected", green dot. The pull mode has no frame (derived).
     case connected(agent: String, mode: AgentPresence.Mode)
-    /// Figma 9272:17228: "No agent connected · Notes will be saved" (owner copy), red dot, and the
+    /// Figma 9272:17228: "No agent connected · Notes will be saved", red dot, and the
     /// action reads Save.
     case offline
     /// The last Send's progress. `agent` may be a raw or display name: `resolve` stores the display
@@ -214,7 +214,7 @@ public enum ReviewHint: Equatable, Sendable {
     /// frame; the other two-part lines are split the same way (derived).
     public var detail: String? { parts.detail }
 
-    /// Copy rules (owner rewrite, 2026-10-29): every line opens with its subject (the agent, "No
+    /// Copy rules (rewritten 2026-10-29): every line opens with its subject (the agent, "No
     /// agent", or the notes), and the part after " · " is the consequence or the agent's own words.
     /// No Figma frame for the rewrite; the states are the Figma ones.
     private var parts: (headline: String, detail: String?) {
@@ -229,7 +229,7 @@ public enum ReviewHint: Equatable, Sendable {
             // A pull agent reads sessions only when asked, matching `AgentPresence.accessibilityDescription`
             return ("\(Self.displayName(agent)) connected", "Checks when asked")
         case .offline:
-            // Figma 9276:28048 / 9276:28049 states, owner copy
+            // Figma 9276:28048 / 9276:28049 states, rewritten copy
             return ("No agent connected", "Notes will be saved")
         case .delivery(let stage, let agent, let notes, let written):
             let agent = Self.displayName(agent)
@@ -303,7 +303,7 @@ public enum ReviewHint: Equatable, Sendable {
 
     /// Elapsed time since Send: "Ns" below a minute (Figma 9273:18007 sample "1s"), a negative input
     /// (clock skew) reads "0s". From 60 s it reads minutes and seconds ("1m 5s"), never minutes
-    /// alone (owner request), so the counter keeps visibly moving.
+    /// alone (design choice), so the counter keeps visibly moving.
     public static func elapsedText(_ seconds: Int) -> String {
         let seconds = max(seconds, 0)
         if seconds < secondsPerMinute { return "\(seconds)s" }

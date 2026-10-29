@@ -5,7 +5,7 @@
 // The intent chip (9276:27109 shows "Fix") opens our own dropdown above it to pick what the user wants
 // done with the pin (Fix, Question), and the placeholder follows it. The dropdown is SwiftUI inside the
 // overlay rather than a system menu: the system one is drawn by UIKit outside this view tree, where the
-// frozen screen's touch-down drag gesture could take a real finger's tap on an item (owner reports on
+// frozen screen's touch-down drag gesture could take a real finger's tap on an item (seen on
 // iOS 27 devices; it never reproduced on simulators). Undo and redo step through the strokes drawn since the card opened
 // (StrokeHistory); with nothing left to undo, undo turns into × and discards the pin, and redo dims
 // with nothing to redo. It only lays itself out at the width it is given; OverlayRoot docks it
@@ -170,7 +170,7 @@ struct ComposerCard: View {
             Spacer(minLength: 0)
 
             HStack(spacing: Self.rowGroupSpacing) {
-                // No Figma: undo / redo sit where Figma's × was (9257:13397/13398, owner request), and
+                // No Figma: undo / redo sit where Figma's × was (9257:13397/13398, design choice), and
                 // undo turns back into that × once there's nothing left to undo
                 undoOrDiscardButton
                 CircleIconButton(
@@ -199,7 +199,7 @@ struct ComposerCard: View {
                 controller.discardDraft()
             }
         }
-        // Four times the system speed (owner request): the swap reads as a state change, not an animation
+        // Four times the system speed (design choice): the swap reads as a state change, not an animation
         .contentTransition(.symbolEffect(.replace, options: .speed(Self.symbolSwapSpeed)))
     }
 
@@ -210,7 +210,7 @@ struct ComposerCard: View {
     /// width "Fix" draws at, so it is the minimum and longer titles grow the capsule.
     private static let chipHorizontalPadding: CGFloat = 12
     private static let chipMinWidth: CGFloat = 65
-    /// No Figma (owner request): the up / down chevron that marks the chip as a menu, 4pt after the
+    /// No Figma frame (design choice): the up / down chevron that marks the chip as a menu, 4pt after the
     /// title and smaller than it so the intent reads first.
     private static let chipChevronSpacing: CGFloat = 4
     private static let chipChevronSize: CGFloat = 11
@@ -222,7 +222,7 @@ struct ComposerCard: View {
         return Button {
             withAnimation(Self.pickerAnimation) { isPickingIntent.toggle() }
         } label: {
-            // 9276:27110 — SF Pro Medium 17 / 22; the chevron is the owner's addition
+            // 9276:27110 — SF Pro Medium 17 / 22; the chevron is an addition
             HStack(spacing: Self.chipChevronSpacing) {
                 Text(intent.title)
                     .font(.system(size: 17, weight: .medium))
@@ -351,10 +351,10 @@ struct ComposerCard: View {
     private static let quoteWidth: CGFloat = 236
     private static let quoteHorizontalPadding: CGFloat = 16
     /// Figma has 12pt above the first line (two 20pt lines centered in the 64pt box, a single line
-    /// at the same top, 9276:27466); 2pt more above and below (owner request), so two lines make
+    /// at the same top, 9276:27466); 2pt more above and below (design choice), so two lines make
     /// the box 70pt and a single line hangs 14pt from its top.
     private static let quoteVerticalPadding: CGFloat = 14
-    /// 2pt more between the quoted lines than Loose Leading's 20pt (owner request; no leading
+    /// 2pt more between the quoted lines than Loose Leading's 20pt (design choice; no leading
     /// setting reaches 22).
     private static let quoteLineSpacing: CGFloat = 2
     /// Figma `opacity-75` on the quoted lines (9276:27375).

@@ -293,7 +293,7 @@ public enum SessionInbox {
         return true
     }
 
-    /// How long the app's notes sheet remembers a Send (owner request); pruning never removes one younger.
+    /// How long the app's notes sheet remembers a Send (design choice); pruning never removes one younger.
     public static let historyWindow: TimeInterval = 48 * 3600
 
     /// The lowest session id inside the history window that ends at `now`. Ids are UTC timestamps,

@@ -1,4 +1,4 @@
-// Shared overlay chrome for the redesigned annotate mode (Figma PVX9n74hzo5BWauvymG141, group
+// Shared overlay chrome for the redesigned annotate mode (Figma group
 // 9257:13754): the 44pt round icon button every surface uses, the shared chrome button style
 // (press feedback only, no disabled dimming), the glass helper, the white number badge and the sent
 // pin's progress badge (spinner, outcome glyph or number; 9276:28552), white sketch strokes, and the
@@ -9,7 +9,7 @@
 // (9273:18004 / 18099 / 18194); its copy and dot come from `ReviewHint` in AnnotateCore. It is a label,
 // never a button (the notes sheet lists the results); its dot turns orange (`ReviewHint.Dot.attention`)
 // when the agent asked about a pin. Also owns the launcher pill (9265:14439 / 9265:14691): a Liquid Glass capsule
-// docked above the home indicator (Liquid Glass, owner request) whose title narrates the last Send ("Annotate", "4 notes
+// docked above the home indicator (Liquid Glass, design choice) whose title narrates the last Send ("Annotate", "4 notes
 // sent", …) so delivery progress needs no separate toast or ring, with a connection dot showing
 // whether an agent is listening. The toast below predates the redesign and now only carries
 // in-mode messages.
@@ -107,7 +107,7 @@ struct ChromeButtonStyle: ButtonStyle {
 
 // MARK: - Sending from a card
 
-/// Sending from the comment or reply card (owner request): the card vanishes at once but stays in
+/// Sending from the comment or reply card (design choice): the card vanishes at once but stays in
 /// place while its field lets go of the keyboard, and only once the keyboard has slid away does `send`
 /// run and take the card out for real. Taking the field out with the keyboard still up made iOS drop
 /// the keyboard without its slide. Callers send directly when no keyboard is up.
@@ -151,7 +151,7 @@ extension View {
     /// surfaces people press on: the review bar's buttons and the comment card. `tint` colors the
     /// glass (the review bar's ↑, Figma 9276:27565 Tint); before iOS 26 it is a solid fill.
     /// On iOS 26 the glass materializes as its view is inserted and dematerializes as it leaves
-    /// (owner request): the material condenses in or melts away rather than the shape sliding.
+    /// (design choice): the material condenses in or melts away rather than the shape sliding.
     @ViewBuilder
     func annotateGlass<S: Shape>(in shape: S, interactive: Bool = false, tint: Color? = nil) -> some View {
         #if compiler(>=6.2)
@@ -319,7 +319,7 @@ struct SketchStrokes: View {
 
 /// Bottom bar while no pin is open (Figma 9276:27550): a back chevron that keeps the notes, the note
 /// count, and ↑, each its own 52pt glass shape 8pt apart. The count is a button that opens the notes
-/// sheet (owner request), where notes open, delete and clear. ↑ is tinted blue while there is
+/// sheet (design choice), where notes open, delete and clear. ↑ is tinted blue while there is
 /// something to send, and VoiceOver calls it Save while no agent listens. Fills the width it is
 /// given; OverlayRoot positions it. State comes from `controller.chrome`, `reviewTitle` and
 /// `reviewHint`, never from `annotations`.
@@ -335,7 +335,7 @@ struct ReviewBar: View {
     var body: some View {
         let canSend = controller.chrome.canSend
 
-        // One glass group (owner request): pressing one piece makes it swell into its neighbours
+        // One glass group (design choice): pressing one piece makes it swell into its neighbours
         AnnotateGlassGroup(spacing: Self.spacing) {
         HStack(spacing: Self.spacing) {
             // A chevron, not ×, because leaving annotate mode keeps the notes (9276:27551)
@@ -454,7 +454,7 @@ struct ReviewHintLine: View {
     static let shadowOpacity: Double = 0.25
     static let shadowRadius: CGFloat = 2
     static let shadowY: CGFloat = 2
-    /// Not in Figma (owner request): a new line rises in from below, blurred and faded, while the old
+    /// Not in Figma (design choice): a new line rises in from below, blurred and faded, while the old
     /// one leaves upward the same way, e.g. when the gestures hint yields to "Claude connected".
     static let changeAnimation: Animation = .smooth(duration: 0.45)
     /// How far the swapping lines travel, and how blurred they start and end.
@@ -464,7 +464,7 @@ struct ReviewHintLine: View {
     static let tickInterval: TimeInterval = 1
     /// Not in Figma: the digit roll on each tick, well inside the second between ticks.
     static let tickAnimation: Animation = .snappy(duration: 0.3)
-    /// Not in Figma (owner request): the status dot pulses, fading to this and back; a shallow,
+    /// Not in Figma (design choice): the status dot pulses, fading to this and back; a shallow,
     /// slow breath so it reads as alive rather than alarming. Reduce Motion keeps it solid.
     static let dotBlinkFloor: Double = 0.4
     /// One fade of the pulse (bright → faint or back): a 2 s breath, between the first 1.2 s blink and
@@ -525,7 +525,7 @@ struct ReviewHintLine: View {
                         .monospacedDigit()
                         .modifier(HintTextStyle())
                         .opacity(Self.secondaryOpacity)
-                        // Each tick rolls the digits that changed (owner request)
+                        // Each tick rolls the digits that changed (design choice)
                         .contentTransition(.numericText(countsDown: false))
                         .animation(Self.tickAnimation, value: elapsed)
                         // A long agent message truncates first; the elapsed always shows in full
@@ -611,7 +611,7 @@ struct LauncherButton: View {
     static let placementAnimation: Animation = .spring(duration: 0.4, bounce: 0.2)
 
     /// Connection dot, Figma 9289:1311 (8×8, `gap-[8px]` to the title, green `#34C759`). Always shown
-    /// (owner request); its color follows `controller.agentLink`.
+    /// (design choice); its color follows `controller.agentLink`.
     static let dotSize: CGFloat = 8
     static let dotSpacing: CGFloat = 8
 
@@ -633,7 +633,7 @@ struct LauncherButton: View {
             .padding(.horizontal, Self.horizontalPadding)
             // The 44pt Figma height wins over its py-8 (22 + 16 = 38)
             .frame(height: AnnotateController.launcherHeight)
-            // Liquid Glass (owner request) in place of Figma's solid black capsule: it reads over any
+            // Liquid Glass (design choice) in place of Figma's solid black capsule: it reads over any
             // app screen in light and dark, and presses like the overlay's other glass
             .annotateGlass(in: Capsule(), interactive: true)
             .animation(Self.statusAnimation, value: status)
@@ -713,7 +713,7 @@ struct ToastView: View {
         .allowsHitTesting(false)
     }
 }
-/// The launcher's connection dot, always shown (owner request): green while an agent listens, red
+/// The launcher's connection dot, always shown (design choice): green while an agent listens, red
 /// when nothing does (the hint line's two colors), yellow while the app catches up on a late
 /// heartbeat. Push and pull agents read alike here; the hint line in annotate mode tells them apart.
 struct ConnectionDot: View {

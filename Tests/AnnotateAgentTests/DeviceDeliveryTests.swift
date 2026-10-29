@@ -235,19 +235,19 @@ struct Checkout {
 
 @Suite struct BundleIDPatternTests {
     @Test func variablesMatchAnything() {
-        #expect(BundleIDPattern.matches("com.olzhas.Sunset.dev", anyOf: ["com.olzhas.Sunset.dev"]))
-        #expect(BundleIDPattern.matches("com.olzhas.Sunset.dev", anyOf: ["com.olzhas.Sunset$(BUNDLE_SUFFIX)"]))
+        #expect(BundleIDPattern.matches("com.example.Notes.dev", anyOf: ["com.example.Notes.dev"]))
+        #expect(BundleIDPattern.matches("com.example.Notes.dev", anyOf: ["com.example.Notes$(BUNDLE_SUFFIX)"]))
         #expect(BundleIDPattern.matches("com.example.app", anyOf: ["${PREFIX}.app"]))
-        #expect(!BundleIDPattern.matches("com.olzhas.Sunset.dev", anyOf: ["com.olzhas.Sunset"]))
-        #expect(!BundleIDPattern.matches("comXolzhas", anyOf: ["com.olzhas"]))
+        #expect(!BundleIDPattern.matches("com.example.Notes.dev", anyOf: ["com.example.Notes"]))
+        #expect(!BundleIDPattern.matches("comXexample", anyOf: ["com.example"]))
     }
 
     @Test func readsPbxprojAndXcodeGenValues() {
         let pbxproj = """
-            PRODUCT_BUNDLE_IDENTIFIER = com.olzhas.Sunset.dev;
+            PRODUCT_BUNDLE_IDENTIFIER = com.example.Notes.dev;
             PRODUCT_BUNDLE_IDENTIFIER = "com.example.$(TARGET_NAME)";
             """
-        #expect(BundleIDPattern.values(in: pbxproj) == ["com.olzhas.Sunset.dev", "com.example.$(TARGET_NAME)"])
+        #expect(BundleIDPattern.values(in: pbxproj) == ["com.example.Notes.dev", "com.example.$(TARGET_NAME)"])
         #expect(BundleIDPattern.values(in: "    PRODUCT_BUNDLE_IDENTIFIER: com.example.yml") == ["com.example.yml"])
     }
 }

@@ -1,5 +1,5 @@
 // Pure state model for the floating launcher pill
-// (Figma PVX9n74hzo5BWauvymG141, frames 9265:14439 and 9265:14691).
+// (Figma frames 9265:14439 and 9265:14691).
 // `LauncherStatus` decides whether the pill is idle or narrating the last Send, and owns the one-line
 // title it carries; `DeliveryStage` is where that Send has got to. The pill replaces the old delivery
 // ring and toasts, so every delivery message lives here as the pill's title. The controller and the
