@@ -8,11 +8,13 @@ Tap, draw and comment on your running app. Hit Send. Your agent gets the screens
 </p>
 
 <p align="center">
-<a href="https://github.com/ooolzhas/annotate-ios/actions/workflows/ci.yml"><img src="https://github.com/ooolzhas/annotate-ios/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-<a href="https://swiftpackageindex.com/ooolzhas/annotate-ios"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fooolzhas%2Fannotate-ios%2Fbadge%3Ftype%3Dswift-versions" alt="Swift versions"></a>
-<a href="https://swiftpackageindex.com/ooolzhas/annotate-ios"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fooolzhas%2Fannotate-ios%2Fbadge%3Ftype%3Dplatforms" alt="Platforms"></a>
+<a href="https://github.com/ooolzhas/annotatekit/actions/workflows/ci.yml"><img src="https://github.com/ooolzhas/annotatekit/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://swiftpackageindex.com/ooolzhas/annotatekit"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fooolzhas%2Fannotatekit%2Fbadge%3Ftype%3Dswift-versions" alt="Swift versions"></a>
+<a href="https://swiftpackageindex.com/ooolzhas/annotatekit"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fooolzhas%2Fannotatekit%2Fbadge%3Ftype%3Dplatforms" alt="Platforms"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
 </p>
+
+<p align="center"><a href="https://annotatekit.com"><b>annotatekit.com</b></a></p>
 
 ---
 
@@ -38,22 +40,22 @@ the way Cursor's runs inside its browser, so it can read the real view and acces
 
 Tell Claude Code (or Cursor, Codex…):
 
-> Set up AnnotateKit from github.com/ooolzhas/annotate-ios in this app.
+> Set up AnnotateKit from github.com/ooolzhas/annotatekit in this app.
 
 The repo ships an [`annotate-setup` skill](skills/annotate-setup/SKILL.md) that walks an agent
 through every project shape (Xcode project, XcodeGen, Tuist, SwiftPM), the CLI and the connection.
 In Claude Code, installing the plugin gives you the skill, the MCP server and the CLI in one go:
 
 ```
-/plugin install annotate --marketplace ooolzhas/annotate-ios
+/plugin install annotate --marketplace ooolzhas/annotatekit
 ```
 
-On Claude Code older than 2.1.275, run `/plugin marketplace add ooolzhas/annotate-ios`, then
-`/plugin install annotate@annotate-ios`. After that, ask: *"Set up AnnotateKit in this app."*
+On Claude Code older than 2.1.275, run `/plugin marketplace add ooolzhas/annotatekit`, then
+`/plugin install annotate@annotatekit`. After that, ask: *"Set up AnnotateKit in this app."*
 
 ### By hand
 
-**1. The overlay.** Add `https://github.com/ooolzhas/annotate-ios` with Swift Package Manager and
+**1. The overlay.** Add `https://github.com/ooolzhas/annotatekit` with Swift Package Manager and
 link **AnnotateKit** to your app target (iOS 17+). Then:
 
 ```swift
@@ -73,14 +75,14 @@ Add `.annotate/` to your `.gitignore`.
 **2. The CLI** (skip this if you use the Claude Code plugin):
 
 ```sh
-brew install ooolzhas/tap/annotate      # or: mint install ooolzhas/annotate-ios
+brew install ooolzhas/tap/annotate      # or: mint install ooolzhas/annotatekit
 ```
 
 **3. Connect your agent.** Pick one:
 
 | Agent | How sends reach it |
 |---|---|
-| **Claude Code + channels** (recommended) | Pushed into your open session the moment you hit Send, even while Claude is idle. Start with `claude --dangerously-load-development-channels plugin:annotate@annotate-ios`, or `server:annotate` without the plugin. |
+| **Claude Code + channels** (recommended) | Pushed into your open session the moment you hit Send, even while Claude is idle. Start with `claude --dangerously-load-development-channels plugin:annotate@annotatekit`, or `server:annotate` without the plugin. |
 | **Claude Code, no flags** | Run `/annotate-watch`. A watcher picks up each Send. |
 | **Unattended** | `annotate run` in the project root runs `claude -p` per Send (`--permission-mode acceptEdits`, resuming the conversation). |
 | **Cursor / Codex / VS Code / Claude desktop / any MCP client** | Add the server (below) and ask the agent to *"keep calling annotation_wait"*: each call blocks until you Send, then returns the notes. Or say *"check my latest annotation"* now and then. |

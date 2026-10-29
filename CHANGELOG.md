@@ -146,7 +146,7 @@ First release.
   tracking and the text outline all start on first use.
 - Send renders, encodes and writes off the main thread, in 8-bit sRGB.
 
-[Unreleased]: https://github.com/ooolzhas/annotate-ios/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/ooolzhas/annotate-ios/compare/v0.1.1...v0.2.0
-[0.1.1]: https://github.com/ooolzhas/annotate-ios/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/ooolzhas/annotate-ios/releases/tag/v0.1.0
+[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ooolzhas/annotatekit/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/ooolzhas/annotatekit/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/ooolzhas/annotatekit/releases/tag/v0.1.0

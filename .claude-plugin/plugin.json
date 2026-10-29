@@ -6,8 +6,8 @@
     "name": "Olzhas Beisenbayev",
     "url": "https://github.com/ooolzhas"
   },
-  "homepage": "https://github.com/ooolzhas/annotate-ios",
-  "repository": "https://github.com/ooolzhas/annotate-ios",
+  "homepage": "https://annotatekit.com",
+  "repository": "https://github.com/ooolzhas/annotatekit",
   "license": "MIT",
   "keywords": ["ios", "swiftui", "simulator", "annotation", "visual-feedback", "design", "screenshot", "mcp", "channels"],
   "mcpServers": {

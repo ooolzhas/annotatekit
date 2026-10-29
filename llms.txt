@@ -1,28 +1,30 @@
-# AnnotateKit (annotate-ios)
+# AnnotateKit
 
-> Cursor-style visual annotation for iOS apps, for coding agents. A DEBUG-only Swift overlay lets a developer freeze their running app, tap any element or spot, drag regions, draw on the screen, and comment; Send writes a session bundle (1x screenshots where pixel = point, annotated screens, crops, exact coordinates, nearby visible text, prompt.md, session.json) and the `annotate` CLI delivers it to Claude Code (channels push, MCP tools, watcher skill, or headless `claude -p`) or any MCP client, with progress shown back on the device. Works from the Simulator and from a paired physical device (bundles are copied over `devicectl`, no app setup); a dot on the launcher pill shows whether an agent is listening. Agents can block on `annotation_wait` for hands-free delivery in any MCP client, report each pin with `annotation_resolve` / `annotation_dismiss`, and ask the user about a pin with `annotation_ask`; pins carry an intent (fix or question). File formats: SCHEMA.md.
+> Cursor-style visual annotation for iOS apps, for coding agents. A DEBUG-only Swift overlay lets a developer freeze their running app, draw on it, tap an element or hold for an exact spot, and comment; Send writes a session bundle (1x screenshots where pixel = point, annotated screens, crops, exact coordinates, nearby visible text, prompt.md, session.json) and the `annotate` CLI delivers it to Claude Code (channels push, MCP tools, watcher skill, or headless `claude -p`) or any MCP client, with progress shown back on the device. Works from the Simulator and from a paired physical device (bundles are copied over `devicectl`, no app setup); a dot on the launcher pill shows whether an agent is listening. Agents can block on `annotation_wait` for hands-free delivery in any MCP client, report each pin with `annotation_resolve` / `annotation_dismiss`, and ask the user about a pin with `annotation_ask`; pins carry an intent (fix or question). File formats: SCHEMA.md.
 
-Swift package: https://github.com/ooolzhas/annotate-ios (product `AnnotateKit`, iOS 17+). Claude Code plugin: `/plugin marketplace add ooolzhas/annotate-ios`, then `/plugin install annotate@annotate-ios`. MCP server: `annotate mcp` (stdio).
+Website: https://annotatekit.com
+
+Swift package: https://github.com/ooolzhas/annotatekit (product `AnnotateKit`, iOS 17+). Claude Code plugin: `/plugin marketplace add ooolzhas/annotatekit`, then `/plugin install annotate@annotatekit`. MCP server: `annotate mcp` (stdio).
 
 ## Using it
 
-- [Setup skill (for agents)](https://github.com/ooolzhas/annotate-ios/blob/main/skills/annotate-setup/SKILL.md): step-by-step: add the package to any iOS project shape, install the CLI, connect Claude Code / Cursor / Codex / VS Code, verify
-- [Watcher skill](https://github.com/ooolzhas/annotate-ios/blob/main/skills/annotate-watch/SKILL.md): act on each sent session as it arrives
-- [README](https://github.com/ooolzhas/annotate-ios/blob/main/README.md): overview, delivery modes, gestures, bundle layout, prompt example
-- [Getting Started (DocC)](https://github.com/ooolzhas/annotate-ios/blob/main/Sources/AnnotateKit/AnnotateKit.docc/GettingStarted.md)
+- [Setup skill (for agents)](https://github.com/ooolzhas/annotatekit/blob/main/skills/annotate-setup/SKILL.md): step-by-step: add the package to any iOS project shape, install the CLI, connect Claude Code / Cursor / Codex / VS Code, verify
+- [Watcher skill](https://github.com/ooolzhas/annotatekit/blob/main/skills/annotate-watch/SKILL.md): act on each sent session as it arrives
+- [README](https://github.com/ooolzhas/annotatekit/blob/main/README.md): overview, delivery modes, gestures, bundle layout, prompt example
+- [Getting Started (DocC)](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateKit/AnnotateKit.docc/GettingStarted.md)
 
 ## Session format
 
-- [session.json types](https://github.com/ooolzhas/annotate-ios/blob/main/Sources/AnnotateCore/Session.swift): AnnotationSession, Screen, Annotation (element / point / region / sketch), coordinates in points
-- [Prompt rendering](https://github.com/ooolzhas/annotate-ios/blob/main/Sources/AnnotateCore/PromptRenderer.swift)
-- [Bundle and status files](https://github.com/ooolzhas/annotate-ios/blob/main/Sources/AnnotateCore/SessionWriter.swift): status.json states delivered, received, working, done, failed
+- [session.json types](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateCore/Session.swift): AnnotationSession, Screen, Annotation (element / point / region / sketch), coordinates in points
+- [Prompt rendering](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateCore/PromptRenderer.swift)
+- [Bundle and status files](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateCore/SessionWriter.swift): status.json states delivered, received, working, done, failed
 
 ## MCP tools
 
-- [ChannelServer](https://github.com/ooolzhas/annotate-ios/blob/main/Sources/AnnotateAgent/ChannelServer.swift): `get_annotation_session` (prompt + images), `annotation_status` (report back to the device), `list_annotation_sessions`; pushes `notifications/claude/channel`
+- [ChannelServer](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateAgent/ChannelServer.swift): `get_annotation_session` (prompt + images), `annotation_status` (report back to the device), `list_annotation_sessions`; pushes `notifications/claude/channel`
 
 ## Optional
 
-- [Contributing](https://github.com/ooolzhas/annotate-ios/blob/main/CONTRIBUTING.md)
-- [Agent instructions for this repo](https://github.com/ooolzhas/annotate-ios/blob/main/AGENTS.md)
-- [Changelog](https://github.com/ooolzhas/annotate-ios/blob/main/CHANGELOG.md)
+- [Contributing](https://github.com/ooolzhas/annotatekit/blob/main/CONTRIBUTING.md)
+- [Agent instructions for this repo](https://github.com/ooolzhas/annotatekit/blob/main/AGENTS.md)
+- [Changelog](https://github.com/ooolzhas/annotatekit/blob/main/CHANGELOG.md)

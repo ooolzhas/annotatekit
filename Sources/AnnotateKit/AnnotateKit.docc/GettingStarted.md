@@ -5,11 +5,11 @@ Add the overlay, connect your agent, and send your first annotation.
 ## Add the package
 
 In Xcode choose **File → Add Package Dependencies…**, enter
-`https://github.com/ooolzhas/annotate-ios`, and add the **AnnotateKit** library to your app target.
+`https://github.com/ooolzhas/annotatekit`, and add the **AnnotateKit** library to your app target.
 In a `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.2.0")
+.package(url: "https://github.com/ooolzhas/annotatekit", from: "0.2.0")
 ```
 
 ## Install the overlay
@@ -29,7 +29,7 @@ folder.
 
 ## Connect an agent
 
-Install the CLI (`brew install ooolzhas/tap/annotate` or `mint install ooolzhas/annotate-ios`), then
+Install the CLI (`brew install ooolzhas/tap/annotate` or `mint install ooolzhas/annotatekit`), then
 pick a delivery mode:
 
 - **Claude Code, pushed into your open session:** add `annotate mcp` as an MCP server and start

@@ -14,7 +14,7 @@ Thanks for helping. Bug reports, device/OS quirks, and small focused PRs are all
 Requirements: Xcode 16+ (Swift 6), macOS 14+. Linux works for the Foundation-only targets.
 
 ```sh
-git clone https://github.com/ooolzhas/annotate-ios && cd annotate-ios
+git clone https://github.com/ooolzhas/annotatekit && cd annotatekit
 swift test                                   # AnnotateCore + AnnotateAgent suites (macOS or Linux)
 xcodebuild build -scheme AnnotateKit -destination 'generic/platform=iOS Simulator'   # the overlay
 swift run annotate help                      # the CLI

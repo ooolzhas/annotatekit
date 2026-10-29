@@ -1,6 +1,6 @@
 ---
 name: annotate-setup
-description: Add AnnotateKit (Cursor-style visual annotation that sends UI feedback from a running iOS app to a coding agent) to an iOS project, and connect the agent so sent annotations arrive automatically. Use when the user wants to annotate, comment on, or sketch over their iOS app's UI for an agent, or asks to install AnnotateKit / annotate-ios.
+description: Add AnnotateKit (Cursor-style visual annotation that sends UI feedback from a running iOS app to a coding agent) to an iOS project, and connect the agent so sent annotations arrive automatically. Use when the user wants to annotate, comment on, or sketch over their iOS app's UI for an agent, or asks to install AnnotateKit / annotatekit.
 license: MIT
 compatibility: iOS 17+ apps built with Xcode 16+ (SwiftUI or UIKit). Works with Claude Code, Cursor, Codex, VS Code and any MCP client.
 ---
@@ -24,18 +24,18 @@ a `UIApplicationDelegate`.
 
 ## 2. Add the package
 
-Package URL `https://github.com/ooolzhas/annotate-ios`, product **AnnotateKit**, version `from: "0.2.0"`.
+Package URL `https://github.com/ooolzhas/annotatekit`, product **AnnotateKit**, version `from: "0.2.0"`.
 Link it to the **app target only**, not widgets or extensions.
 
 ### 2a. Manifests
 
 - XcodeGen `project.yml`: under `packages:` add
-  `AnnotateKit: { url: https://github.com/ooolzhas/annotate-ios, from: 0.2.0 }`, and under the app
+  `AnnotateKit: { url: https://github.com/ooolzhas/annotatekit, from: 0.2.0 }`, and under the app
   target's `dependencies:` add `- package: AnnotateKit`. Run `xcodegen`.
-- Tuist: add `.remote(url: "https://github.com/ooolzhas/annotate-ios", requirement: .upToNextMajor(from: "0.2.0"))`
+- Tuist: add `.remote(url: "https://github.com/ooolzhas/annotatekit", requirement: .upToNextMajor(from: "0.2.0"))`
   and `.package(product: "AnnotateKit")` to the app target, then `tuist install && tuist generate`.
-- SwiftPM: `.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.2.0")` and
-  `.product(name: "AnnotateKit", package: "annotate-ios")` on the app target.
+- SwiftPM: `.package(url: "https://github.com/ooolzhas/annotatekit", from: "0.2.0")` and
+  `.product(name: "AnnotateKit", package: "annotatekit")` on the app target.
 
 ### 2b. Plain .xcodeproj
 
@@ -54,12 +54,12 @@ edit `project.pbxproj` yourself, add four objects with fresh unique 24-character
 				<PRODUCT_ID> /* AnnotateKit */,
 
 /* in PBXProject packageReferences = ( … ) */
-				<PACKAGE_ID> /* XCRemoteSwiftPackageReference "annotate-ios" */,
+				<PACKAGE_ID> /* XCRemoteSwiftPackageReference "annotatekit" */,
 
 /* in the XCRemoteSwiftPackageReference section (create it if missing) */
-		<PACKAGE_ID> /* XCRemoteSwiftPackageReference "annotate-ios" */ = {
+		<PACKAGE_ID> /* XCRemoteSwiftPackageReference "annotatekit" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ooolzhas/annotate-ios";
+			repositoryURL = "https://github.com/ooolzhas/annotatekit";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 0.2.0;
@@ -69,7 +69,7 @@ edit `project.pbxproj` yourself, add four objects with fresh unique 24-character
 /* in the XCSwiftPackageProductDependency section (create it if missing) */
 		<PRODUCT_ID> /* AnnotateKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = <PACKAGE_ID> /* XCRemoteSwiftPackageReference "annotate-ios" */;
+			package = <PACKAGE_ID> /* XCRemoteSwiftPackageReference "annotatekit" */;
 			productName = AnnotateKit;
 		};
 ```
@@ -100,10 +100,10 @@ Add `.annotate/` to the project's `.gitignore`.
 Check `command -v annotate`. If it's missing, use the first of these that works:
 
 - `brew install ooolzhas/tap/annotate`
-- `mint install ooolzhas/annotate-ios`
-- Claude Code plugin users already have it: `/plugin marketplace add ooolzhas/annotate-ios`,
-  then `/plugin install annotate@annotate-ios`.
-- From source: `git clone https://github.com/ooolzhas/annotate-ios && cd annotate-ios && swift build -c release --product annotate`,
+- `mint install ooolzhas/annotatekit`
+- Claude Code plugin users already have it: `/plugin marketplace add ooolzhas/annotatekit`,
+  then `/plugin install annotate@annotatekit`.
+- From source: `git clone https://github.com/ooolzhas/annotatekit && cd annotatekit && swift build -c release --product annotate`,
   then put `.build/release/annotate` on PATH.
 
 ## 5. Connect the agent
@@ -113,7 +113,7 @@ The MCP server is `annotate mcp`, over stdio, run with the project root as its w
 - **Claude Code.** The plugin from step 4 registers it. Without the plugin:
   `claude mcp add annotate --scope project -- annotate mcp`. For push delivery into the open
   session (channels, research preview), the user starts
-  `claude --dangerously-load-development-channels plugin:annotate@annotate-ios`, or
+  `claude --dangerously-load-development-channels plugin:annotate@annotatekit`, or
   `server:annotate` for the non-plugin setup. That flag only lifts the preview allowlist for this
   server and asks for confirmation. Without channels, use the `annotate-watch` skill, or
   `annotate run` for unattended runs.
