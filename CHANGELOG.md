@@ -91,8 +91,9 @@ All notable changes to this project are documented here. The format is based on
     survives relaunches; pruning never removes a session that young. A note the agent never
     reported on follows its Send: resolved once the Send is done, failed when it failed.
   - Sending from a card with the keyboard up hides the card at once and saves once the keyboard has
-    slid away, so the keyboard keeps its slide. Clear All asks with a centered alert. The tag bar
+    slid away, so the keyboard keeps its slide. Clear All is a trash icon and asks with a centered alert. The tag bar
     sits right under the toolbar.
+  - The hint line's elapsed counter rolls its digits on each tick.
   - The intent chip opens our own dropdown above it instead of a system menu: on iOS 27 devices a
     tap on a system menu item could be taken by the frozen screen's drawing gesture.
   - The review bar's back, count and ↑ share one glass container, so a pressed one swells into its
