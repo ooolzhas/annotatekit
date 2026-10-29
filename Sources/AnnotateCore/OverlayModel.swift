@@ -215,8 +215,8 @@ public enum ReviewHint: Equatable, Sendable {
     public var detail: String? { parts.detail }
 
     /// Copy rules (owner rewrite, 2026-10-29): every line opens with its subject (the agent, "No
-    /// agent", or the notes), in the present tense, and the part after " · " is the consequence or the
-    /// agent's own words. No Figma frame for the rewrite; the states are the Figma ones.
+    /// agent", or the notes), and the part after " · " is the consequence or the agent's own words.
+    /// No Figma frame for the rewrite; the states are the Figma ones.
     private var parts: (headline: String, detail: String?) {
         switch self {
         case .gestures:
@@ -238,10 +238,10 @@ public enum ReviewHint: Equatable, Sendable {
                 // The Send's notes as they're written into it, then held at the total until picked up
                 return ("Sending notes", notes > 0 ? "\(min(max(written, 0), notes))/\(notes)" : nil)
             case .unclaimed:
-                return ("\(agent) hasn't picked them up", nil)
+                return ("\(agent) failed to receive your notes", nil)
             case .delivered:
                 // Figma 9273:18006 state
-                return ("\(agent) has your notes", nil)
+                return ("\(agent) received your notes", nil)
             case .received:
                 // Figma 9273:18101 state
                 return ("\(agent) is reading…", nil)

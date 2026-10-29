@@ -20,7 +20,7 @@ Tap, draw and comment on your running app. Hit Send. Your agent gets the screens
 2. **Tap anything** to pin a comment: an element, or the exact spot. **Drag** a region and sketch
    in it, or flip on **Draw** and scribble anywhere. Retype a label in place.
 3. Hit **↑**. Claude Code, already open on your Mac, starts working. Annotate mode stays open and
-   narrates it: *Claude has your notes → Claude is working… → All changes applied · Reinstalling*,
+   narrates it: *Claude received your notes → Claude is working… → All changes applied · Reinstalling*,
    while each pin's
    badge spins until the agent resolves it and then turns into a green check. A green dot on the
    pill means an agent is listening. It works the same from a physical iPhone, with no extra setup.

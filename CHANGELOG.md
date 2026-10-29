@@ -34,9 +34,10 @@ All notable changes to this project are documented here. The format is based on
     - "Draw, tap or hold to annotate" for a few seconds after you open annotate mode.
     - Then "● Claude connected", or "● No agent connected · Notes will be saved" when nothing is
       listening, and it stays on that, following the connection.
-    - While a Send is in flight it narrates it with a timer: "● Sending notes · 1/4", "● Claude has
+    - While a Send is in flight it narrates it with a timer: "● Sending notes · 1/4", "● Claude received
       your notes 1s", "● Claude is reading… 2s", the agent's own "All changes applied · Reinstalling
-      9s", then "● Claude is done · 4 notes" (owner copy: subject first, present tense).
+      9s", then "● Claude is done · 4 notes" (owner copy: subject first). A Send nobody claims reads
+      "● Claude failed to receive your notes".
   - **Background:** a blue gradient rises behind the bottom chrome.
   - **Comment card:** text sits at 20/16pt. Attached images are 64pt with a white remove badge.
 - The annotated screenshot and crops keep their blue and red markers for contrast. Their strokes are
