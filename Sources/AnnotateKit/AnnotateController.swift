@@ -79,7 +79,8 @@ final class AnnotateController {
     struct SentBatch: Equatable {
         let sessionID: String
         let output: URL
-        let pins: [Annotation]
+        /// Moved with the content when annotate mode comes back on a scrolled screen.
+        var pins: [Annotation]
         let sentAt: Date
     }
 
@@ -111,6 +112,16 @@ final class AnnotateController {
         let thumbnail: [UInt8]?
         /// Visible-text outline; nil until first needed (see `elements(for:)`).
         var elements: [ScreenElement]?
+        /// The main scroll view and where it stood at capture, so pins can follow its content.
+        var scroll: ScrollMark?
+    }
+
+    /// A scroll view and its content offset at one capture. Weak: the app owns the view.
+    struct ScrollMark {
+        weak var view: UIScrollView?
+        let offset: CGPoint
+        /// The scroll view's frame on screen; pins outside it sit on fixed chrome and don't move.
+        let frame: CGRect
     }
 
     /// The touch in progress: identified by its start point (constant across a DragGesture's
@@ -1049,18 +1060,53 @@ final class AnnotateController {
             return
         }
         let thumbnail = Snapshotter.grayThumbnail(of: image)
-        let pinned = Set(annotations.map(\.screen))
+        let scroll = ScrollProbe.mainScrollView(excluding: window).map {
+            ScrollMark(view: $0, offset: $0.contentOffset, frame: $0.convert($0.bounds, to: nil))
+        }
+        var pinned = Set(annotations.map(\.screen))
+        if showsSentPins, let lastSend { pinned.formUnion(lastSend.pins.map(\.screen)) }
         screens = screens.filter { pinned.contains($0.key) }
         let candidates = screens.values.compactMap { screen in screen.thumbnail.map { (index: screen.index, pixels: $0) } }
         if let thumbnail, let index = ScreenMatch.match(thumbnail, among: candidates), let revisited = screens[index] {
             currentScreen = index
             frozenImage = revisited.image
-            return
+        } else {
+            let index = (screens.keys.max() ?? 0) + 1
+            screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image, thumbnail: thumbnail, scroll: scroll)
+            currentScreen = index
+            frozenImage = image
         }
-        let index = (screens.keys.max() ?? 0) + 1
-        screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image, thumbnail: thumbnail)
-        currentScreen = index
-        frozenImage = image
+        followScroll(into: currentScreen, bounds: CGRect(origin: .zero, size: image.size))
+    }
+
+    /// Back on a scroll view that has pins from earlier captures, those pins move by how far its
+    /// content scrolled since, onto the screen now showing — as long as they're still on it. Pins
+    /// scrolled out of view stay on their own screen and come back when it's scrolled to again.
+    private func followScroll(into target: Int, bounds: CGRect) {
+        guard let mark = screens[target]?.scroll, let view = mark.view else { return }
+        let moves: [Int: CGPoint] = screens.reduce(into: [:]) { result, entry in
+            guard entry.key != target, let other = entry.value.scroll, other.view === view else { return }
+            result[entry.key] = CGPoint(x: other.offset.x - mark.offset.x, y: other.offset.y - mark.offset.y)
+        }
+        guard !moves.isEmpty else { return }
+        func moved(_ pin: Annotation) -> Annotation? {
+            guard let delta = moves[pin.screen], let from = screens[pin.screen]?.scroll else { return nil }
+            // Pins on fixed chrome (outside the scroll view) come along without moving
+            let scrolls = from.frame.contains(pin.anchor.cgPoint)
+            var result = scrolls ? pin.translated(dx: delta.x, dy: delta.y) : pin
+            guard result.frame.cgRect.intersects(bounds), !scrolls || mark.frame.contains(result.anchor.cgPoint) else {
+                return nil
+            }
+            result.screen = target
+            return result
+        }
+        for position in annotations.indices {
+            if let pin = moved(annotations[position]) { annotations[position] = pin }
+        }
+        if var sent = lastSend {
+            sent.pins = sent.pins.map { moved($0) ?? $0 }
+            lastSend = sent
+        }
     }
 
     /// The screen's visible-text outline, scanned on first use rather than at freeze time: entering

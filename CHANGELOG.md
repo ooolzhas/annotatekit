@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- Pins follow scrolled content: back in annotate mode after scrolling, pins move with the scroll
+  view's content instead of disappearing; pins scrolled out of view return when scrolled back.
 - Redesigned overlay (Figma SUNSET 9257:13754). Annotate mode dims the frozen screen 50% and draws
   a blue inset glow along the screen edge (62pt radius) that drifts slowly while annotate mode is on
   (static with Reduce Motion).

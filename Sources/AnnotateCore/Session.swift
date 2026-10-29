@@ -248,6 +248,14 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
 }
 
 extension Annotation {
+    /// The pin moved by (`dx`, `dy`) screen points; the sketch is frame-local, so it follows the frame.
+    public func translated(dx: Double, dy: Double) -> Annotation {
+        var moved = self
+        moved.anchor = AnnotationPoint(x: anchor.x + dx, y: anchor.y + dy)
+        moved.frame = AnnotationRect(x: frame.x + dx, y: frame.y + dy, width: frame.width, height: frame.height)
+        return moved
+    }
+
     /// `sketch` strokes moved from frame-local to screen points (empty without a sketch).
     public var sketchInScreenPoints: [Stroke] {
         guard let sketch else { return [] }
