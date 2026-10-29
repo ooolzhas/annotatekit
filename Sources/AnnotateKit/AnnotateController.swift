@@ -13,13 +13,13 @@
 // The comment card docks to the keyboard (`chromeBottom`), never to the marker. A pin can carry up
 // to `maxAttachments` reference images, kept beside the pin and handed to Send. With no pin open the
 // review bar shows: × stops (pins kept), trash clears, Send sends and exits. `chrome` resolves which.
-// ↑ saves a pin with a comment (Return types a newline), the intent menu's Delete discards it, Esc backs
-// out one level, ⌘Z / ⇧⌘Z (and the card's buttons) undo and redo strokes.
+// ↑ saves a pin with a comment (Return types a newline), Esc backs out one level, ⌘Z / ⇧⌘Z (and the
+// card's buttons) undo and redo strokes; once nothing is left to undo, the undo button is × and discards.
 // Send → hands a SendJob to BundleRenderer off the main thread (1x/annotated images, crops,
 // attachments, PNG encoding, write, prune), then polls status.json; the launcher pill narrates each
 // stage (`delivery` → `launcherStatus`) instead of toasts, so progress stays on screen in one place
 // and toasts are left to in-mode messages. No copy/paste. Each pin carries an intent picked on the
-// comment card (`setIntent`; new pins start as Fix, and an Approve pin may be saved with no comment),
+// comment card (`setIntent`; new pins start as Fix),
 // and the prompt's detail level comes from `AnnotateOptions.promptDetail`.
 // Agent loop: the last Send's pins are kept (`lastSend`) with the per-pin statuses the agent writes
 // into status.json (`pinStatuses`), shown on the results card (`pinResults`, `isShowingResults`).
@@ -478,7 +478,6 @@ final class AnnotateController {
             isDraftOpen: draft != nil,
             draftComment: draft?.annotation.comment ?? "",
             pinCount: annotations.count,
-            draftIntent: draft?.annotation.intent,
             replyText: replyDraft?.text,
             isShowingResults: isShowingResults,
             resultCount: pinResults.count
@@ -515,14 +514,14 @@ final class AnnotateController {
         draft?.images.removeAll { $0.id == id }
     }
 
-    /// ↑: saves only once there's a comment (or the intent needs none, as Approve), so the
-    /// button and key agree with `chrome`.
+    /// ↑: saves only once there's a comment, so the button and key agree with `chrome`.
     func submitDraft() {
         guard case .composing(canSubmit: true) = chrome else { return }
         saveDraft()
     }
 
-    /// Delete (the intent menu's last item): a new pin is dropped, a reopened one is deleted.
+    /// × (undo's place once there's nothing left to undo): a new pin is dropped, a reopened one is
+    /// deleted.
     func discardDraft() {
         guard let current = draft else { return }
         if !current.isNew { removeAnnotation(id: current.annotation.id) }
@@ -555,9 +554,7 @@ final class AnnotateController {
 
         let id = current.annotation.id
         let hasImages = !current.images.isEmpty
-        // An Approve pin says "this is right" by itself, so it needs no comment to be worth sending
-        let isSelfExplanatory = current.annotation.intent?.allowsEmptyComment ?? false
-        guard !current.annotation.isEmpty || hasImages || isSelfExplanatory else {
+        guard !current.annotation.isEmpty || hasImages else {
             if !current.isNew { removeAnnotation(id: id) }
             return
         }

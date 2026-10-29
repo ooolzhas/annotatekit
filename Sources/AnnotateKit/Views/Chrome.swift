@@ -63,6 +63,8 @@ struct CircleIcon: View {
 struct CircleIconButton: View {
     let systemName: String
     var style: CircleIcon.Style = .plain
+    /// Overrides the per-symbol VoiceOver name when one symbol means different things.
+    var label: String?
     let action: () -> Void
 
     var body: some View {
@@ -71,7 +73,7 @@ struct CircleIconButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(ChromeButtonStyle())
-        .accessibilityLabel(Self.accessibilityLabel(for: systemName))
+        .accessibilityLabel(label ?? Self.accessibilityLabel(for: systemName))
     }
 
     /// Symbols are the only label these buttons carry, so VoiceOver gets a spoken name.

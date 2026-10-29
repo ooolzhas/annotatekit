@@ -109,7 +109,6 @@ public enum PromptRenderer {
         switch intent {
         case .fix: return nil
         case .question: return "wants an answer, not a code change"
-        case .approve: return "already looks right, so leave it as is"
         case .move: return "move it to where the drawing points"
         }
     }

@@ -1,7 +1,7 @@
 // Pure state model for the annotate overlay (Figma PVX9n74hzo5BWauvymG141, group 9272:17592).
 // `OverlayChrome` decides which bottom chrome shows (the review bar, the comment card, the reply card for
 // an agent's question about one sent pin, or the last Send's results card) and the copy it carries,
-// including intent-aware submit (an Approve pin may be saved with no comment); `ReviewHint` decides the
+// including whether the open pin can be saved (it needs a comment); `ReviewHint` decides the
 // line above the review bar (gestures, agent connected, offline, or the last Send's delivery narration
 // with its elapsed time, including an agent's open question) and whether the bar's action reads Send or
 // Save; `PointerIntent` classifies a touch on the frozen screen as a pen stroke, a hold or a tap.
@@ -32,8 +32,6 @@ public enum OverlayChrome: Equatable, Sendable {
         /// The open pin's comment; ignored when no pin is open.
         public var draftComment: String
         public var pinCount: Int
-        /// The open pin's intent; nil reads as `.fix`. Ignored when no pin is open.
-        public var draftIntent: AnnotationIntent?
         /// The reply being typed, non-nil while answering an agent's question.
         public var replyText: String?
         /// The results card was opened (from the hint line, or on start with an open question).
@@ -41,13 +39,12 @@ public enum OverlayChrome: Equatable, Sendable {
         /// How many pins the last Send's results list.
         public var resultCount: Int
 
-        /// The new inputs default to "not replying, no results, no intent", so existing callers keep
+        /// The new inputs default to "not replying, no results", so existing callers keep
         /// today's review / composing behavior.
         public init(
             isDraftOpen: Bool,
             draftComment: String,
             pinCount: Int,
-            draftIntent: AnnotationIntent? = nil,
             replyText: String? = nil,
             isShowingResults: Bool = false,
             resultCount: Int = 0
@@ -55,7 +52,6 @@ public enum OverlayChrome: Equatable, Sendable {
             self.isDraftOpen = isDraftOpen
             self.draftComment = draftComment
             self.pinCount = pinCount
-            self.draftIntent = draftIntent
             self.replyText = replyText
             self.isShowingResults = isShowingResults
             self.resultCount = resultCount
@@ -72,10 +68,8 @@ public enum OverlayChrome: Equatable, Sendable {
             return .replying(canSubmit: !trimmed(reply).isEmpty)
         }
         if inputs.isDraftOpen {
-            // Whitespace alone isn't a comment worth sending to the agent, unless the intent itself is
-            // the message (Approve: "looks right as it is")
-            let allowsEmpty = inputs.draftIntent?.allowsEmptyComment ?? false
-            return .composing(canSubmit: !trimmed(inputs.draftComment).isEmpty || allowsEmpty)
+            // Whitespace alone isn't a comment worth sending to the agent
+            return .composing(canSubmit: !trimmed(inputs.draftComment).isEmpty)
         }
         if inputs.isShowingResults && inputs.resultCount > 0 {
             return .results(count: inputs.resultCount)

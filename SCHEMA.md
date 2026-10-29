@@ -68,7 +68,7 @@ Session ids are sortable UTC timestamps plus a short suffix: `20261028-141502-a1
 | `screen` | Int | `Screen.index` |
 | `kind` | `element` · `point` · `region` · `sketch` | |
 | `comment` | String | the user's words |
-| `intent` | `fix` · `question` · `approve` · `move`, optional | picked on the comment card; absent = `fix`. `question` wants an answer, not an edit; `approve` means it already looks right; `move` means move it where the drawing points |
+| `intent` | `fix` · `question` · `move`, optional | picked on the comment card; absent = `fix` (so does any value a reader doesn't know). `question` wants an answer, not an edit; `move` means move it where the drawing points |
 | `anchor` | Point | exactly where the user tapped, or the drawing's center |
 | `frame` | Rect | the box the comment is about |
 | `element` | ElementInfo, optional | `role`, `typeName`, `label`, `value`, `identifier`, `traits`, `breadcrumb` |

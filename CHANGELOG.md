@@ -42,7 +42,8 @@ All notable changes to this project are documented here. The format is based on
   now 4pt, and a crop covers the pin's drawing as well as its frame.
 
 - Comment card: undo and redo buttons replace ×. They step through the strokes drawn since the card
-  opened and dim at either end; `⇧⌘Z` redoes. Deleting the open pin moved to the intent menu.
+  opened; `⇧⌘Z` redoes. With nothing left to undo, undo turns into × and discards the pin (deletes a
+  reopened one); redo dims with nothing to redo.
   `Return` now types a newline in the comment and reply fields (↑ saves or sends), and a new drawing
   opens its card without the keyboard so the next stroke has the whole screen.
 - The hint line's elapsed counter is dimmed to 50%, and every delivery stage change plays a haptic:
@@ -64,7 +65,7 @@ All notable changes to this project are documented here. The format is based on
     - The pill and hint line say "Question on note N".
     - The results card's Reply opens a reply card.
     - The answer is saved to `replies.json` and travels back from a device too.
-  - **Intent per pin** (Fix · Question · Approve · Move), on a chip on the comment card. Prompts tag
+  - **Intent per pin** (Fix · Question · Move), on a chip on the comment card. Prompts tag
     non-fix pins.
   - **`AnnotateOptions.promptDetail`:** `.compact`, `.standard` or `.detailed`.
   - **`SCHEMA.md`:** documents every file the app and agents exchange.

@@ -128,7 +128,7 @@ Tools:
 | Pin anything | Tap. It snaps to the element under your finger, or pins the exact spot when nothing distinct is there |
 | Walk spot → element → containers | `↑` / `↓` before saving |
 | Comment and save | Type, then ↑ (`Return` types a newline) |
-| Delete the open pin | Intent chip → *Delete* |
+| Discard the open pin | × in undo's place, once there's nothing left to undo |
 | Retype a label in place | Text-cursor button on the card |
 | Region with a sketch inside | Drag, then draw with pen / ellipse / rectangle / arrow |
 | Draw anywhere on the screen | Scribble button in the toolbar. The drawing becomes one pin, attributed to the view under it |
@@ -146,7 +146,7 @@ Shortcuts to Device* is on. The on-screen buttons always work.
 ## The loop back to you
 
 - **Intent per pin.** On the comment card, pick **Fix** (the default), **Question** (explain it, don't
-  edit), **Approve** (it already looks right) or **Move** (move it where you drew). Pins carry their
+  edit) or **Move** (move it where you drew). Pins carry their
   intent into the prompt.
 - **Per-pin results.** The agent reports each pin as resolved (with what changed) or dismissed (with
   why). Tap the hint line above the review bar to see the last Send's results.

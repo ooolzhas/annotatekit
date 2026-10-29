@@ -1,11 +1,12 @@
 // The comment card for the open pin (Figma 9272:16847 empty · 9272:16929 typed · 9272:17011 with
 // attachments): an optional strip of 64pt reference-image thumbnails with white remove badges,
 // the comment field, and the paperclip / intent chip / undo / redo / ↑ row. The intent chip (no
-// Figma frame) picks what the user wants done with the pin (Fix, Question, Approve, Move) and the
-// placeholder follows it; its last item deletes the pin. Undo and redo step through the strokes
-// drawn since the card opened (StrokeHistory) and dim at either end. It only lays itself out at the width it is given; OverlayRoot docks it
+// Figma frame) picks what the user wants done with the pin (Fix, Question, Move) and the
+// placeholder follows it. Undo and redo step through the strokes drawn since the card opened
+// (StrokeHistory); with nothing left to undo, undo turns into × and discards the pin, and redo dims
+// with nothing to redo. It only lays itself out at the width it is given; OverlayRoot docks it
 // to the keyboard and adds the 8pt inset. ↑ saves through the controller, which decides via
-// `chrome` whether the comment can be submitted (Approve may be saved with no text); Return types a
+// `chrome` whether the comment can be submitted (it needs text); Return types a
 // newline. A new drawing opens the card without the keyboard so the next stroke has the screen.
 
 #if DEBUG && canImport(UIKit)
@@ -144,10 +145,14 @@ struct ComposerCard: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 6) {
-                // No Figma: undo / redo replace Figma's × (9257:13397/13398, owner request); deleting
-                // the pin moved to the intent menu
-                historyButton("arrow.uturn.backward", isEnabled: draft.history.canUndo) { controller.undo() }
-                historyButton("arrow.uturn.forward", isEnabled: draft.history.canRedo) { controller.redo() }
+                // No Figma: undo / redo sit where Figma's × was (9257:13397/13398, owner request), and
+                // undo turns back into that × once there's nothing left to undo
+                undoOrDiscardButton
+                CircleIconButton(
+                    systemName: "arrow.uturn.forward",
+                    style: draft.history.canRedo ? .plain : .dimmed
+                ) { controller.redo() }
+                .disabled(!draft.history.canRedo)
                 submitButton
             }
         }
@@ -155,18 +160,28 @@ struct ComposerCard: View {
         .padding(.bottom, 8)
     }
 
-    /// Dimmed and inert at either end of the history, like ↑ without a comment.
-    private func historyButton(_ systemName: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
-        CircleIconButton(systemName: systemName, style: isEnabled ? .plain : .dimmed, action: action)
-            .disabled(!isEnabled)
+    /// Undo while there are strokes to take back; at the state the card opened with (a new drawing's
+    /// first stroke, a tap or hold pin, a reopened pin as saved) it's × and discards the pin instead.
+    private var undoOrDiscardButton: some View {
+        let canUndo = draft.history.canUndo
+        return CircleIconButton(
+            systemName: canUndo ? "arrow.uturn.backward" : "xmark",
+            label: canUndo ? nil : (draft.isNew ? "Discard pin" : "Delete pin")
+        ) {
+            if canUndo {
+                controller.undo()
+            } else {
+                controller.discardDraft()
+            }
+        }
+        .contentTransition(.symbolEffect(.replace))
     }
 
     /// No Figma: derived chip. Same 44pt height and 5% fill as `CircleIcon` `.plain`, stretched to
     /// a capsule around the intent title so the current choice reads without opening the menu.
     private static let chipHorizontalPadding: CGFloat = 14
 
-    /// Menu of every intent; picking one stores it on the draft through the controller, which
-    /// also lets `chrome` allow an empty Approve.
+    /// Menu of every intent; picking one stores it on the draft through the controller.
     private var intentChip: some View {
         let intent = intent
         return Menu {
@@ -181,12 +196,6 @@ struct ComposerCard: View {
                         Image(systemName: option.symbol)
                     }
                 }
-            }
-            Divider()
-            Button(role: .destructive) {
-                controller.discardDraft()
-            } label: {
-                Label(draft.isNew ? "Discard" : "Delete pin", systemImage: "trash")
             }
         } label: {
             HStack(spacing: 4) {

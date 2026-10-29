@@ -226,7 +226,6 @@ private struct InboxFixture {
         #expect(legend.hasPrefix("Tags:"))
         #expect(legend.contains("[Question]"))
         // Only the tags present
-        #expect(!legend.contains("[Approve]"))
         #expect(!legend.contains("[Move]"))
         #expect(lines.filter { $0.hasPrefix("Tags:") }.count == 1)
     }
@@ -246,7 +245,6 @@ private struct InboxFixture {
         let question = try #require(legend.range(of: "[Question]"))
         let move = try #require(legend.range(of: "[Move]"))
         #expect(question.lowerBound < move.lowerBound)
-        #expect(!legend.contains("[Approve]"))
     }
 
     @Test("no non-fix intent means no tags and no legend",
@@ -353,13 +351,12 @@ private struct InboxFixture {
         open: Bool = false,
         comment: String = "",
         pins: Int = 2,
-        intent: AnnotationIntent? = nil,
         reply: String? = nil,
         showingResults: Bool = false,
         results: Int = 0
     ) -> OverlayChrome.Inputs {
         OverlayChrome.Inputs(
-            isDraftOpen: open, draftComment: comment, pinCount: pins, draftIntent: intent,
+            isDraftOpen: open, draftComment: comment, pinCount: pins,
             replyText: reply, isShowingResults: showingResults, resultCount: results
         )
     }
@@ -385,20 +382,11 @@ private struct InboxFixture {
                 == .composing(canSubmit: false))
     }
 
-    @Test func approveMaySubmitWithAnEmptyComment() {
-        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: "", intent: .approve)) == .composing(canSubmit: true))
-        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: "  \n", intent: .approve)) == .composing(canSubmit: true))
-    }
-
-    @Test("every other intent (and none) still needs a comment",
-          arguments: [nil, AnnotationIntent.fix, .question, .move])
-    func otherIntentsNeedAComment(intent: AnnotationIntent?) {
-        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: " ", intent: intent)) == .composing(canSubmit: false))
-        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: "x", intent: intent)) == .composing(canSubmit: true))
-    }
-
-    @Test func draftIntentIsIgnoredWithoutAnOpenDraft() {
-        #expect(OverlayChrome.resolve(Self.inputs(open: false, intent: .approve)) == .review(count: 2))
+    @Test("an open pin needs a comment; whitespace isn't one",
+          arguments: ["", " ", "  \n"])
+    func blankCommentCannotSubmit(comment: String) {
+        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: comment)) == .composing(canSubmit: false))
+        #expect(OverlayChrome.resolve(Self.inputs(open: true, comment: comment + "x")) == .composing(canSubmit: true))
     }
 
     @Test func resultsShowOnlyWhileOpenAndNonEmpty() {
@@ -534,17 +522,19 @@ private struct InboxFixture {
     }
 
     @Test func rawValuesAreTheSchemaStrings() {
-        #expect(AnnotationIntent.allCases.map(\.rawValue) == ["fix", "question", "approve", "move"])
+        #expect(AnnotationIntent.allCases.map(\.rawValue) == ["fix", "question", "move"])
     }
 
-    @Test func onlyApproveAllowsAnEmptyComment() {
-        #expect(AnnotationIntent.allCases.filter(\.allowsEmptyComment) == [.approve])
+    @Test("an intent this version doesn't know (the removed approve) loads as fix",
+          arguments: ["approve", "somethingNew"])
+    func unknownIntentDecodesAsFix(raw: String) throws {
+        let data = Data("[\"\(raw)\", \"move\"]".utf8)
+        #expect(try JSONDecoder().decode([AnnotationIntent].self, from: data) == [.fix, .move])
     }
 
     @Test func onlyFixHasNoPromptTag() {
         #expect(AnnotationIntent.allCases.filter { $0.promptTag == nil } == [.fix])
         #expect(AnnotationIntent.question.promptTag == "[Question]")
-        #expect(AnnotationIntent.approve.promptTag == "[Approve]")
         #expect(AnnotationIntent.move.promptTag == "[Move]")
     }
 
