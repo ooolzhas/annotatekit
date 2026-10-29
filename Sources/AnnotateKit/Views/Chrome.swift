@@ -610,9 +610,8 @@ struct LauncherButton: View {
     /// Not in Figma: the pill springs to a new spot when the app's chrome pushes it (or lets it back).
     static let placementAnimation: Animation = .spring(duration: 0.4, bounce: 0.2)
 
-    /// Connection dot, Figma 9289:1311 (8×8, `gap-[8px]` to the title, green `#34C759`): solid green
-    /// when a Send starts an agent by itself, a ring when one is connected but only reads when asked
-    /// (no Figma frame), absent when nothing listens.
+    /// Connection dot, Figma 9289:1311 (8×8, `gap-[8px]` to the title, green `#34C759`). Always shown
+    /// (owner request); its color follows `controller.agentLink`.
     static let dotSize: CGFloat = 8
     static let dotSpacing: CGFloat = 8
 
@@ -621,12 +620,10 @@ struct LauncherButton: View {
         let frame = controller.launcherFrame
         let maxWidth = max(controller.bounds.width - AnnotateController.launcherSideInset * 2, 0)
         let agent = controller.agent
+        let link = controller.agentLink
 
         HStack(spacing: Self.dotSpacing) {
-            if let agent {
-                ConnectionDot(mode: agent.mode, ringColor: .primary)
-                    .transition(.scale.combined(with: .opacity))
-            }
+            ConnectionDot(link: link)
             Text(status.title)
                 .font(.system(size: Self.titleSize, weight: .medium))
                 .foregroundStyle(.primary)
@@ -640,7 +637,7 @@ struct LauncherButton: View {
             // app screen in light and dark, and presses like the overlay's other glass
             .annotateGlass(in: Capsule(), interactive: true)
             .animation(Self.statusAnimation, value: status)
-            .animation(Self.statusAnimation, value: agent?.mode)
+            .animation(Self.statusAnimation, value: link)
             // The controller's hit frame (OverlayWindow hit-tests it) must match the rendered width,
             // which changes with every title; measured here, before `.position` expands the view
             .onGeometryChange(for: CGSize.self) { $0.size } action: { controller.updateLauncherSize($0) }
@@ -655,7 +652,7 @@ struct LauncherButton: View {
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(status.title)
-            .accessibilityValue(agent?.accessibilityDescription ?? "No agent connected")
+            .accessibilityValue(ConnectionDot.accessibilityValue(link: link, agent: agent))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Annotate the screen")
             // Caps the proposal so long titles truncate inside the capsule. It must come after the
@@ -716,24 +713,38 @@ struct ToastView: View {
         .allowsHitTesting(false)
     }
 }
-/// The launcher's connection dot: filled when a Send will start the agent by itself, a ring when
-/// the agent only reads sessions when asked.
+/// The launcher's connection dot, always shown (owner request): green while an agent listens, red
+/// when nothing does (the hint line's two colors), yellow while the app catches up on a late
+/// heartbeat. Push and pull agents read alike here; the hint line in annotate mode tells them apart.
 struct ConnectionDot: View {
-    let mode: AgentPresence.Mode
-    /// The ring uses the pill's title color so it reads on both the light and the dark pill.
-    let ringColor: Color
+    let link: AgentLink
+
+    /// No Figma frame for resyncing: between "listening" green and "nobody" red, and not the orange
+    /// that marks a question waiting for the user.
+    static let resyncingColor = Color(uiColor: .systemYellow)
 
     var body: some View {
-        Group {
-            switch mode {
-            case .push:
-                Circle().fill(Color(uiColor: .systemGreen))
-            case .pull:
-                Circle().strokeBorder(ringColor.opacity(0.7), lineWidth: 1.5)
-            }
+        Circle()
+            .fill(Self.color(for: link))
+            .frame(width: LauncherButton.dotSize, height: LauncherButton.dotSize)
+            .accessibilityHidden(true)
+    }
+
+    static func color(for link: AgentLink) -> Color {
+        switch link {
+        case .active: ReviewHintLine.connectedColor
+        case .resyncing: resyncingColor
+        case .offline: ReviewHintLine.offlineColor
         }
-        .frame(width: LauncherButton.dotSize, height: LauncherButton.dotSize)
-        .accessibilityHidden(true)
+    }
+
+    /// VoiceOver value for the pill: the agent's own description while it listens.
+    static func accessibilityValue(link: AgentLink, agent: AgentPresence?) -> String {
+        switch link {
+        case .active: agent?.accessibilityDescription ?? "Agent connected"
+        case .resyncing: "Reconnecting to the agent"
+        case .offline: "No agent connected"
+        }
     }
 }
 #endif

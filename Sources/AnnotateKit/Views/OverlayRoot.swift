@@ -326,6 +326,9 @@ private struct ActiveOverlay: View {
                 .transition(Self.badgeAppearance)
             }
         }
+        // Screen-sized whatever a layer does: a layer wider than the screen made the window
+        // re-center the overlay, shifting the frozen screen under the pins
+        .frame(width: bounds.width, height: bounds.height, alignment: .topLeading)
         .animation(.snappy(duration: 0.2), value: controller.annotations)
         .animation(.snappy(duration: 0.2), value: sent.map(\.id))
     }
@@ -464,13 +467,18 @@ private enum FluidMotion {
 }
 
 private extension View {
-    /// Places a pin badge by its center in the overlay's top-leading ZStack through alignment guides,
-    /// which move its layout frame. `.position` makes the view fill the screen and `.offset` moves only
-    /// the drawing, so with either a scale transition pivoted far from the badge and it flew in;
-    /// here the badge-sized frame sits on the pin, so it scales about its own center.
+    /// Places a pin badge by its center in the overlay's top-leading ZStack: a zero-size anchor sits
+    /// on the center through alignment guides, and the badge rides in its overlay. A scale transition
+    /// pivots on the anchor, so the badge grows from its own center (`.position` fills the screen and
+    /// `.offset` moves only the drawing, and with either it flew in). The overlay takes no layout
+    /// room, so a badge on the screen's edge can't widen the ZStack: when the badge's own hit frame
+    /// was laid out there, a pin at the edge pushed it past the screen and the whole overlay shifted.
     func badgePlaced(at center: CGPoint) -> some View {
-        alignmentGuide(.leading) { _ in -(center.x - PinBadge.hitSize / 2) }
-            .alignmentGuide(.top) { _ in -(center.y - PinBadge.hitSize / 2) }
+        Color.clear
+            .frame(width: 0, height: 0)
+            .overlay { self }
+            .alignmentGuide(.leading) { _ in -center.x }
+            .alignmentGuide(.top) { _ in -center.y }
     }
 }
 
@@ -485,10 +493,11 @@ extension Annotation {
             let offset = AnnotateStyle.spotBadgeOffset
             return CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0)
         case .sketch:
-            // The controller pads stroke bounds; Figma puts the badge on the stroke's own corner
-            // (9257:13566 vs 9257:13562), so undo that same padding here.
-            let padding = AnnotateController.sketchPadding
-            return frame.cgRect.insetBy(dx: padding, dy: padding)
+            // Figma puts the badge on the strokes' own corner (9257:13566), not the padded frame's
+            // (9257:13562). Read from the strokes rather than undoing the padding: at a screen edge
+            // the padded frame was clipped, and a thin stroke there left less than the padding to
+            // undo, a null rect that sent the badge to the bottom-trailing corner
+            return BundleRenderer.strokeBounds(sketchInScreenPoints) ?? frame.cgRect
         case .element, .region:
             // Badge center on the box's outer corner (Figma 9257:13564 corner = 9257:13570 center);
             // the box is the element frame grown by the outset, matching PinMarker
@@ -535,6 +544,10 @@ private struct PinMarker: View {
                     .frame(width: bounds.width, height: bounds.height)
             }
         }
+        // An element box is laid out at its own size before its offset, so a full-width element
+        // plus the outset is wider than the screen; the screen-sized frame keeps it from widening
+        // the overlay (which would re-center everything)
+        .frame(width: bounds.width, height: bounds.height, alignment: .topLeading)
         .allowsHitTesting(false)
     }
 }

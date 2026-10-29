@@ -186,8 +186,8 @@ enum BundleRenderer {
     }
 
     /// Bounding box of every point in `strokes` (screen points); nil when there are none, so a pin
-    /// without a sketch crops exactly as before.
-    private static func strokeBounds(_ strokes: [Stroke]) -> CGRect? {
+    /// without a sketch crops exactly as before. The overlay anchors sketch badges on it too.
+    static func strokeBounds(_ strokes: [Stroke]) -> CGRect? {
         let points = strokes.flatMap(\.points)
         guard let first = points.first else { return nil }
         var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y

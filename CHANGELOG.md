@@ -121,6 +121,13 @@ All notable changes to this project are documented here. The format is based on
     the sides, and its connection dot is 8pt. On a fresh open it no longer pops up with the window:
     it waits for the app's first settled screen, then scales up and fades in like it does when
     annotate mode closes.
+  - The pill's connection dot is always there and only changes color (owner request): green while
+    an agent listens, yellow while its heartbeat is late (past 7 s, before it goes stale at 15 s,
+    as when the copy to a device lags), red when nothing listens. Push and pull agents look alike on
+    the pill; the hint line still tells them apart. The model is `AgentLink` in AnnotateCore.
+  - The quoted element text in the comment card has 2pt more padding above and below and 2pt more
+    between its two lines, so a two-line quote makes the box 70pt; the strip bottom-aligns it with
+    the thumbnails.
 
 ### Added
 - **Launcher collision avoidance:** the idle pill keeps off the app's own bottom chrome. Once a
@@ -178,6 +185,10 @@ All notable changes to this project are documented here. The format is based on
   carry `sketch` strokes, whose points may extend outside the pin's frame.
 
 ### Fixed
+- Drawing at the screen's edge no longer shifts the whole overlay sideways. A pin badge's 40pt hit
+  frame was laid out at the edge and widened the overlay, which re-centered it; badges now ride a
+  zero-size anchor, and every layer is held to the screen's size. The sketch's badge also stays on
+  the stroke: a thin stroke at the edge used to send it to the bottom-trailing corner.
 - `annotate mcp` no longer swallows Sends.
   - **Without channels:** Claude Code, including the desktop app, drops channel events silently,
     yet the server marked each session delivered. A push now counts only once Claude is seen acting

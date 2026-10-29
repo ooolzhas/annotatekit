@@ -347,12 +347,16 @@ struct ComposerCard: View {
     /// How far the badge pokes past the thumbnail's top and right edges (20 / 2 − 4 = 6).
     private static var badgeOverhang: CGFloat { badgeSize / 2 - badgeInset }
 
-    /// Figma 9276:27374: `w-[236px] h-[64px] px-[16px]`, as tall as a thumbnail.
+    /// Figma 9276:27374: `w-[236px] h-[64px] px-[16px]`, at least as tall as a thumbnail.
     private static let quoteWidth: CGFloat = 236
     private static let quoteHorizontalPadding: CGFloat = 16
-    /// Figma centers two 20pt lines in the 64pt box (`py-[10px] justify-center`, 12pt above the
-    /// first) and keeps a single line at that same top (9276:27466), so the text hangs from here.
-    private static let quoteTopPadding: CGFloat = 12
+    /// Figma has 12pt above the first line (two 20pt lines centered in the 64pt box, a single line
+    /// at the same top, 9276:27466); 2pt more above and below (owner request), so two lines make
+    /// the box 70pt and a single line hangs 14pt from its top.
+    private static let quoteVerticalPadding: CGFloat = 14
+    /// 2pt more between the quoted lines than Loose Leading's 20pt (owner request; no leading
+    /// setting reaches 22).
+    private static let quoteLineSpacing: CGFloat = 2
     /// Figma `opacity-75` on the quoted lines (9276:27375).
     private static let quoteOpacity: Double = 0.75
 
@@ -364,7 +368,8 @@ struct ComposerCard: View {
     /// 9272:17019 — `flex gap-[8px] items-end pt-[16px] px-[16px]`.
     private var attachmentStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            // Figma `items-end`: a two-line quote is taller than a thumbnail, and they share a bottom
+            HStack(alignment: .bottom, spacing: 8) {
                 if let quote {
                     quoteBox(quote)
                 }
@@ -389,18 +394,20 @@ struct ComposerCard: View {
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     }
 
-    /// The element's text in a thumbnail-shaped box (same height, radius and fill as the card's
-    /// circle buttons), like the message a reply quotes. Figma 9276:27374: Loose Leading/Footnote
-    /// (13 / 20) at 75%, two lines, then it truncates.
+    /// The element's text in a thumbnail-shaped box (a thumbnail's radius and fill, at least its
+    /// height), like the message a reply quotes. Figma 9276:27374: Loose Leading/Footnote (13 / 20)
+    /// at 75%, two lines, then it truncates; 2pt more between the lines and around them.
     private func quoteBox(_ text: String) -> some View {
         Text(text)
             .font(.footnote.leading(.loose))
+            .lineSpacing(Self.quoteLineSpacing)
             .foregroundStyle(.primary.opacity(Self.quoteOpacity))
             .lineLimit(2)
             .truncationMode(.tail)
             .padding(.horizontal, Self.quoteHorizontalPadding)
-            .padding(.top, Self.quoteTopPadding)
-            .frame(width: Self.quoteWidth, height: Self.thumbnailSize, alignment: .topLeading)
+            .padding(.vertical, Self.quoteVerticalPadding)
+            .frame(width: Self.quoteWidth, alignment: .topLeading)
+            .frame(minHeight: Self.thumbnailSize, alignment: .topLeading)
             .background(
                 Color.primary.opacity(CircleIcon.fillOpacity),
                 in: RoundedRectangle(cornerRadius: Self.thumbnailRadius, style: .continuous)

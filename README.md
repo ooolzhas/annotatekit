@@ -22,8 +22,9 @@ Tap, draw and comment on your running app. Hit Send. Your agent gets the screens
 3. Hit **↑**. Claude Code, already open on your Mac, starts working. Annotate mode stays open and
    narrates it: *Claude received your notes → Claude is working… → All changes applied · Reinstalling*,
    while each pin's
-   badge spins until the agent resolves it and then turns into a green check. A green dot on the
-   pill means an agent is listening. It works the same from a physical iPhone, with no extra setup.
+   badge spins until the agent resolves it and then turns into a green check. The dot on the pill
+   is green while an agent listens, yellow while it reconnects, and red when nothing does. It works
+   the same from a physical iPhone, with no extra setup.
 
 No copy/paste and no tagging views: every pixel is annotatable. It works with SwiftUI and UIKit,
 and everything is compiled out of Release builds.

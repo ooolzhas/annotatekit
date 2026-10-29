@@ -1,6 +1,7 @@
 // Agent presence: which heartbeat the app shows when several agents listen, freshness by file
-// date (so a dead process's heartbeat reads as gone), releasing an unanswered claim, and that
-// bundles from builds before `installFile` still decode.
+// date (so a dead process's heartbeat reads as gone), the launcher dot's link state (active,
+// resyncing on a late heartbeat or before the first read, offline), releasing an unanswered
+// claim, and that bundles from builds before `installFile` still decode.
 
 import Foundation
 import Testing
@@ -40,6 +41,37 @@ import Testing
 
         try AgentPresenceFile.write(nil, in: output)
         #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent(AgentPresenceFile.fileName).path))
+    }
+
+    @Test("the dot resyncs until the first read lands")
+    func linkResyncsBeforeFirstRead() {
+        #expect(AgentLink.resolve(hasRead: false, presence: nil, heartbeatAge: nil) == .resyncing)
+    }
+
+    @Test("a fresh heartbeat is active, a late one resyncs, none is offline")
+    func linkFollowsHeartbeatAge() {
+        let presence = AgentPresence(agent: "Claude Code", mode: .pull, via: "mcp")
+        #expect(AgentLink.resolve(hasRead: true, presence: presence, heartbeatAge: 1) == .active)
+        #expect(AgentLink.resolve(hasRead: true, presence: presence, heartbeatAge: AgentLink.lateAfter) == .active)
+        #expect(AgentLink.resolve(hasRead: true, presence: presence, heartbeatAge: AgentLink.lateAfter + 1) == .resyncing)
+        #expect(AgentLink.resolve(hasRead: true, presence: nil, heartbeatAge: AgentPresenceFile.staleAfter + 1) == .offline)
+        #expect(AgentLink.resolve(hasRead: true, presence: nil, heartbeatAge: nil) == .offline)
+    }
+
+    @Test("late sits between the heartbeat interval and staleness")
+    func lateWindowIsInsideStale() {
+        #expect(AgentLink.lateAfter > AgentPresenceFile.interval)
+        #expect(AgentLink.lateAfter < AgentPresenceFile.staleAfter)
+    }
+
+    @Test func heartbeatAgeReadsTheMergedFile() throws {
+        let output = try Self.tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        #expect(AgentPresenceFile.heartbeatAge(in: output) == nil)
+        try AgentPresenceFile.write(AgentPresence(agent: "Claude Code", mode: .push, via: "watch"), in: output)
+        try Self.age(output.appendingPathComponent(AgentPresenceFile.fileName), by: 10)
+        let age = try #require(AgentPresenceFile.heartbeatAge(in: output))
+        #expect(abs(age - 10) < 2)
     }
 
     @Test func liveHeartbeatsSkipStaleOnes() throws {

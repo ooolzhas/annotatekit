@@ -180,6 +180,8 @@ final class AnnotateController {
     private(set) var deliveryStartedAt: Date?
     /// The agent listening for Sends, from `agent.json`; nil when none is (the pill's dot).
     private(set) var agent: AgentPresence?
+    /// The launcher dot's state: resyncing until the first presence read lands.
+    private(set) var agentLink: AgentLink = .resyncing
     /// True for `ReviewHint.introHold` after annotate mode starts: the hint line shows how to annotate
     /// before it settles on the connection.
     private(set) var isIntro = false
@@ -250,8 +252,8 @@ final class AnnotateController {
     static let maxAttachments = 4
     /// Pen samples closer than this to the previous one are dropped, keeping paths light (as 0.1.x did).
     private static let strokeSampleSpacing: CGFloat = 1.5
-    /// Padding around a drawing's strokes when it becomes a pin's frame. OverlayRoot undoes it to
-    /// place the sketch badge on the strokes' own corner.
+    /// Padding around a drawing's strokes when it becomes a pin's frame. OverlayRoot places the
+    /// sketch badge on the strokes' own corner instead.
     nonisolated static let sketchPadding: CGFloat = 8
     /// Longest wait for SwiftUI's accessibility tree after the bootstrap; pure UIKit apps never
     /// grow accessibility nodes and wait this out once.
@@ -1545,16 +1547,20 @@ final class AnnotateController {
             : nil
         presenceTask = Task { [weak self] in
             while !Task.isCancelled {
-                let presence = await Task.detached(priority: .utility) { () -> AgentPresence? in
+                let (presence, age) = await Task.detached(priority: .utility) { () -> (AgentPresence?, TimeInterval?) in
                     if let beacon, let data = try? AnnotationSession.encoder.encode(beacon) {
                         try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
                         try? data.write(to: output.appendingPathComponent(AgentPresenceFile.appFile), options: .atomic)
                     }
-                    return AgentPresenceFile.read(in: output)
+                    return (AgentPresenceFile.read(in: output), AgentPresenceFile.heartbeatAge(in: output))
                 }.value
                 guard let self, !Task.isCancelled else { return }
                 if self.agent != presence {
                     self.agent = presence
+                }
+                let link = AgentLink.resolve(hasRead: true, presence: presence, heartbeatAge: age)
+                if self.agentLink != link {
+                    self.agentLink = link
                 }
                 try? await Task.sleep(for: .seconds(AgentPresenceFile.interval))
             }
