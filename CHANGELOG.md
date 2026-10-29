@@ -93,7 +93,8 @@ All notable changes to this project are documented here. The format is based on
   - Sending from a card with the keyboard up hides the card at once and saves once the keyboard has
     slid away, so the keyboard keeps its slide. Clear All is a trash icon and asks with a centered alert. The tag bar
     sits right under the toolbar.
-  - The hint line's elapsed counter rolls its digits on each tick.
+  - The hint line's elapsed counter rolls its digits on each tick, and its status dot blinks
+    (solid with Reduce Motion).
   - The intent chip opens our own dropdown above it instead of a system menu: on iOS 27 devices a
     tap on a system menu item could be taken by the frozen screen's drawing gesture.
   - The review bar's back, count and ↑ share one glass container, so a pressed one swells into its

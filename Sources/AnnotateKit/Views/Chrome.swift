@@ -431,6 +431,8 @@ struct ReviewHintLine: View {
     /// When the current Send started (`controller.deliveryStartedAt`); nil hides the elapsed.
     let startedAt: Date?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// Figma `gap-[6px]` between the dot and the text (9276:27745).
     static let spacing: CGFloat = 6
     /// Figma `gap-[4px]` between the headline and what follows it, detail or elapsed (9276:27747).
@@ -456,6 +458,11 @@ struct ReviewHintLine: View {
     static let tickInterval: TimeInterval = 1
     /// Not in Figma: the digit roll on each tick, well inside the second between ticks.
     static let tickAnimation: Animation = .snappy(duration: 0.3)
+    /// Not in Figma (owner request): the status dot blinks, fading to this and back. Reduce Motion
+    /// keeps it solid.
+    static let dotBlinkFloor: Double = 0.2
+    /// One fade of the blink (bright → faint or back).
+    static let dotBlinkHalfPeriod: Double = 0.6
     /// The detail and the elapsed sit at half the headline's strength (Figma 9276:27749 / 9276:28049
     /// `opacity-50`).
     static let secondaryOpacity: Double = 0.5
@@ -486,9 +493,7 @@ struct ReviewHintLine: View {
     private func row(elapsed: String?) -> some View {
         HStack(spacing: Self.spacing) {
             if let dot = hint.dot {
-                Circle()
-                    .fill(Self.color(for: dot))
-                    .frame(width: Self.dotSize, height: Self.dotSize)
+                statusDot(Self.color(for: dot))
             }
             HStack(spacing: Self.textSpacing) {
                 Text(hint.headline)
@@ -527,6 +532,22 @@ struct ReviewHintLine: View {
                 .lineLimit(1)
                 .shadow(color: .black.opacity(ReviewHintLine.shadowOpacity), radius: ReviewHintLine.shadowRadius,
                         x: 0, y: ReviewHintLine.shadowY)
+        }
+    }
+
+    @ViewBuilder
+    private func statusDot(_ color: Color) -> some View {
+        let dot = Circle()
+            .fill(color)
+            .frame(width: Self.dotSize, height: Self.dotSize)
+        if reduceMotion {
+            dot
+        } else {
+            dot.phaseAnimator([false, true]) { content, isFaint in
+                content.opacity(isFaint ? Self.dotBlinkFloor : 1)
+            } animation: { _ in
+                .easeInOut(duration: Self.dotBlinkHalfPeriod)
+            }
         }
     }
 
