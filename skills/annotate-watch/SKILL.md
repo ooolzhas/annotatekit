@@ -38,14 +38,16 @@ user can annotate on their phone with no other setup. Run it from the checkout t
    visible label on the screen with its frame. A `Source:` line, when present, is exact.
 4. Make the changes, following the project's own instructions (CLAUDE.md / AGENTS.md) as for any
    edit, and build and check them if the project expects it, all before the reinstall below.
-5. Report each pin as you finish it: `annotate resolve <id> <pin> "<what changed>"`, or
+5. As you start each pin, run `annotate ack <id> <pin>`, so the device shows which note you're on.
+   Report each pin as you finish it: `annotate resolve <id> <pin> "<what changed>"`, or
    `annotate dismiss <id> <pin> "<why not>"` for a pin you won't change. Respect the pin's intent:
    - **[Question]:** answer it; don't edit code for it.
 
    If a pin is unclear, ask before guessing: `annotate ask <id> <pin> "<question>"`. It waits up to
    2 minutes and prints the user's answer (from a phone, the answer travels back through the
    running watcher, so keep it armed). If it times out, the answer arrives later as a `reply on pin`
-   line from the watcher; continue that session when it does.
+   line from the watcher; continue that session when it does. You can ask again about the same
+   pin: the device shows the whole exchange.
 6. If you rebuild and reinstall the app so the user can see the change, first run
    `annotate status <id> working "All changes applied · Reinstalling"`: the app shows it while it
    restarts and picks the narration back up after relaunch.

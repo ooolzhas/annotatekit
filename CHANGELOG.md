@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Conversations per note:** an agent can ask about the same note more than once. Each pin's
+  `status.json` entry keeps a `thread` of questions and replies, and the reply card and notes sheet
+  show the earlier exchange. `note` and `reply` still hold the latest question and answer, so apps
+  built with 0.2.x keep working.
+- **Which note the agent is on:** `annotate ack <id> <pin>` (MCP: `annotation_acknowledge`) records
+  the pin the agent is starting. The device says "Working on note 2", spins only that pin's badge
+  and lists it as Working. The prompt and the watch skill ask agents to do it. It's stored as a
+  session-level `acknowledged` list rather than a new pin state, which 0.2.x apps would reject.
+
+### Fixed
+- Asking about a note again within a second of the user's reply no longer hands back that reply as
+  the answer to the new question (timestamps are stored to the second).
+
 ### Changed
 - Releases publish the npm package `annotate-ios` through npm Trusted Publishing (GitHub's OIDC
   identity), so there's no npm token to store or rotate. (npm blocks `annotatekit` as too close to

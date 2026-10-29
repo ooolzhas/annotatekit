@@ -1,8 +1,9 @@
 // Pure model of each sent pin's result, as the app's notes sheet shows it. `PinOutcome` turns the
 // agent's `PinStatus` (from status.json) into what the badge, label and detail line read;
-// `PinResult` pairs it with the pin's comment, subject and intent and builds the card's summary line.
-// `SentPinMark` is what a sent pin's badge shows on the frozen screen after a Send: its number, a
-// spinner while the agent has it, or the outcome's glyph. `NoteFilter` is the notes sheet's tags.
+// `PinResult` pairs it with the pin's comment, subject, intent and conversation and builds the
+// card's summary line. `SentPinMark` is what a sent pin's badge shows on the frozen screen after a
+// Send: its number, a spinner while the agent has it, or the outcome's glyph. `NoteFilter` is the
+// notes sheet's tags.
 // Views switch on these instead of reading `PinStatus` directly, so the rules stay testable on Linux.
 
 import Foundation
@@ -11,6 +12,8 @@ import Foundation
 public enum PinOutcome: Equatable, Sendable {
     /// Sent, nothing reported yet.
     case open
+    /// The agent said it started on this pin (`annotate ack`) and hasn't reported a result yet.
+    case working
     case resolved(summary: String?)
     case dismissed(reason: String?)
     case question(String)
@@ -18,10 +21,11 @@ public enum PinOutcome: Equatable, Sendable {
 
     public enum Tone: Sendable, Equatable { case neutral, success, muted, attention }
 
-    /// No status means the agent hasn't reported on the pin yet. Blank notes and replies count as
-    /// absent, so the card never shows an empty "Resolved · " detail.
-    public static func resolve(_ status: PinStatus?) -> PinOutcome {
-        guard let status else { return .open }
+    /// No status means the agent hasn't reported on the pin yet: working once it acknowledged the
+    /// pin, else open. Blank notes and replies count as absent, so the card never shows an empty
+    /// "Resolved · " detail.
+    public static func resolve(_ status: PinStatus?, acknowledged: Bool = false) -> PinOutcome {
+        guard let status else { return acknowledged ? .working : .open }
         switch status.state {
         case .resolved:
             return .resolved(summary: cleaned(status.note))
@@ -42,18 +46,18 @@ public enum PinOutcome: Equatable, Sendable {
 
     public var tone: Tone {
         switch self {
-        case .open, .answered: .neutral
+        case .open, .working, .answered: .neutral
         case .resolved: .success
         case .dismissed: .muted
         case .question: .attention
         }
     }
 
-    /// Badge glyph. nil means the badge shows the pin number instead: open and answered pins are
-    /// still in progress, so the number keeps them easy to match with the pins on screen.
+    /// Badge glyph. nil means the badge shows the pin number instead: open, working and answered pins
+    /// are still in progress, so the number keeps them easy to match with the pins on screen.
     public var symbol: String? {
         switch self {
-        case .open, .answered: nil
+        case .open, .working, .answered: nil
         case .resolved: "checkmark"
         case .dismissed: "xmark"
         case .question: "questionmark"
@@ -63,6 +67,7 @@ public enum PinOutcome: Equatable, Sendable {
     public var label: String {
         switch self {
         case .open: "Waiting"
+        case .working: "Working"
         case .resolved: "Resolved"
         case .dismissed: "Dismissed"
         case .question: "Question"
@@ -74,7 +79,7 @@ public enum PinOutcome: Equatable, Sendable {
     /// (not only via `resolve`), so this trims again.
     public var detail: String? {
         switch self {
-        case .open: nil
+        case .open, .working: nil
         case .resolved(let summary): Self.cleaned(summary)
         case .dismissed(let reason): Self.cleaned(reason)
         case .question(let question): Self.cleaned(question)
@@ -99,19 +104,42 @@ public struct PinResult: Equatable, Sendable, Identifiable {
     public var subject: String
     public var intent: AnnotationIntent
     public var outcome: PinOutcome
+    /// The agent's questions and the user's replies about this pin, oldest first.
+    public var thread: [PinMessage]
 
     public var id: Int { index }
 
-    public init(index: Int, comment: String, subject: String, intent: AnnotationIntent, outcome: PinOutcome) {
+    public init(
+        index: Int,
+        comment: String,
+        subject: String,
+        intent: AnnotationIntent,
+        outcome: PinOutcome,
+        thread: [PinMessage] = []
+    ) {
         self.index = index
         self.comment = comment
         self.subject = subject
         self.intent = intent
         self.outcome = outcome
+        self.thread = thread
     }
 
-    /// One result per pin (sorted by index), outcome from the matching status (by index).
-    public static func results(for pins: [Annotation], statuses: [PinStatus]) -> [PinResult] {
+    /// The conversation without its last message when the outcome's detail already shows it (the
+    /// open question, or the reply that answered it), so a row or card never says it twice.
+    public var earlierMessages: [PinMessage] {
+        guard let last = thread.last else { return [] }
+        switch outcome {
+        case .question where last.role == .agent, .answered where last.role == .human:
+            return Array(thread.dropLast())
+        default:
+            return thread
+        }
+    }
+
+    /// One result per pin (sorted by index), outcome from the matching status (by index); a pin with
+    /// no status that the agent acknowledged is working.
+    public static func results(for pins: [Annotation], statuses: [PinStatus], acknowledged: [Int] = []) -> [PinResult] {
         // The writer upserts by index, so duplicates shouldn't occur; if they do, the later entry wins
         var byIndex: [Int: PinStatus] = [:]
         for status in statuses { byIndex[status.index] = status }
@@ -125,21 +153,23 @@ public struct PinResult: Equatable, Sendable, Identifiable {
                     subject: subject(of: pin),
                     // Bundles from before intents existed have none: those pins were all fixes
                     intent: pin.intent ?? .fix,
-                    outcome: PinOutcome.resolve(byIndex[pin.index])
+                    outcome: PinOutcome.resolve(byIndex[pin.index], acknowledged: acknowledged.contains(pin.index)),
+                    thread: byIndex[pin.index]?.messages ?? []
                 )
             }
     }
 
     /// "2 resolved · 1 dismissed · 1 question" (counts > 0 only, in that order: resolved, dismissed,
-    /// question, answered, waiting); nil when every pin is .open, since "3 waiting" alone adds nothing
-    /// the delivery hint doesn't already say.
+    /// question, answered, working, waiting); nil when every pin is .open, since "3 waiting" alone adds
+    /// nothing the delivery hint doesn't already say.
     public static func summary(_ results: [PinResult]) -> String? {
         guard results.contains(where: { $0.outcome != .open }) else { return nil }
 
-        var resolved = 0, dismissed = 0, questions = 0, answered = 0, waiting = 0
+        var resolved = 0, dismissed = 0, questions = 0, answered = 0, working = 0, waiting = 0
         for result in results {
             switch result.outcome {
             case .open: waiting += 1
+            case .working: working += 1
             case .resolved: resolved += 1
             case .dismissed: dismissed += 1
             case .question: questions += 1
@@ -152,6 +182,7 @@ public struct PinResult: Equatable, Sendable, Identifiable {
             dismissed > 0 ? "\(dismissed) dismissed" : nil,
             questions > 0 ? "\(questions) \(questions == 1 ? "question" : "questions")" : nil,
             answered > 0 ? "\(answered) answered" : nil,
+            working > 0 ? "\(working) working" : nil,
             waiting > 0 ? "\(waiting) waiting" : nil
         ]
         return parts.compactMap { $0 }.joined(separator: " · ")
@@ -177,11 +208,14 @@ public enum SentPinMark: Equatable, Sendable {
     case progress
     case symbol(String, PinOutcome.Tone)
 
-    /// A glyph wins whatever the delivery is doing. Open and answered pins (the agent has the reply)
-    /// spin while the Send is on its way to the agent or with it, and show their number once nothing
-    /// is in flight: nobody picked it up, it finished, failed or was only saved.
-    public static func resolve(outcome: PinOutcome, delivery: DeliveryStage?) -> SentPinMark {
+    /// A glyph wins whatever the delivery is doing. Open, working and answered pins (the agent has the
+    /// reply) spin while the Send is on its way to the agent or with it, and show their number once
+    /// nothing is in flight: nobody picked it up, it finished, failed or was only saved.
+    /// `acknowledgesPins`: the agent acknowledged a pin of this Send, so it says which ones it's on; an
+    /// open pin it hasn't reached shows its number instead of spinning.
+    public static func resolve(outcome: PinOutcome, delivery: DeliveryStage?, acknowledgesPins: Bool = false) -> SentPinMark {
         if let symbol = outcome.symbol { return .symbol(symbol, outcome.tone) }
+        if acknowledgesPins, outcome == .open { return .number }
         guard let delivery, spins(during: delivery) else { return .number }
         return .progress
     }
@@ -198,7 +232,7 @@ public enum SentPinMark: Equatable, Sendable {
 public enum NoteFilter: String, CaseIterable, Sendable {
     /// Saved but not sent yet.
     case current
-    /// Sent and still with the agent: waiting, asked about, or answered.
+    /// Sent and still with the agent: waiting, being worked on, asked about, or answered.
     case inProgress
     /// The agent resolved it.
     case resolved
@@ -231,7 +265,7 @@ public enum NoteFilter: String, CaseIterable, Sendable {
         switch outcome {
         case .resolved: return .resolved
         case .dismissed: return .failed
-        case .question, .answered: return .inProgress
+        case .working, .question, .answered: return .inProgress
         case .open:
             switch delivery {
             case .done: return .resolved

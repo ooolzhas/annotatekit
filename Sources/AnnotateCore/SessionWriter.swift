@@ -89,12 +89,23 @@ public struct SessionStatus: Codable, Sendable, Equatable {
     /// Per-pin results reported by the agent. Optional so status.json files written before pins
     /// existed still decode (schema changes are additive only).
     public var pins: [PinStatus]?
+    /// Pins the agent said it started on (`annotate ack`, annotation_acknowledge), the most recent
+    /// last. A list on the session rather than a pin state: apps built before it existed decode pin
+    /// states strictly and would reject an unknown one, while an unknown key is ignored.
+    public var acknowledged: [Int]?
 
-    public init(state: State, message: String? = nil, updatedAt: Date = Date(), pins: [PinStatus]? = nil) {
+    public init(
+        state: State,
+        message: String? = nil,
+        updatedAt: Date = Date(),
+        pins: [PinStatus]? = nil,
+        acknowledged: [Int]? = nil
+    ) {
         self.state = state
         self.message = message
         self.updatedAt = updatedAt
         self.pins = pins
+        self.acknowledged = acknowledged
     }
 
     public var isFinal: Bool { state == .done || state == .failed }
@@ -112,13 +123,55 @@ public struct PinStatus: Codable, Sendable, Equatable {
     /// answered only: the user's reply
     public var reply: String?
     public var updatedAt: Date
+    /// The conversation about this pin, oldest first: each question the agent asked and each reply
+    /// it was handed. The agent side appends to it; `note` and `reply` keep the latest question and
+    /// reply for apps built before threads. Optional: older files have none (see `messages`).
+    public var thread: [PinMessage]?
 
-    public init(index: Int, state: State, note: String? = nil, reply: String? = nil, updatedAt: Date = Date()) {
+    public init(
+        index: Int,
+        state: State,
+        note: String? = nil,
+        reply: String? = nil,
+        updatedAt: Date = Date(),
+        thread: [PinMessage]? = nil
+    ) {
         self.index = index
         self.state = state
         self.note = note
         self.reply = reply
         self.updatedAt = updatedAt
+        self.thread = thread
+    }
+
+    /// The pin's conversation: `thread`, or for a file written before threads, the one question and
+    /// reply that `note` and `reply` kept (dated `updatedAt`, the only date there is).
+    public var messages: [PinMessage] {
+        if let thread, !thread.isEmpty { return thread }
+        guard state == .question || state == .answered else { return [] }
+        var messages: [PinMessage] = []
+        if let question = note, !question.isEmpty {
+            messages.append(PinMessage(role: .agent, text: question, at: updatedAt))
+        }
+        if state == .answered, let reply, !reply.isEmpty {
+            messages.append(PinMessage(role: .human, text: reply, at: updatedAt))
+        }
+        return messages
+    }
+}
+
+/// One message in a pin's conversation: a question from the agent or a reply from the user.
+public struct PinMessage: Codable, Sendable, Equatable {
+    public enum Role: String, Codable, Sendable { case agent, human }
+
+    public var role: Role
+    public var text: String
+    public var at: Date
+
+    public init(role: Role, text: String, at: Date = Date()) {
+        self.role = role
+        self.text = text
+        self.at = at
     }
 }
 
@@ -189,32 +242,82 @@ public enum SessionInbox {
         return try? AnnotationSession.decoder.decode(SessionStatus.self, from: data)
     }
 
-    /// A status without `pins` keeps the per-pin results already on disk: `annotate status`, the
+    /// A status without `pins` or `acknowledged` keeps what's already on disk: `annotate status`, the
     /// status tool and "received" all write a session-level state and must not wipe what the agent
     /// reported pin by pin.
     public static func writeStatus(_ status: SessionStatus, id: String, in outputDirectory: URL) throws {
         let url = sessionDirectory(id, in: outputDirectory).appendingPathComponent(statusFile)
         var status = status
-        if status.pins == nil, let existing = readStatus(id: id, in: outputDirectory)?.pins {
-            status.pins = existing
+        if status.pins == nil || status.acknowledged == nil, let existing = readStatus(id: id, in: outputDirectory) {
+            status.pins = status.pins ?? existing.pins
+            status.acknowledged = status.acknowledged ?? existing.acknowledged
         }
         try AnnotationSession.encoder.encode(status).write(to: url, options: .atomic)
     }
 
-    /// Upserts one pin's status (matched by index), keeping the session's state and message. A session
-    /// with no status yet becomes `.working`. Returns the written status.
+    /// Upserts one pin's status (matched by index), keeping the session's state and message. A pin
+    /// written without a thread keeps the conversation it had, so resolving an asked-about pin doesn't
+    /// lose it. A session with no status yet becomes `.working`. Returns the written status.
     @discardableResult
     public static func updatePin(_ pin: PinStatus, id: String, in outputDirectory: URL) throws -> SessionStatus {
         // A pin report means the agent is on it, so an unclaimed session counts as working
         var status = readStatus(id: id, in: outputDirectory) ?? SessionStatus(state: .working)
         var pins = status.pins ?? []
         if let existing = pins.firstIndex(where: { $0.index == pin.index }) {
+            var pin = pin
+            if pin.thread == nil {
+                let kept = pins[existing].messages
+                pin.thread = kept.isEmpty ? nil : kept
+            }
             pins[existing] = pin
         } else {
             pins.append(pin)
         }
         // Sorted so the file (and the app's diffing of it) is stable regardless of report order
         status.pins = pins.sorted { $0.index < $1.index }
+        status.updatedAt = Date()
+        try writeStatus(status, id: id, in: outputDirectory)
+        return status
+    }
+
+    /// Marks the pin `.question` and adds the question to its thread, after any earlier exchange about
+    /// it. The question is dated at least a second after the thread's last message: dates are stored
+    /// to the second, and a reply counts as answering a question at its own second, so asking again
+    /// right after a reply would otherwise take that reply as the new answer. Returns the written status.
+    @discardableResult
+    public static func ask(_ question: String, pin: Int, id: String, in outputDirectory: URL, at date: Date = Date()) throws -> SessionStatus {
+        let earlier = readStatus(id: id, in: outputDirectory)?.pins?.first { $0.index == pin }?.messages ?? []
+        let date = earlier.last.map { max(date, $0.at.addingTimeInterval(1)) } ?? date
+        return try updatePin(
+            PinStatus(
+                index: pin,
+                state: .question,
+                note: question,
+                updatedAt: date,
+                thread: earlier + [PinMessage(role: .agent, text: question, at: date)]
+            ),
+            id: id,
+            in: outputDirectory
+        )
+    }
+
+    /// Records that the agent started on these pins: each moves to the end of `acknowledged` (so the
+    /// last is the one it's on now). A session still in progress becomes `.working` and drops its
+    /// message, so the device names the pin until the agent reports something newer. Returns the
+    /// written status.
+    @discardableResult
+    public static func acknowledge(_ pins: [Int], id: String, in outputDirectory: URL) throws -> SessionStatus {
+        var status = readStatus(id: id, in: outputDirectory) ?? SessionStatus(state: .working)
+        var acknowledged = status.acknowledged ?? []
+        for pin in pins {
+            acknowledged.removeAll { $0 == pin }
+            acknowledged.append(pin)
+        }
+        status.acknowledged = acknowledged
+        if !status.isFinal {
+            status.state = .working
+            status.message = nil
+        }
         status.updatedAt = Date()
         try writeStatus(status, id: id, in: outputDirectory)
         return status
@@ -251,11 +354,16 @@ public enum SessionInbox {
             .map(\.element)
     }
 
-    /// Marks the reply's pin `.answered` (note keeps the question, reply = text), so each reply is delivered once.
+    /// Marks the reply's pin `.answered` (note keeps the question, reply = text) and adds the reply to
+    /// its thread, so each reply is delivered once.
     public static func markAnswered(_ reply: PinReply, id: String, in outputDirectory: URL) throws {
-        let question = readStatus(id: id, in: outputDirectory)?.pins?.first { $0.index == reply.index }?.note
+        let asked = readStatus(id: id, in: outputDirectory)?.pins?.first { $0.index == reply.index }
+        var thread = asked?.messages ?? []
+        let message = PinMessage(role: .human, text: reply.text, at: reply.at)
+        // A reply delivered again (its earlier mark failed) is in the thread once
+        if !thread.contains(message) { thread.append(message) }
         try updatePin(
-            PinStatus(index: reply.index, state: .answered, note: question, reply: reply.text),
+            PinStatus(index: reply.index, state: .answered, note: asked?.note, reply: reply.text, thread: thread),
             id: id,
             in: outputDirectory
         )

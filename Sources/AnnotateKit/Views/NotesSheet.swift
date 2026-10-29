@@ -4,8 +4,9 @@
 // `NoteFilter`, from the last Send and every earlier one of the last 48 hours, grouped by Send),
 // each with its count. Current rows open on the comment card with a tap (pins on another
 // screen can't open here, so they only list) and delete with a swipe (a trash icon, no label); Clear
-// All (a trash icon) clears them after an alert asks. Sent rows show the same spinner / glyph / number as their badges, with
-// Reply on a question of the last Send. A tag with nothing in it shows an empty state. Row copy comes from `PinResult`
+// All (a trash icon) clears them after an alert asks. Sent rows show the same spinner / glyph / number as their badges and
+// the pin's conversation with the agent, with Reply on a question of the last Send. A tag with nothing in it shows an
+// empty state. Row copy comes from `PinResult`
 // and `PinOutcome` in AnnotateCore.
 
 #if DEBUG && canImport(UIKit)
@@ -210,7 +211,13 @@ struct NotesSheet: View {
     private func sentRow(_ note: SentNote) -> some View {
         let result = note.result
         let outcome = result.outcome
-        let mark = SentPinMark.resolve(outcome: outcome, delivery: note.isLatest ? controller.delivery : nil)
+        let mark = SentPinMark.resolve(
+            outcome: outcome,
+            delivery: note.isLatest ? controller.delivery : nil,
+            acknowledgesPins: note.isLatest && !controller.acknowledgedPins.isEmpty
+        )
+        let agent = controller.agent?.agent ?? ""
+        let thread = result.earlierMessages.suffix(OverlayChrome.threadLimit).map { OverlayChrome.threadLine($0, agent: agent) }
         return HStack(spacing: Self.rowSpacing) {
             HStack(spacing: Self.rowSpacing) {
                 NoteBadge(number: result.index, mark: mark)
@@ -223,6 +230,13 @@ struct NotesSheet: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                    // The pin's conversation with the agent, after the comment it started from
+                    ForEach(Array(thread.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

@@ -124,8 +124,11 @@ Tools:
   while an agent waits.
 - `get_annotation_session` returns the prompt plus annotated screens and crops as images.
 - `annotation_status` reports progress back to the device.
+- `annotation_acknowledge` says which pin the agent is starting on; the device shows "Working on
+  note 2" and spins only that pin's badge.
 - `annotation_resolve` / `annotation_dismiss` report per pin.
-- `annotation_ask` asks the user about one pin and waits for the answer.
+- `annotation_ask` asks the user about one pin and waits for the answer. Asking again on the same
+  pin continues the conversation: the reply card and the notes sheet show the earlier exchange.
 - `list_annotation_sessions` lists recent sessions.
 </details>
 
@@ -171,6 +174,7 @@ worked on still shows as in progress on the device, so the app never waits on a 
 Agents report with the MCP tools above, or with the CLI:
 
 ```sh
+annotate ack <id> <pin>                 # starting on this pin
 annotate resolve <id> <pin> "what changed"
 annotate dismiss <id> <pin> "why not"
 annotate ask <id> <pin> "question"      # waits for the answer and prints it

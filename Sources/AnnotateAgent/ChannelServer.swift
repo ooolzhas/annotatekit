@@ -6,6 +6,7 @@
 //   list_annotation_sessions
 //   annotation_wait         blocks until Sends (or replies to questions) arrive, batches them and
 //                           returns them; hands-free delivery for any MCP client, no channels needed
+//   annotation_acknowledge  the agent started on a pin; the app shows which note it's on
 //   annotation_resolve / annotation_dismiss   per-pin result the app shows next to each note
 //   annotation_ask          asks the user about one pin and waits for the reply typed on the device
 // Wire format: newline-delimited JSON-RPC 2.0 on stdin/stdout. Channel capability is declared as
@@ -44,7 +45,8 @@ public actor ChannelServer {
         reinstalling". The user sees these statuses on the device. \
         Without channel events, call annotation_wait in a loop: it returns each new session (and \
         the user's answers to your questions) as it arrives. \
-        Report each pin as you finish it with annotation_resolve (what changed) or \
+        When you start on a pin, call annotation_acknowledge so the device shows which note you're \
+        on. Report each pin as you finish it with annotation_resolve (what changed) or \
         annotation_dismiss (why not). \
         When a pin is unclear, ask with annotation_ask; the user answers on the device.
         """
@@ -341,6 +343,19 @@ public actor ChannelServer {
                 ]
             ],
             [
+                "name": "annotation_acknowledge",
+                "description": "Say you're starting on one pin of a session; the device shows which note you're on "
+                    + "until you report it with annotation_resolve or annotation_dismiss.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "session_id": ["type": "string"],
+                        "pin": ["type": "integer", "description": "The note number from the prompt."]
+                    ],
+                    "required": ["session_id", "pin"]
+                ]
+            ],
+            [
                 "name": "annotation_resolve",
                 "description": "Mark one pin of a session as done; the user sees the summary next to that note in the app.",
                 "inputSchema": [
@@ -417,6 +432,9 @@ public actor ChannelServer {
                 timeout: Self.seconds(arguments["timeout_seconds"], default: Self.waitDefaultSeconds, max: Self.waitMaxSeconds),
                 batch: Self.seconds(arguments["batch_seconds"], default: Self.batchDefaultSeconds, max: Self.batchMaxSeconds)
             ))
+        case "annotation_acknowledge":
+            noteAgentActivity()
+            return .done(acknowledge(arguments))
         case "annotation_resolve":
             noteAgentActivity()
             return .done(setPin(arguments, state: .resolved, noteKey: "summary"))
@@ -540,6 +558,20 @@ public actor ChannelServer {
         return ["content": [Self.text("Pin \(target.pin) of \(target.sessionID): \(state.rawValue)")]]
     }
 
+    private func acknowledge(_ arguments: [String: Any]) -> [String: Any] {
+        let target: (sessionID: String, pin: Int)
+        switch pinTarget(arguments) {
+        case .success(let value): target = value
+        case .failure(let error): return toolError(error.message)
+        }
+        do {
+            try SessionInbox.acknowledge([target.pin], id: target.sessionID, in: feed.outputDirectory)
+        } catch {
+            return toolError("Couldn't acknowledge pin \(target.pin) of \(target.sessionID): \(error.localizedDescription)")
+        }
+        return ["content": [Self.text("Pin \(target.pin) of \(target.sessionID): acknowledged")]]
+    }
+
     /// Writes the question now (so the app shows it at once), then waits for the answer in a Task.
     private func ask(_ arguments: [String: Any]) -> ToolOutcome {
         let target: (sessionID: String, pin: Int)
@@ -551,10 +583,7 @@ public actor ChannelServer {
             return .done(toolError("question is required."))
         }
         do {
-            try SessionInbox.updatePin(
-                PinStatus(index: target.pin, state: .question, note: question),
-                id: target.sessionID, in: feed.outputDirectory
-            )
+            try SessionInbox.ask(question, pin: target.pin, id: target.sessionID, in: feed.outputDirectory)
         } catch {
             return .done(toolError("Couldn't ask about pin \(target.pin) of \(target.sessionID): \(error.localizedDescription)"))
         }

@@ -5,6 +5,7 @@
 //                                    background watcher
 //   annotate run [--fresh] [--permission-mode M] [-- <claude args>]   headless claude -p per session
 //   annotate status <id|latest> <working|done|failed> [message…]
+//   annotate ack <id|latest> <pin> [pin…]            the agent started on these pins
 //   annotate resolve <id|latest> <pin> [summary…]     per-pin result, shown on the device
 //   annotate dismiss <id|latest> <pin> [reason…]
 //   annotate ask <id|latest> <pin> <question…> [--wait <seconds>]   blocks for the user's reply
@@ -12,7 +13,7 @@
 //   annotate list
 //   annotate hook stop               Claude Code Stop hook: reads the hook's JSON on stdin and blocks
 //                                    the stop while a Send from this conversation is still open
-// resolve / dismiss / ask are the CLI counterparts of the MCP per-pin tools, so an agent driven by
+// ack / resolve / dismiss / ask are the CLI counterparts of the MCP per-pin tools, so an agent driven by
 // `annotate watch` (no MCP) can report pins and ask questions too.
 // Every command takes --dir <path>; default is .annotate at the project root above the cwd.
 // mcp, watch and run also keep a heartbeat (the app's connection dot) and copy Sends from paired
@@ -26,6 +27,7 @@ public enum Command: Equatable, Sendable {
     case watch(once: Bool)
     case run(fresh: Bool, permissionMode: String, claudeArguments: [String])
     case status(sessionID: String, state: SessionStatus.State, message: String?)
+    case acknowledge(sessionID: String, pins: [Int])
     case resolve(sessionID: String, pin: Int, summary: String?)
     case dismiss(sessionID: String, pin: Int, reason: String?)
     case ask(sessionID: String, pin: Int, question: String, wait: Double)
@@ -52,6 +54,8 @@ public enum Command: Equatable, Sendable {
                                        run `claude -p` for every new session, unattended
           annotate status <id|latest> <working|done|failed> [message]
                                        report progress back to the app
+          annotate ack <id|latest> <pin> [pin…]
+                                       say which pin you're starting on; the device shows it
           annotate resolve <id|latest> <pin> [summary]
                                        mark one pin done, with what changed
           annotate dismiss <id|latest> <pin> [reason]
@@ -135,6 +139,10 @@ public enum Command: Equatable, Sendable {
             }
             let message = rest.count > 2 ? rest[2...].joined(separator: " ") : nil
             return Invocation(command: .status(sessionID: rest[0], state: state, message: message), directory: directory)
+        case "ack", "acknowledge":
+            guard rest.count >= 2 else { throw ParseError.missingArguments("annotate ack <id|latest> <pin> [pin…]") }
+            let pins = try rest.dropFirst().map(parsePin)
+            return Invocation(command: .acknowledge(sessionID: rest[0], pins: pins), directory: directory)
         case "resolve", "dismiss":
             guard rest.count >= 2 else { throw ParseError.missingArguments("annotate \(name) <id|latest> <pin> [\(name == "resolve" ? "summary" : "reason")]") }
             let pin = try parsePin(rest[1])
@@ -271,6 +279,19 @@ public enum Command: Equatable, Sendable {
                 return 1
             }
 
+        case .acknowledge(let requested, let pins):
+            guard let sessionID = feed.resolve(requested) else {
+                writeError("annotate: no sessions in \(output.path)")
+                return 1
+            }
+            do {
+                try SessionInbox.acknowledge(pins, id: sessionID, in: output)
+                return 0
+            } catch {
+                writeError("annotate: couldn't acknowledge pins of \(sessionID): \(error.localizedDescription)")
+                return 1
+            }
+
         case .resolve(let requested, let pin, let summary):
             return writePin(PinStatus(index: pin, state: .resolved, note: summary), requested: requested, feed: feed, output: output)
 
@@ -314,9 +335,9 @@ public enum Command: Equatable, Sendable {
         }
     }
 
-    /// Marks the pin `.question`, then polls for the user's reply to it until `wait` elapses. The reply
-    /// goes to stdout (exit 0); a timeout leaves the question open, so the reply still reaches the agent
-    /// later through `annotate watch`.
+    /// Marks the pin `.question` (adding the question to its thread), then polls for the user's reply
+    /// to it until `wait` elapses. The reply goes to stdout (exit 0); a timeout leaves the question
+    /// open, so the reply still reaches the agent later through `annotate watch`.
     private static func ask(
         _ question: String,
         pin: Int,
@@ -330,7 +351,7 @@ public enum Command: Equatable, Sendable {
             return 1
         }
         do {
-            try SessionInbox.updatePin(PinStatus(index: pin, state: .question, note: question), id: sessionID, in: output)
+            try SessionInbox.ask(question, pin: pin, id: sessionID, in: output)
         } catch {
             writeError("annotate: couldn't ask about pin \(pin) of \(sessionID): \(error.localizedDescription)")
             return 1

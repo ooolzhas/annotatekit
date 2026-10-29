@@ -1,5 +1,5 @@
 // The agent loop on the Mac side: annotation_wait (async delivery of Sends and replies, wait
-// presence, cancellation), the per-pin tools (resolve / dismiss / ask), SessionFeed's reply queue,
+// presence, cancellation), the per-pin tools (acknowledge / resolve / dismiss / ask), SessionFeed's reply queue,
 // the CLI's per-pin commands, and the device mirror pulling replies.json back while a question is open.
 
 import AnnotateCore
@@ -254,6 +254,26 @@ enum LoopHarness {
         #expect(status.pins?.first?.note == "Already 16pt")
     }
 
+    @Test func acknowledgeRecordsThePinTheAgentIsOn() async throws {
+        let output = try AgentFixtures.tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        let (server, sink) = LoopHarness.makeServer(output)
+        let id = try AgentFixtures.writeSession(to: output)
+        await LoopHarness.initialize(server, client: "cursor-vscode")
+
+        await LoopHarness.call(server, id: 2, "annotation_acknowledge", ["session_id": id, "pin": 1])
+        let result = try #require(await LoopHarness.response(to: 2, in: sink, within: 1))
+        #expect(result["isError"] == nil)
+        let status = try #require(SessionInbox.readStatus(id: id, in: output))
+        #expect(status.state == .working)
+        #expect(status.acknowledged == [1])
+
+        await LoopHarness.call(server, id: 3, "annotation_acknowledge", ["session_id": id, "pin": 4])
+        let unknown = try #require(await LoopHarness.response(to: 3, in: sink, within: 1))
+        #expect(unknown["isError"] as? Bool == true)
+        #expect(SessionInbox.readStatus(id: id, in: output)?.acknowledged == [1])
+    }
+
     @Test func unknownPinsAndSessionsAreErrors() async throws {
         let output = try AgentFixtures.tempDir()
         defer { try? FileManager.default.removeItem(at: output) }
@@ -301,6 +321,8 @@ enum LoopHarness {
         #expect(pin.state == .answered)
         #expect(pin.note == "Which blue?")
         #expect(pin.reply == "The brand one")
+        #expect(pin.thread?.map(\.role) == [.agent, .human])
+        #expect(pin.thread?.map(\.text) == ["Which blue?", "The brand one"])
     }
 
     @Test func askTimesOutWithNoAnswerYet() async throws {
@@ -397,6 +419,18 @@ enum LoopHarness {
         #expect(try Command.parse(["ask", "--wait", "2.5", "abc", "1", "why?"]).command
             == .ask(sessionID: "abc", pin: 1, question: "why?", wait: 2.5))
         #expect(try Command.parse(["resolve", "abc", "1", "--dir", "x/.annotate"]).directory == "x/.annotate")
+        #expect(try Command.parse(["ack", "latest", "2"]).command == .acknowledge(sessionID: "latest", pins: [2]))
+        #expect(try Command.parse(["acknowledge", "abc", "1", "3"]).command == .acknowledge(sessionID: "abc", pins: [1, 3]))
+    }
+
+    @Test func ackCommandRecordsThePins() async throws {
+        let output = try AgentFixtures.tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        let id = try AgentFixtures.writeSession(to: output)
+
+        let invocation = try Command.parse(["ack", "latest", "1", "--dir", output.path])
+        #expect(await Command.execute(invocation) == 0)
+        #expect(SessionInbox.readStatus(id: id, in: output)?.acknowledged == [1])
     }
 
     @Test func rejectsBadPins() {
@@ -407,6 +441,8 @@ enum LoopHarness {
         #expect(throws: Command.ParseError.missingValue("--wait")) { try Command.parse(["ask", "latest", "1", "why?", "--wait"]) }
         #expect(throws: (any Error).self) { try Command.parse(["ask", "latest", "1"]) }
         #expect(throws: (any Error).self) { try Command.parse(["resolve", "latest"]) }
+        #expect(throws: Command.ParseError.invalidPin("0")) { try Command.parse(["ack", "latest", "0"]) }
+        #expect(throws: (any Error).self) { try Command.parse(["ack", "latest"]) }
     }
 
     @Test func replyLineNamesThePinAndText() {

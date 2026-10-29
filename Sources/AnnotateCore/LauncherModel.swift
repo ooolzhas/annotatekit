@@ -54,6 +54,43 @@ public enum DeliveryStage: Equatable, Sendable {
         case .failed, .notSaved: .error
         }
     }
+
+    /// A Send's stage from its status.json. A final state maps to its final stage. Otherwise an open
+    /// question (lowest pin first) wins over the session state, since the agent is blocked on the
+    /// user. A `working` session without a message of its own names the pin the agent is on
+    /// (`activePin`). `pins` are the statuses to judge by, which may carry replies the app applied
+    /// before the agent saw them.
+    public static func resolve(status: SessionStatus, pins: [PinStatus]) -> DeliveryStage {
+        if !status.isFinal, let asked = pins.filter({ $0.state == .question }).map(\.index).min() {
+            return .question(pin: asked)
+        }
+        return switch status.state {
+        case .delivered: .delivered
+        case .received: .received
+        case .working: .working(message: cleaned(status.message) ?? activePin(status: status, pins: pins).map(workingMessage))
+        case .done: .done(message: status.message)
+        case .failed: .failed(message: status.message)
+        }
+    }
+
+    /// The pin the agent is on: the last one it acknowledged that it hasn't resolved, dismissed or
+    /// asked about since. An answered pin counts: the agent has the reply and goes on with it.
+    public static func activePin(status: SessionStatus, pins: [PinStatus]) -> Int? {
+        let settled = Set(pins.filter { $0.state != .answered }.map(\.index))
+        return status.acknowledged?.last { !settled.contains($0) }
+    }
+
+    /// "Working on note 2". No Figma frame (derived), worded like the question stage's "Question on note 2".
+    public static func workingMessage(pin: Int) -> String {
+        "Working on note \(pin)"
+    }
+
+    private static func cleaned(_ message: String?) -> String? {
+        guard let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
 }
 
 /// The feedback a delivery stage change plays; AnnotateKit maps it onto UIKit's generators.

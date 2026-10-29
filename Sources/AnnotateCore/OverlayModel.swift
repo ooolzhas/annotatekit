@@ -111,6 +111,20 @@ public enum OverlayChrome: Equatable, Sendable {
         "\(ReviewHint.displayName(agent)) asks about note \(pin)"
     }
 
+    /// The earlier messages of a pin's conversation shown on the reply card and a notes row, newest
+    /// kept. No Figma frame (derived): enough for the last exchange or two without crowding the card.
+    public static let threadLimit = 4
+
+    /// One message of a pin's conversation, e.g. "Claude: Which blue?" or "You: The darker one". No
+    /// Figma frame (derived); the agent's name reads as on the hint line.
+    public static func threadLine(_ message: PinMessage, agent: String) -> String {
+        let speaker = switch message.role {
+        case .agent: ReviewHint.displayName(agent)
+        case .human: "You"
+        }
+        return "\(speaker): \(message.text)"
+    }
+
     /// Send is live only on the review bar with at least one pin; while composing or replying the
     /// card's ↑ governs, so Send isn't shown.
     public var canSend: Bool {

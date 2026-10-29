@@ -168,7 +168,7 @@ enum AgentFixtures {
         let tools = try #require((sink.messages.last?["result"] as? [String: Any])?["tools"] as? [[String: Any]])
         #expect(tools.compactMap { $0["name"] as? String } == [
             "get_annotation_session", "annotation_status", "list_annotation_sessions",
-            "annotation_wait", "annotation_resolve", "annotation_dismiss", "annotation_ask"
+            "annotation_wait", "annotation_acknowledge", "annotation_resolve", "annotation_dismiss", "annotation_ask"
         ])
     }
 
