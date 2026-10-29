@@ -7,7 +7,10 @@
 // Wire format: newline-delimited JSON-RPC 2.0 on stdin/stdout. Channel capability is declared as
 // `experimental["claude/channel"]`; events go out as `notifications/claude/channel`.
 // Claude Code must be started with `--dangerously-load-development-channels server:annotate` for
-// events to arrive; without it they're dropped silently and the tools still work.
+// events to arrive; without it they're dropped silently and the tools still work. Because a drop is
+// silent, a pushed session counts as delivered only once Claude is seen acting on one: until then,
+// an event nobody answers within `ackTimeout` is released for a watcher or the tools, and the
+// server stops claiming. Clients other than Claude Code never get pushes; they read with the tools.
 
 import AnnotateCore
 import Foundation
@@ -36,23 +39,50 @@ public actor ChannelServer {
     let send: @Sendable (Data) -> Void
     let maxImages: Int
     let maxImageBytes: Int
+    /// Seconds a pushed session may go unanswered before it's handed back (see the header).
+    let ackTimeout: TimeInterval
     private var isInitialized = false
     private var announced: Set<String> = []
+    /// `clientInfo.name` from initialize: "claude-code", "cursor-vscode"…
+    private(set) var clientName: String?
+    /// Claude has answered a pushed session, so channel events reach it.
+    private(set) var channelConfirmed = false
+    /// A pushed session went unanswered: stop claiming and leave sessions to other consumers.
+    private(set) var channelSilent = false
+    private var awaitingAck: [String: Date] = [:]
 
-    public init(feed: SessionFeed, maxImages: Int = 10, maxImageBytes: Int = 6_000_000, send: @escaping @Sendable (Data) -> Void) {
+    public init(
+        feed: SessionFeed,
+        maxImages: Int = 10,
+        maxImageBytes: Int = 6_000_000,
+        ackTimeout: TimeInterval = 45,
+        send: @escaping @Sendable (Data) -> Void
+    ) {
         self.feed = feed
         self.maxImages = maxImages
         self.maxImageBytes = maxImageBytes
+        self.ackTimeout = ackTimeout
         self.send = send
+    }
+
+    /// What this server tells the app through its heartbeat: push only once a channel is confirmed.
+    public func presence() -> AgentPresence {
+        AgentPresence(
+            agent: AgentIdentity.name(forClient: clientName),
+            mode: channelConfirmed ? .push : .pull,
+            via: channelConfirmed ? "channel" : "mcp"
+        )
     }
 
     // MARK: Stdio
 
     /// Serves on stdin/stdout until stdin closes, polling for new sessions twice a second.
-    public static func serveStdio(feed: SessionFeed) async {
+    /// `alongside` runs for as long as the server does and is cancelled (and awaited) when it ends.
+    public static func serveStdio(feed: SessionFeed, alongside: (@Sendable (ChannelServer) async -> Void)? = nil) async {
         let server = ChannelServer(feed: feed) { data in
             FileHandle.standardOutput.write(data)
         }
+        let side = Task { await alongside?(server) }
         let (lines, continuation) = AsyncStream.makeStream(of: String.self)
         let reader = Thread {
             while let line = readLine(strippingNewline: true) {
@@ -71,6 +101,8 @@ public actor ChannelServer {
             await server.handle(line)
         }
         poller.cancel()
+        side.cancel()
+        await side.value
     }
 
     // MARK: JSON-RPC
@@ -84,6 +116,7 @@ public actor ChannelServer {
 
         switch method {
         case "initialize":
+            clientName = (params["clientInfo"] as? [String: Any])?["name"] as? String
             respond(to: id, result: initializeResult())
         case "notifications/initialized":
             isInitialized = true
@@ -102,12 +135,53 @@ public actor ChannelServer {
         }
     }
 
-    /// Announces sessions sent since startup that no other consumer has claimed.
-    public func poll() {
+    /// Announces sessions sent since startup that no other consumer has claimed, and hands back
+    /// pushes that went unanswered.
+    public func poll(now: Date = Date()) {
         guard isInitialized else { return }
+        releaseUnanswered(now: now)
+        guard pushesSessions(now: now) else { return }
         for sessionID in feed.claimPending(as: .delivered) where announced.insert(sessionID).inserted {
+            awaitingAck[sessionID] = now
             announce(sessionID)
         }
+    }
+
+    /// Only Claude Code takes channel events, and an unconfirmed channel yields to a watcher or
+    /// headless runner in the same folder: they deliver for certain.
+    private func pushesSessions(now: Date) -> Bool {
+        guard AgentIdentity.isClaudeCode(client: clientName), !channelSilent else { return false }
+        if channelConfirmed { return true }
+        let others = AgentPresenceFile.liveHeartbeats(in: feed.outputDirectory, now: now)
+        return !others.contains { $0.via == "watch" || $0.via == "run" }
+    }
+
+    private func releaseUnanswered(now: Date) {
+        guard !channelConfirmed else {
+            awaitingAck.removeAll()
+            return
+        }
+        for (sessionID, sentAt) in awaitingAck where now.timeIntervalSince(sentAt) > ackTimeout {
+            awaitingAck[sessionID] = nil
+            if SessionInbox.release(id: sessionID, in: feed.outputDirectory) {
+                announced.remove(sessionID)
+            }
+            if !channelSilent {
+                channelSilent = true
+                FileHandle.standardError.write(Data((
+                    "annotate: channel events aren't reaching Claude (start Claude Code with "
+                        + "--dangerously-load-development-channels, or run `annotate watch`); "
+                        + "leaving sessions for the tools\n").utf8))
+            }
+        }
+    }
+
+    /// Claude called a tool while a push was waiting: the channel works.
+    private func noteAgentActivity() {
+        guard !awaitingAck.isEmpty else { return }
+        channelConfirmed = true
+        channelSilent = false
+        awaitingAck.removeAll()
     }
 
     private func initializeResult() -> [String: Any] {
@@ -175,8 +249,10 @@ public actor ChannelServer {
         let arguments = params["arguments"] as? [String: Any] ?? [:]
         switch params["name"] as? String {
         case "get_annotation_session":
+            noteAgentActivity()
             return getSession(arguments["session_id"] as? String)
         case "annotation_status":
+            noteAgentActivity()
             return setStatus(arguments)
         case "list_annotation_sessions":
             return listSessions()

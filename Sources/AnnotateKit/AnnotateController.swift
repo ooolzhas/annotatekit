@@ -113,6 +113,8 @@ final class AnnotateController {
     /// Progress of the most recent Send, read back from the bundle's status.json; nil once the
     /// launcher has gone back to idle.
     private(set) var delivery: DeliveryStage?
+    /// The agent listening for Sends, from `agent.json`; nil when none is (the pill's dot).
+    private(set) var agent: AgentPresence?
     /// Top of the software keyboard (or hardware-keyboard bar) in overlay points while it's up.
     private(set) var keyboardTop: CGFloat?
 
@@ -129,6 +131,8 @@ final class AnnotateController {
     @ObservationIgnored private var deliveryHold: Task<Void, Never>?
     /// The latest Send's write completion; a newer Send cancels it so a stale outcome is dropped.
     @ObservationIgnored private var deliveryWrite: Task<Void, Never>?
+    @ObservationIgnored private var presenceTask: Task<Void, Never>?
+    @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var launchStart: Task<Void, Never>?
     @ObservationIgnored private var accessibilityWarmUp: Task<Void, Never>?
     @ObservationIgnored private var isTreeWarm = false
@@ -158,6 +162,9 @@ final class AnnotateController {
     func configure(options: AnnotateOptions, callerFile: String) {
         self.options = options
         self.callerFile = callerFile
+        observeLifecycle()
+        startPresence()
+        resumeDelivery()
     }
 
     func updateLayout(bounds: CGRect, safeInsets: UIEdgeInsets) {
@@ -555,7 +562,7 @@ final class AnnotateController {
         let appWindow = ElementScanner.appWindows(excluding: window).first
         let job = SendJob(
             sessionID: SessionWriter.makeSessionID(),
-            app: .current,
+            app: .current(installFile: callerFile),
             device: .current(window: appWindow ?? window),
             captures: captures,
             annotations: outgoing,
@@ -601,6 +608,12 @@ final class AnnotateController {
                 self.delivery = .notSaved
                 self.clearDelivery(ifStill: .notSaved, after: LauncherStatus.finalHold)
                 return
+            }
+            if self.agent == nil {
+                // Nothing is listening: say so now rather than after `unclaimedAfter`. Tracking still
+                // runs, so an agent that connects in time picks it up and narrates over this.
+                self.delivery = .noAgent
+                self.clearDelivery(ifStill: .noAgent, after: LauncherStatus.finalHold)
             }
             self.trackDelivery(id: job.sessionID, in: job.outputDirectory)
         }
@@ -943,7 +956,7 @@ final class AnnotateController {
 
     /// How long status.json is polled after a Send (the existing cap). Past it the agent is
     /// presumed gone, and a stuck non-final stage is cleared so the pill shows pending pins again.
-    static let deliveryTrackingLimit: TimeInterval = 3600
+    nonisolated static let deliveryTrackingLimit: TimeInterval = 3600
 
     /// Polls status.json written by the receiving agent; the launcher pill narrates each stage.
     private func trackDelivery(id: String, in output: URL) {
@@ -987,6 +1000,27 @@ final class AnnotateController {
         }
     }
 
+    /// Seconds after an agent's final status during which a fresh launch still shows it: an agent
+    /// that rebuilds and reinstalls the app reports "done" around the relaunch.
+    nonisolated static let resumeFinalWindow: TimeInterval = 60
+
+    /// Picks the newest Send's narration back up after a relaunch, since an agent that reinstalls the
+    /// app restarts it mid-delivery. Skipped when that Send is over an hour old or long finished.
+    private func resumeDelivery() {
+        let output = outputDirectory()
+        Task { [weak self] in
+            let resumable = await Task.detached(priority: .utility) { () -> String? in
+                guard let id = SessionInbox.sessionIDs(in: output).last,
+                      let session = try? SessionInbox.loadSession(id: id, in: output),
+                      Date().timeIntervalSince(session.createdAt) < Self.deliveryTrackingLimit else { return nil }
+                guard let status = SessionInbox.readStatus(id: id, in: output), status.isFinal else { return id }
+                return Date().timeIntervalSince(status.updatedAt) < Self.resumeFinalWindow ? id : nil
+            }.value
+            guard let self, let resumable, self.deliveryTask == nil, self.delivery == nil else { return }
+            self.trackDelivery(id: resumable, in: output)
+        }
+    }
+
     private static func stage(for status: SessionStatus) -> DeliveryStage {
         switch status.state {
         case .delivered: .delivered
@@ -1006,6 +1040,53 @@ final class AnnotateController {
             guard let self, !Task.isCancelled, self.delivery == stage else { return }
             self.delivery = nil
         }
+    }
+
+    // MARK: Presence
+
+    /// Reads `agent.json` every `AgentPresenceFile.interval` while the app is in the foreground. On a
+    /// device it also rewrites `app.json`, which tells the Mac this build is open (so it polls
+    /// quickly) and which checkout it came from. Two tiny files, off the main thread.
+    private func startPresence() {
+        guard presenceTask == nil else { return }
+        let output = outputDirectory()
+        let beacon = projectRoot == nil
+            ? AppBeacon(bundleID: Bundle.main.bundleIdentifier, installFile: callerFile)
+            : nil
+        presenceTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let presence = await Task.detached(priority: .utility) { () -> AgentPresence? in
+                    if let beacon, let data = try? AnnotationSession.encoder.encode(beacon) {
+                        try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+                        try? data.write(to: output.appendingPathComponent(AgentPresenceFile.appFile), options: .atomic)
+                    }
+                    return AgentPresenceFile.read(in: output)
+                }.value
+                guard let self, !Task.isCancelled else { return }
+                if self.agent != presence { self.agent = presence }
+                try? await Task.sleep(for: .seconds(AgentPresenceFile.interval))
+            }
+        }
+    }
+
+    private func stopPresence() {
+        presenceTask?.cancel()
+        presenceTask = nil
+    }
+
+    /// Presence pauses in the background: nobody sees the dot, and on a device a stale `app.json`
+    /// is what tells the Mac to poll slowly.
+    private func observeLifecycle() {
+        guard lifecycleObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        lifecycleObservers = [
+            center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.stopPresence() }
+            },
+            center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.startPresence() }
+            }
+        ]
     }
 
     /// Found once from the `install` call site; nil on a device, where host paths don't exist.

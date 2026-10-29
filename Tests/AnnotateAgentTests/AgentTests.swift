@@ -34,14 +34,14 @@ enum AgentFixtures {
     }
 
     @discardableResult
-    static func writeSession(id: String = SessionWriter.makeSessionID(), to output: URL, withImages: Bool = true) throws -> String {
+    static func writeSession(id: String = SessionWriter.makeSessionID(), to output: URL, withImages: Bool = true, app: AppInfo = AppInfo()) throws -> String {
         let screen = Screen(
             index: 1, capturedAt: Date(), size: AnnotationSize(width: 402, height: 874),
             image: "screens/1.png", annotatedImage: "screens/1-annotated.png"
         )
         let pin = Annotation(index: 1, kind: .point, comment: "more space", frame: AnnotationRect(x: 10, y: 10, width: 44, height: 44), crop: "crops/1.png")
         let session = AnnotationSession(
-            id: id, createdAt: Date(), app: AppInfo(),
+            id: id, createdAt: Date(), app: app,
             device: DeviceInfo(model: "iPhone", systemName: "iOS", systemVersion: "26.0", isSimulator: true,
                                screen: AnnotationSize(width: 402, height: 874), scale: 3, colorScheme: "light",
                                contentSize: "L", orientation: "portrait"),
@@ -69,6 +69,10 @@ enum AgentFixtures {
         #expect(try Command.parse(["status", "latest", "done", "Edited", "HomeView.swift"]).command
             == .status(sessionID: "latest", state: .done, message: "Edited HomeView.swift"))
         #expect(try Command.parse(["status", "abc", "working"]).command == .status(sessionID: "abc", state: .working, message: nil))
+        #expect(try Command.parse(["watch"]).devices)
+        let noDevice = try Command.parse(["--no-device", "mcp"])
+        #expect(noDevice.command == .mcp)
+        #expect(!noDevice.devices)
     }
 
     @Test func rejectsBadInput() {
@@ -136,8 +140,11 @@ enum AgentFixtures {
         return (server, sink)
     }
 
-    func initialize(_ server: ChannelServer) async {
-        await server.handle(AgentFixtures.json(["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": ["protocolVersion": "2026-07-28"]]))
+    func initialize(_ server: ChannelServer, client: String = "claude-code") async {
+        await server.handle(AgentFixtures.json([
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": ["protocolVersion": "2026-07-28", "clientInfo": ["name": client, "version": "2.1"]]
+        ]))
         await server.handle(AgentFixtures.json(["jsonrpc": "2.0", "method": "notifications/initialized"]))
     }
 

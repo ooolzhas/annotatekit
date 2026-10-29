@@ -6,6 +6,8 @@
 //   annotate status <id|latest> <working|done|failed> [message…]
 //   annotate list
 // Every command takes --dir <path>; default is .annotate at the project root above the cwd.
+// mcp, watch and run also keep a heartbeat (the app's connection dot) and copy Sends from paired
+// devices (`DeviceMirror`); --no-device turns the device part off.
 
 import AnnotateCore
 import Foundation
@@ -21,10 +23,12 @@ public enum Command: Equatable, Sendable {
     public struct Invocation: Equatable, Sendable {
         public var command: Command
         public var directory: String?
+        /// Copy Sends from paired devices (on by default; `--no-device` turns it off).
+        public var devices: Bool = true
     }
 
     public static let usage = """
-        annotate — deliver AnnotateKit sessions from the iOS Simulator to Claude Code
+        annotate — deliver AnnotateKit sessions from the Simulator or a device to your coding agent
 
         USAGE
           annotate mcp                 MCP server: pushes each Send into your open Claude Code session
@@ -38,6 +42,7 @@ public enum Command: Equatable, Sendable {
 
         OPTIONS
           --dir <path>                 sessions folder (default: <project root>/.annotate)
+          --no-device                  don't copy Sends from paired iPhones and iPads (mcp, watch, run)
         """
 
     public enum ParseError: Error, Equatable, CustomStringConvertible {
@@ -69,6 +74,14 @@ public enum Command: Equatable, Sendable {
             directory = tokens[flag + 1]
             tokens.removeSubrange(flag...(flag + 1))
         }
+        let devices = !tokens.contains("--no-device")
+        tokens.removeAll { $0 == "--no-device" }
+        var invocation = try parseCommand(tokens, directory: directory, passthrough: passthrough)
+        invocation.devices = devices
+        return invocation
+    }
+
+    private static func parseCommand(_ tokens: [String], directory: String?, passthrough: [String]) throws -> Invocation {
         guard let name = tokens.first else { return Invocation(command: .help, directory: directory) }
         let rest = Array(tokens.dropFirst())
 
@@ -122,26 +135,43 @@ public enum Command: Equatable, Sendable {
             return 0
 
         case .mcp:
-            await ChannelServer.serveStdio(feed: feed)
+            let devices = invocation.devices
+            await ChannelServer.serveStdio(feed: feed) { server in
+                let runtime = makeRuntime(output: output, feed: feed, devices: devices) { await server.presence() }
+                await runtime.run()
+            }
             return 0
 
         case .watch(let once):
+            let agent = currentAgent()
+            let runtime = makeRuntime(output: output, feed: feed, devices: invocation.devices) {
+                AgentPresence(agent: agent, mode: .push, via: "watch")
+            }
+            let background = Task { await runtime.run() }
             writeError("annotate: watching \(output.path)")
-            while !Task.isCancelled {
+            watching: while !Task.isCancelled {
                 for sessionID in feed.claimPending(as: .delivered) {
                     writeLine(watchLine(sessionID: sessionID, directory: feed.sessionDirectory(sessionID)))
-                    if once { return 0 }
+                    if once { break watching }
                 }
                 try? await Task.sleep(for: .milliseconds(500))
             }
+            background.cancel()
+            await background.value
             return 0
 
         case .run(let fresh, let mode, let claudeArguments):
             #if os(macOS) || os(Linux)
             let projectRoot = output.deletingLastPathComponent()
             let runner = HeadlessRunner(workingDirectory: projectRoot, permissionMode: mode, extraArguments: claudeArguments)
+            let runtime = makeRuntime(output: output, feed: feed, devices: invocation.devices) {
+                AgentPresence(agent: "Claude Code", mode: .push, via: "run")
+            }
+            let background = Task { await runtime.run() }
             writeError("annotate: running claude -p for new sessions in \(output.path) (permission mode \(mode))")
             await runner.serve(feed: feed, resumeConversations: !fresh) { writeError($0) }
+            background.cancel()
+            await background.value
             return 0
             #else
             writeError("annotate run isn't supported on this platform")
@@ -170,6 +200,31 @@ public enum Command: Equatable, Sendable {
             }
             return 0
         }
+    }
+
+    /// Heartbeat for a long-lived command, plus the device mirror where devicectl exists.
+    static func makeRuntime(
+        output: URL,
+        feed: SessionFeed,
+        devices: Bool,
+        presence: @escaping AgentRuntime.PresenceProvider
+    ) -> AgentRuntime {
+        var mirror: DeviceMirror?
+        #if os(macOS)
+        if devices, let bridge = DeviceCtlBridge.makeIfAvailable() {
+            mirror = DeviceMirror(outputDirectory: output, cutoffID: feed.cutoffID, bridge: bridge) { writeError($0) }
+        }
+        #endif
+        return AgentRuntime(outputDirectory: output, mirror: mirror, presence: presence)
+    }
+
+    /// The agent whose shell started this process, for the connection dot.
+    static func currentAgent() -> String {
+        #if os(macOS) || os(Linux)
+        AgentIdentity.current() ?? AgentIdentity.fallbackName
+        #else
+        AgentIdentity.fallbackName
+        #endif
     }
 
     /// The line a watcher prints; written so the agent reading it knows what to do.

@@ -19,8 +19,9 @@ Tap, draw and comment on your running app. Hit Send. Your agent gets the screens
 1. In your app in the Simulator, tap the pencil. The screen freezes.
 2. **Tap anything** to pin a comment: an element, or the exact spot. **Drag** a region and sketch
    in it, or flip on **Draw** and scribble anywhere. Retype a label in place.
-3. Hit **Send**. Claude Code, already open on your Mac, starts working. The pencil narrates it:
-   *Delivered → Claude picked it up → Done · Edited AlarmCard.swift*.
+3. Hit **Send**. Claude Code, already open on your Mac, starts working. The pill narrates it:
+   *Delivered → Claude picked it up → Done · Edited AlarmCard.swift*. A green dot on the pill
+   means an agent is listening. It works the same from a physical iPhone, with no extra setup.
 
 No copy/paste and no tagging views: every pixel is annotatable. It works with SwiftUI and UIKit,
 and everything is compiled out of Release builds.
@@ -194,11 +195,24 @@ When you're done, finish with a one-line summary of what you changed.
     crops/1.png …
     session.json                    written last, so it marks the bundle complete (schema v1)
     status.json                     written by the receiver: delivered → received → working → done | failed
+  agent.json                        who is listening (the pill's dot), merged from agents/<pid>.json
 ```
 
 Simulator apps can write to the Mac's file system. AnnotateKit finds your project root by walking up
 from the `#filePath` of `Annotate.install()` to the nearest `.git`, and it polls `status.json` to
-show progress on the pencil. On a physical device, bundles go to the app's Documents folder.
+show progress on the pill.
+
+**On a physical iPhone or iPad** it works the same, with nothing to set up in the app:
+- **Where the bundle goes:** the app writes it to its own Documents folder.
+- **How it reaches the Mac:** whichever `annotate` process is running (`mcp`, `watch` or `run`)
+  copies it into the project's `.annotate/` over the developer connection Xcode uses (`devicectl`,
+  USB or Wi-Fi). That needs no network permission and no Info.plist keys, just a development build
+  on a paired device.
+- **Which checkout gets it:** each bundle records the `Annotate.install()` file it was built from,
+  so a Send reaches the checkout the build came from. With two worktrees, each one's agent gets its
+  own builds' Sends.
+- **Back to the phone:** status and the connection dot are copied back, so the pill narrates there
+  too.
 
 The schema is defined in [`Session.swift`](Sources/AnnotateCore/Session.swift). `AnnotateCore` is
 Foundation-only, so viewers, bots and other tools can depend on it without UIKit.
@@ -260,7 +274,6 @@ skills/                 annotate-setup and annotate-watch (Agent Skills format)
 - Device / Dynamic Type / appearance switcher that re-captures the same screen
 - Live style panel: nudge spacing, radius and color in place, then send the diff
 - Listing in the official MCP Registry
-- Sending sessions from a physical device
 
 ## License
 

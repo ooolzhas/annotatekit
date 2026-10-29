@@ -21,6 +21,11 @@ Monitor tool). Every output line is one new session and says where it is. When t
 deadline passes, re-arm it with the same command. Keep watching until the user says stop, and tell
 them once that you're watching.
 
+While it runs, the app's launcher pill shows a green dot: someone is listening. The watcher also
+copies Sends from a paired iPhone or iPad running a development build of this project, so the
+user can annotate on their phone with no other setup. Run it from the checkout the build came from
+(with several worktrees, each gets its own builds' Sends).
+
 ## For each session
 
 1. `annotate status <id> working "Looking at it"` so the device shows it was picked up.

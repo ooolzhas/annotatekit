@@ -7,8 +7,10 @@
 //   sessions/<id>/session.json written LAST: its presence means the bundle is complete
 //   sessions/<id>/status.json  written by the receiving side (received → working → done/failed);
 //                              the app polls it to show progress. Absent = not picked up yet.
+//   agent.json, agents/<pid>.json   who is listening (AgentPresence.swift)
 // Simulator apps can write to the host file system, so the overlay locates the project root by
-// walking up from the `#filePath` of the `Annotate.install()` call site.
+// walking up from the `#filePath` of the `Annotate.install()` call site. On a device the bundle
+// goes to the app's Documents folder and the Mac copies it over (DeviceMirror).
 
 import Foundation
 
@@ -166,6 +168,18 @@ public enum SessionInbox {
             return false
         }
         try? writeStatus(SessionStatus(state: state), id: id, in: outputDirectory)
+        return true
+    }
+
+    /// Undoes a claim nobody acted on (a channel event that never reached the agent), so another
+    /// consumer can deliver the session. Leaves it alone once the agent has reported anything past
+    /// `delivered`. Returns true when the session is pending again.
+    @discardableResult
+    public static func release(id: String, in outputDirectory: URL, fileManager: FileManager = .default) -> Bool {
+        let dir = sessionDirectory(id, in: outputDirectory)
+        guard let status = readStatus(id: id, in: outputDirectory), status.state == .delivered else { return false }
+        try? fileManager.removeItem(at: dir.appendingPathComponent(statusFile))
+        try? fileManager.removeItem(at: dir.appendingPathComponent(claimMarker))
         return true
     }
 

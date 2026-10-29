@@ -30,12 +30,35 @@ All notable changes to this project are documented here. The format is based on
   now 4pt, and a crop covers the pin's drawing as well as its frame.
 
 ### Added
+- **Sends from a physical iPhone or iPad reach your agent**, with no setup in the app: no network
+  permission and no Info.plist keys. `annotate mcp`, `watch` and `run` copy each new bundle from a
+  paired device's development build over the developer connection (`devicectl`, USB or Wi-Fi) into
+  the project's `.annotate/`. They also copy status back, so the pill narrates on the device too. A
+  Send reaches the checkout the build came from (bundles record the `Annotate.install()` file), so
+  builds from two worktrees go to the agent in each. `--no-device` turns this off.
+- **Connection dot on the launcher pill:**
+  - **Solid green:** an agent that starts on Send is listening (a watcher, the headless runner, or a
+    channel Claude has been seen answering).
+  - **Ring:** an agent is connected but only reads sessions when asked (MCP tools).
+  - **No dot:** nothing is listening. A Send then says "Saved · no agent connected" at once instead
+    of waiting 10 s.
+
+  Every `annotate` process writes a heartbeat to `.annotate/agents/`, and one of them merges the
+  live ones into `.annotate/agent.json`, which the app reads.
+- After a relaunch, the pill picks the newest Send's narration back up. An agent that reinstalls
+  the app to show its change restarts it mid-delivery, and the "Done" now still shows.
 - Reference images: the paperclip opens the photo picker (up to 4 images per pin). Send writes them
   to `attachments/<pin>-<n>.jpg`, and `prompt.md` lists them.
-- **Schema (additive, still v1):** `Annotation.attachments: [String]?`. Pins of any kind can now
+- **Schema (additive, still v1):** `AppInfo.installFile: String?`, `Annotation.attachments: [String]?`. Pins of any kind can now
   carry `sketch` strokes, whose points may extend outside the pin's frame.
 
 ### Fixed
+- `annotate mcp` no longer swallows Sends.
+  - **Without channels:** Claude Code, including the desktop app, drops channel events silently,
+    yet the server marked each session delivered. A push now counts only once Claude is seen acting
+    on one. An unanswered push is handed back after 45 s, the server stops pushing, and a watcher or
+    the tools pick the session up.
+  - **Other agents:** clients other than Claude Code no longer get sessions claimed on their behalf.
 - Pins disappeared after leaving annotate mode and coming back, while the count still included them:
   each start took a new freeze-frame. Starting again on a screen that has pins (same look within a
   small tolerance) now brings back its freeze-frame and pins.

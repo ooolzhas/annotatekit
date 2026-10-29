@@ -25,12 +25,16 @@ public enum DeliveryStage: Equatable, Sendable {
     /// No Figma frame: the bundle couldn't be written, so the prompt was copied instead.
     /// Shortened from the old write-failure toast.
     case notSaved
+    /// No Figma frame: the bundle is saved, but no agent was connected when it went out (no fresh
+    /// `agent.json`). Said at once instead of waiting out `unclaimedAfter`; tracking goes on, so an
+    /// agent that connects in time still picks it up and narrates over this.
+    case noAgent
 
     /// Final stages hold for `LauncherStatus.finalHold` and then the launcher returns to idle;
     /// the others are still waiting on the agent.
     public var isFinal: Bool {
         switch self {
-        case .done, .failed, .notSaved: true
+        case .done, .failed, .notSaved, .noAgent: true
         case .sent, .unclaimed, .delivered, .received, .working: false
         }
     }
@@ -65,7 +69,7 @@ public enum LauncherStatus: Equatable, Sendable {
     /// Idle pill title (Figma 9265:14505).
     public static let idleTitle = "Annotate"
 
-    /// Seconds a final stage (done, failed, notSaved) shows before the launcher returns to idle.
+    /// Seconds a final stage (done, failed, notSaved, noAgent) shows before the launcher returns to idle.
     /// No Figma source: the same 6 s the old delivery ring held, so the result stays readable as long as before.
     public static let finalHold: Double = 6
     /// Seconds "Not picked up yet" shows before the launcher returns to idle (polling continues).
@@ -105,6 +109,8 @@ public enum LauncherStatus: Equatable, Sendable {
                 Self.cleaned(message).map { "Couldn't finish · \($0)" } ?? "Claude couldn't finish"
             case .notSaved:
                 "Couldn't save · prompt copied"
+            case .noAgent:
+                "Saved · no agent connected"
             }
         }
     }

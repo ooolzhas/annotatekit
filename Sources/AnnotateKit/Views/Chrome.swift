@@ -4,8 +4,9 @@
 // sketch strokes, and the review bar shown when no pin is open (9257:13549), whose trash asks for
 // confirmation first. Also owns the launcher pill (9265:14439 / 9265:14691): a solid capsule
 // docked above the home indicator whose title narrates the last Send ("Annotate", "4 comments
-// sent", …) so delivery progress needs no separate toast or ring. The toast below predates the
-// redesign and now only carries in-mode messages.
+// sent", …) so delivery progress needs no separate toast or ring, with a connection dot showing
+// whether an agent is listening. The toast below predates the redesign and now only carries
+// in-mode messages.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -246,22 +247,34 @@ struct LauncherButton: View {
     /// semantic colors: a fixed black pill would vanish into dark app UI.
     private static let fill = Color(uiColor: .label)
     private static let text = Color(uiColor: .systemBackground)
+    /// Connection dot (no Figma frame): solid green when a Send starts an agent by itself, a ring
+    /// when one is connected but only reads when asked, absent when nothing listens.
+    static let dotSize: CGFloat = 7
+    static let dotSpacing: CGFloat = 6
 
     var body: some View {
         let status = controller.launcherStatus
         let frame = controller.launcherFrame
         let maxWidth = max(controller.bounds.width - Self.containerInset * 2, 0)
+        let agent = controller.agent
 
-        Text(status.title)
-            .font(.system(size: Self.titleSize, weight: .medium))
-            .foregroundStyle(Self.text)
-            .lineLimit(1)
-            .truncationMode(.tail)
+        HStack(spacing: Self.dotSpacing) {
+            if let agent {
+                ConnectionDot(mode: agent.mode, ringColor: Self.text)
+                    .transition(.scale.combined(with: .opacity))
+            }
+            Text(status.title)
+                .font(.system(size: Self.titleSize, weight: .medium))
+                .foregroundStyle(Self.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
             .padding(.horizontal, Self.horizontalPadding)
             // The 44pt Figma height wins over its py-8 (22 + 16 = 38)
             .frame(height: AnnotateController.launcherHeight)
             .background(Self.fill, in: Capsule())
             .animation(Self.statusAnimation, value: status)
+            .animation(Self.statusAnimation, value: agent?.mode)
             // The controller's hit frame (OverlayWindow hit-tests it) must match the rendered width,
             // which changes with every title; measured here, before `.position` expands the view
             .onGeometryChange(for: CGSize.self) { $0.size } action: { controller.updateLauncherSize($0) }
@@ -276,6 +289,7 @@ struct LauncherButton: View {
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(status.title)
+            .accessibilityValue(agent?.accessibilityDescription ?? "No agent connected")
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Annotate the screen")
             // Caps the proposal so long titles truncate inside the capsule. It must come after the
@@ -311,6 +325,26 @@ struct ToastView: View {
         // Sits just above the review bar, which OverlayRoot docks 8pt above `chromeBottom`.
         .offset(x: safe.left + 24, y: controller.chromeBottom - 8 - AnnotateController.barHeight - 52)
         .allowsHitTesting(false)
+    }
+}
+/// The launcher's connection dot: filled when a Send will start the agent by itself, a ring when
+/// the agent only reads sessions when asked.
+struct ConnectionDot: View {
+    let mode: AgentPresence.Mode
+    /// The ring uses the pill's title color so it reads on both the light and the dark pill.
+    let ringColor: Color
+
+    var body: some View {
+        Group {
+            switch mode {
+            case .push:
+                Circle().fill(Color(uiColor: .systemGreen))
+            case .pull:
+                Circle().strokeBorder(ringColor.opacity(0.7), lineWidth: 1.5)
+            }
+        }
+        .frame(width: LauncherButton.dotSize, height: LauncherButton.dotSize)
+        .accessibilityHidden(true)
     }
 }
 #endif
