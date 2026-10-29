@@ -1,6 +1,8 @@
 // Pure model of each sent pin's result, as the app's results card shows it. `PinOutcome` turns the
 // agent's `PinStatus` (from status.json) into what the badge, label and detail line read;
 // `PinResult` pairs it with the pin's comment, subject and intent and builds the card's summary line.
+// `SentPinMark` is what a sent pin's badge shows on the frozen screen after a Send: its number, a
+// spinner while the agent has it, or the outcome's glyph.
 // Views switch on these instead of reading `PinStatus` directly, so the rules stay testable on Linux.
 
 import Foundation
@@ -163,6 +165,31 @@ public struct PinResult: Equatable, Sendable, Identifiable {
         case .point: "Spot"
         case .region: "Region"
         case .sketch: "Sketch"
+        }
+    }
+}
+
+/// A sent pin's badge on the frozen screen while annotate mode stays open after a Send
+/// (Figma 9276:28552): a spinner while the agent has the pin (9276:27574), the outcome's glyph once
+/// it reports one (9276:27954, a green checkmark for resolved), otherwise the pin's number (9276:28054).
+public enum SentPinMark: Equatable, Sendable {
+    case number
+    case progress
+    case symbol(String, PinOutcome.Tone)
+
+    /// A glyph wins whatever the delivery is doing. Open and answered pins (the agent has the reply)
+    /// spin while the Send is on its way to the agent or with it, and show their number once nothing
+    /// is in flight: nobody picked it up, it finished, failed or was only saved.
+    public static func resolve(outcome: PinOutcome, delivery: DeliveryStage?) -> SentPinMark {
+        if let symbol = outcome.symbol { return .symbol(symbol, outcome.tone) }
+        guard let delivery, spins(during: delivery) else { return .number }
+        return .progress
+    }
+
+    private static func spins(during stage: DeliveryStage) -> Bool {
+        switch stage {
+        case .sent, .delivered, .received, .working, .question: true
+        case .unclaimed, .done, .failed, .notSaved, .noAgent: false
         }
     }
 }

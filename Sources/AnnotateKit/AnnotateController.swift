@@ -162,6 +162,9 @@ final class AnnotateController {
     private(set) var isShowingResults = false
     /// Non-nil while the user answers a question; the reply card replaces the other bottom chrome.
     private(set) var replyDraft: ReplyDraft?
+    /// A Send from the review bar keeps annotate mode open, and its pins stay drawn on the frozen
+    /// screen with their progress (Figma 9276:28552); closing annotate mode drops them.
+    private(set) var showsSentPins = false
 
     @ObservationIgnored private var screens: [Int: CapturedScreen] = [:]
     /// Saved pins' reference images in pick order. Kept off `Annotation` so pins stay Codable and
@@ -256,6 +259,7 @@ final class AnnotateController {
         finishDraft()
         cancelReply()
         closeResults()
+        showsSentPins = false
         selection = nil
         holdTask?.cancel()
         holdTask = nil
@@ -626,6 +630,28 @@ final class AnnotateController {
         return PinResult.results(for: lastSend.pins, statuses: pinStatuses)
     }
 
+    /// The last Send's pins on the screen showing, while they stay drawn after the Send. Saving a new
+    /// pin hides them until the new pins are sent or removed, so two badges never show one number.
+    var sentPinsOnScreen: [Annotation] {
+        guard showsSentPins, annotations.isEmpty, let lastSend else { return [] }
+        return lastSend.pins.filter { $0.screen == currentScreen }
+    }
+
+    /// A sent pin's badge: a spinner while the agent has it, its outcome's glyph, or its number.
+    func sentPinMark(for pin: Annotation) -> SentPinMark {
+        let outcome = pinResults.first { $0.index == pin.index }?.outcome ?? .open
+        return .resolve(outcome: outcome, delivery: delivery)
+    }
+
+    /// The review bar's title: the pins waiting to be sent, or "4 notes sent" while a Send's pins
+    /// are the ones on screen.
+    var reviewTitle: String {
+        if annotations.isEmpty, !sentPinsOnScreen.isEmpty, let lastSend {
+            return LauncherStatus.sentTitle(lastSend.pins.count)
+        }
+        return OverlayChrome.countTitle(annotations.count)
+    }
+
     func openResults() {
         guard !pinResults.isEmpty else { return }
         isShowingResults = true
@@ -713,9 +739,10 @@ final class AnnotateController {
         screens = screens.filter { $0.key == currentScreen }
     }
 
-    /// Gathers what's needed on the main actor, clears the overlay at once, and renders, encodes
+    /// Gathers what's needed on the main actor, clears the pending pins at once, and renders, encodes
     /// and writes the bundle off the main thread. The launcher reads "N comments sent" at once and
-    /// narrates delivery from there (`trackDelivery`).
+    /// narrates delivery from there (`trackDelivery`). `keepAnnotating` keeps the frozen screen up
+    /// with the sent pins drawn on it, their badges following the agent's progress.
     func send(keepAnnotating: Bool) {
         finishDraft()
         guard chrome.canSend else {
@@ -763,6 +790,7 @@ final class AnnotateController {
         attachmentImages.removeAll()
         if keepAnnotating {
             screens = screens.filter { $0.key == currentScreen }
+            showsSentPins = true
         } else {
             screens.removeAll()
             stop()
@@ -831,8 +859,8 @@ final class AnnotateController {
         ))
     }
 
-    /// Review bar height, Figma 9257:13549.
-    static let barHeight: CGFloat = 60
+    /// Review bar height: its 52pt buttons, Figma 9276:27551 / 9276:27556 / 9276:27561.
+    static let barHeight: CGFloat = 52
     /// Launcher pill height, Figma 9265:14504 (`h-[44px]`; it wins over py-8 + the 22pt line).
     static let launcherHeight: CGFloat = 44
     /// Gap between the docked pill and `chromeBottom`, Figma container 9265:14502 (`pb-[8px]`).

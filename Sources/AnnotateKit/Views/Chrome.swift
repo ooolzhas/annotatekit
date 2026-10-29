@@ -1,12 +1,12 @@
 // Shared overlay chrome for the redesigned annotate mode (Figma PVX9n74hzo5BWauvymG141, group
 // 9257:13754): the 44pt round icon button every surface uses, the shared chrome button style
-// (press feedback only, no disabled dimming), the glass helper, the white number badge, white
-// sketch strokes, and the review bar shown when no pin is open (9257:13549, reworked in 9272:17111:
-// a back chevron that keeps the notes, and an action that reads "Save" while no agent listens),
-// whose trash asks for confirmation first. Also owns the hint line drawn above that bar
-// (9272:17120 / 17213 / 17307), which says how to annotate or whether an agent is connected, and
-// narrates a Send with the seconds since it started (9273:18004 / 18099 / 18194); its copy and dot
-// come from `ReviewHint` in AnnotateCore. Once the last Send has per-pin results, the hint line
+// (press feedback only, no disabled dimming), the glass helper, the white number badge and the sent
+// pin's progress badge (spinner, outcome glyph or number; 9276:28552), white sketch strokes, and the
+// review bar shown when no pin is open (9276:27550: back, the note count and ↑, each its own glass
+// shape; clearing every pin hides behind a hold on the count and asks first). Also owns the hint
+// line drawn above that bar (9272:17120 / 17213 / 17307, 9276:28045), which says how to annotate or
+// whether an agent is connected, and narrates a Send with the seconds since it started
+// (9273:18004 / 18099 / 18194); its copy and dot come from `ReviewHint` in AnnotateCore. Once the last Send has per-pin results, the hint line
 // becomes a button with a trailing chevron that opens the results card, and its dot turns orange
 // (`ReviewHint.Dot.attention`) when the agent asked about a pin. Also owns the launcher pill (9265:14439 / 9265:14691): a solid capsule
 // docked above the home indicator whose title narrates the last Send ("Annotate", "4 notes
@@ -32,9 +32,9 @@ struct CircleIcon: View {
     static let size: CGFloat = 44
     /// Figma fill `rgba(0,0,0,0.05)`; `.primary` keeps it visible in dark mode.
     static let fillOpacity: Double = 0.05
-    /// Figma `opacity-50` on the ↑ glyph while the comment is empty (9257:13400); also the
-    /// disabled Send pill in `.review(count: 0)` (contract gap value).
-    static let dimmedOpacity: Double = 0.5
+    /// Figma `opacity-25` on the ↑ glyph while the comment is empty (9276:27117); also the review
+    /// bar's ↑ with nothing to send (derived).
+    static let dimmedOpacity: Double = 0.25
 
     var body: some View {
         Image(systemName: systemName)
@@ -111,20 +111,38 @@ extension View {
     /// Liquid Glass on iOS 26 (Xcode 26 toolchain), regular material before.
     /// The compiler check keeps the package building on older Xcode, where `glassEffect` is unknown.
     /// `interactive` makes the glass react to touch (the system's press shimmer and flex), for
-    /// surfaces people press on: the review bar and the comment card.
+    /// surfaces people press on: the review bar's buttons and the comment card. `tint` colors the
+    /// glass (the review bar's ↑, Figma 9276:27565 Tint); before iOS 26 it is a solid fill.
     @ViewBuilder
-    func annotateGlass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
+    func annotateGlass<S: Shape>(in shape: S, interactive: Bool = false, tint: Color? = nil) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+            self.glassEffect(annotateGlassStyle(interactive: interactive, tint: tint), in: shape)
+        } else {
+            self.annotateGlassFallback(in: shape, tint: tint)
+        }
+        #else
+        self.annotateGlassFallback(in: shape, tint: tint)
+        #endif
+    }
+
+    @ViewBuilder
+    private func annotateGlassFallback<S: Shape>(in shape: S, tint: Color?) -> some View {
+        if let tint {
+            self.background(tint, in: shape)
         } else {
             self.background(.regularMaterial, in: shape)
         }
-        #else
-        self.background(.regularMaterial, in: shape)
-        #endif
     }
 }
+
+#if compiler(>=6.2)
+@available(iOS 26.0, *)
+private func annotateGlassStyle(interactive: Bool, tint: Color?) -> Glass {
+    let glass = tint.map { Glass.regular.tint($0) } ?? .regular
+    return interactive ? glass.interactive() : glass
+}
+#endif
 
 // MARK: - Pins
 
@@ -138,17 +156,103 @@ struct PinBadge: View {
 
     var body: some View {
         Button(action: action) {
-            Text("\(number)")
-                .font(.system(size: 15, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(AnnotateStyle.badgeText)
-                .frame(width: AnnotateStyle.badgeSize, height: AnnotateStyle.badgeSize)
-                .background(Circle().fill(AnnotateStyle.marker))
-                .frame(width: Self.hitSize, height: Self.hitSize)
-                .contentShape(Rectangle())
+            BadgeNumber(number: number)
+                .modifier(BadgeShape())
         }
         .buttonStyle(ChromeButtonStyle())
         .accessibilityLabel("Pin \(number)")
+    }
+}
+
+/// A sent pin's badge while the Send's pins stay on screen (Figma 9276:28552): the same white 24pt
+/// badge holding a spinner while the agent has the pin (9276:27574), the outcome's glyph once it
+/// reports one (9276:27954: green 12pt bold checkmark for resolved), or the number. Which one comes
+/// from `SentPinMark`; tap opens the Send's results.
+struct SentPinBadge: View {
+    let number: Int
+    let mark: SentPinMark
+    let action: () -> Void
+
+    /// Figma 9276:27955: SF Pro Bold 12.
+    static let glyphSize: CGFloat = 12
+    /// Not in Figma (no motion context): the spinner turning into a checkmark pops rather than cuts.
+    static let changeAnimation: Animation = .snappy(duration: 0.25)
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                switch mark {
+                case .number:
+                    BadgeNumber(number: number)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                case .progress:
+                    // Figma draws SF Symbols' progress.indicator; the system spinner is the same glyph, animated
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(AnnotateStyle.badgeText)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                case .symbol(let name, let tone):
+                    Image(systemName: name)
+                        .font(.system(size: Self.glyphSize, weight: .bold))
+                        .foregroundStyle(Self.color(for: tone))
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+            }
+            .modifier(BadgeShape())
+            .animation(Self.changeAnimation, value: mark)
+        }
+        .buttonStyle(ChromeButtonStyle())
+        .accessibilityLabel("Pin \(number)")
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint("Show results")
+    }
+
+    private var accessibilityValue: String {
+        switch mark {
+        case .number: "Sent"
+        case .progress: "In progress"
+        case .symbol(let name, _):
+            switch name {
+            case "checkmark": "Resolved"
+            case "questionmark": "Question"
+            case "xmark": "Dismissed"
+            default: name
+            }
+        }
+    }
+
+    /// Glyphs on the white badge: Figma Primitive/Green #34C759 (systemGreen) for resolved; the
+    /// other tones match the results card (derived).
+    private static func color(for tone: PinOutcome.Tone) -> Color {
+        switch tone {
+        case .neutral: AnnotateStyle.badgeText
+        case .success: Color(uiColor: .systemGreen)
+        case .muted: Color(uiColor: .systemGray)
+        case .attention: Color(uiColor: .systemOrange)
+        }
+    }
+}
+
+/// The badge's number: SF Pro Semibold 15, black (Figma 9257:13567 / 9276:28055).
+private struct BadgeNumber: View {
+    let number: Int
+
+    var body: some View {
+        Text("\(number)")
+            .font(.system(size: 15, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(AnnotateStyle.badgeText)
+    }
+}
+
+/// The white 24pt circle every pin badge draws, inside a larger square that takes the taps.
+private struct BadgeShape: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(width: AnnotateStyle.badgeSize, height: AnnotateStyle.badgeSize)
+            .background(Circle().fill(AnnotateStyle.marker))
+            .frame(width: PinBadge.hitSize, height: PinBadge.hitSize)
+            .contentShape(Rectangle())
     }
 }
 
@@ -173,66 +277,99 @@ struct SketchStrokes: View {
 
 // MARK: - Review bar
 
-/// Bottom bar while no pin is open (9272:17111): back, count, trash, Send (or Save while offline).
-/// Fills the width it is given; OverlayRoot positions it. State comes from `controller.chrome` and
-/// `controller.reviewHint`, never from `annotations`.
+/// Bottom bar while no pin is open (Figma 9276:27550): a back chevron that keeps the notes, the note
+/// count, and ↑, each its own 52pt glass shape 8pt apart. ↑ is tinted blue while there is something
+/// to send, and VoiceOver calls it Save while no agent listens. Clearing every pin has no button in
+/// Figma: holding the count offers it, and it asks first since there's no undo. Fills the width it
+/// is given; OverlayRoot positions it. State comes from `controller.chrome`, `reviewTitle` and
+/// `reviewHint`, never from `annotations`.
 struct ReviewBar: View {
     let controller: AnnotateController
     @State private var isConfirmingClear = false
+
+    /// Figma 9276:27550 `gap-[8px]`.
+    static let spacing: CGFloat = 8
+    /// Count text inset inside its capsule, so a long title scales down before touching the ends
+    /// (Figma centers "4 notes" in a 214pt capsule; derived).
+    static let countPadding: CGFloat = 16
 
     var body: some View {
         let chrome = controller.chrome
         let canSend = chrome.canSend
         let count: Int = if case .review(let count) = chrome { count } else { 0 }
 
-        HStack(spacing: 16) {
-            // A chevron, not ×, because leaving annotate mode keeps the notes (9272:17112)
-            CircleIconButton(systemName: "chevron.left") { controller.stop() }
-            Text(OverlayChrome.countTitle(count))
+        HStack(spacing: Self.spacing) {
+            // A chevron, not ×, because leaving annotate mode keeps the notes (9276:27551)
+            BarIconButton(systemName: "chevron.left", label: "Back") { controller.stop() }
+
+            // 9276:27556 — SF Pro Medium 17 / 22, centered in a capsule that takes the rest of the row
+            Text(controller.reviewTitle)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            HStack(spacing: 4) {
-                CircleIconButton(systemName: "trash", style: canSend ? .plain : .dimmed) { isConfirmingClear = true }
-                    .disabled(!canSend)
-                    // Trash wipes every pin with no undo, so it asks first. Anchored to the button,
-                    // it shows as a popover from the trash icon on iOS 26
-                    .confirmationDialog(OverlayChrome.clearTitle(count), isPresented: $isConfirmingClear,
-                                        titleVisibility: .visible) {
-                        Button(OverlayChrome.clearAction, role: .destructive) { controller.clearAll() }
+                .padding(.horizontal, Self.countPadding)
+                .frame(maxWidth: .infinity)
+                .frame(height: AnnotateController.barHeight)
+                .annotateGlass(in: Capsule())
+                .contentShape(Capsule())
+                .contextMenu {
+                    if canSend {
+                        Button(OverlayChrome.clearMenuTitle, systemImage: "trash", role: .destructive) {
+                            isConfirmingClear = true
+                        }
                     }
-                Button {
-                    controller.send(keepAnnotating: false)
-                } label: {
-                    // "Save" while offline (9272:17306): the bundle is still written, just not delivered
-                    Text(controller.reviewHint.actionTitle)
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .frame(height: CircleIcon.size)
-                        .background(AnnotateStyle.action, in: Capsule())
                 }
-                .buttonStyle(ChromeButtonStyle())
-                .disabled(!canSend)
-                // Flatten first so the label and capsule fade together, like a Figma layer opacity
-                .compositingGroup()
-                .opacity(canSend ? 1 : CircleIcon.dimmedOpacity)
+                .confirmationDialog(OverlayChrome.clearTitle(count), isPresented: $isConfirmingClear,
+                                    titleVisibility: .visible) {
+                    Button(OverlayChrome.clearAction, role: .destructive) { controller.clearAll() }
+                }
+
+            // 9276:27561 — white ↑ on blue-tinted glass; plain glass and a dimmed glyph with nothing to send
+            BarIconButton(
+                systemName: "arrow.up",
+                label: controller.reviewHint.actionTitle,
+                tint: canSend ? AnnotateStyle.action : nil,
+                isDimmed: !canSend
+            ) {
+                controller.send(keepAnnotating: true)
             }
+            .disabled(!canSend)
         }
-        .padding(8)
         .frame(height: AnnotateController.barHeight)
-        .annotateGlass(in: Capsule(), interactive: true)
-        // Glass alone isn't hit-testable; taps between the buttons must not reach the frozen screen
-        .contentShape(Capsule())
-        .onTapGesture {}
+        // Glass alone isn't hit-testable; taps in the gaps must not reach the frozen screen
+        .contentShape(Rectangle())
     }
 }
 
-/// The hint line above the review bar (9272:17120 / 17213 / 17307): an optional status dot and one
-/// line of white text. While a Send is in flight (9273:18004 / 18099 / 18194) it also shows the
+/// A 52pt glass circle around one symbol (Figma 9276:27551 / 9276:27561, SF Pro Medium 17 glyph).
+/// With `tint` the glass takes that color and the glyph turns white.
+private struct BarIconButton: View {
+    let systemName: String
+    let label: String
+    var tint: Color?
+    var isDimmed = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(tint == nil ? Color.primary : .white)
+                .opacity(isDimmed ? CircleIcon.dimmedOpacity : 1)
+                .frame(width: AnnotateController.barHeight, height: AnnotateController.barHeight)
+                .annotateGlass(in: Circle(), interactive: true, tint: tint)
+                // Interactive glass in a button label needs an explicit shape to take taps
+                .contentShape(Circle())
+        }
+        .buttonStyle(ChromeButtonStyle())
+        .accessibilityLabel(label)
+    }
+}
+
+/// The hint line above the review bar (9272:17120 / 17213 / 17307, 9276:28045): an optional status dot
+/// and one line of white text, a headline with an optional dimmed detail ("Agent offline", "Notes
+/// will be saved"). While a Send is in flight (9273:18004 / 18099 / 18194) it also shows the
 /// time since the Send, ticking once a second. Copy, dot and whether the elapsed shows come from
 /// `ReviewHint`, so the view never decides which hint shows; OverlayRoot places it 16pt above the bar.
 /// With `onTap` set (the last Send has per-pin results) the line is a button that opens them.
@@ -243,8 +380,10 @@ struct ReviewHintLine: View {
     /// Opens the results card. Nil keeps the line a passive label that touches pass through.
     var onTap: (() -> Void)?
 
-    /// Figma `gap-[6px]` between dot, text and elapsed (9273:18004).
+    /// Figma `gap-[6px]` between the dot and the text (9276:27745).
     static let spacing: CGFloat = 6
+    /// Figma `gap-[4px]` between the headline and what follows it, detail or elapsed (9276:27747).
+    static let textSpacing: CGFloat = 4
     /// Figma dot 8×8 (9272:17214 / 9272:17308).
     static let dotSize: CGFloat = 8
     /// Figma Colors/Green #34C759, which is systemGreen in light mode.
@@ -267,8 +406,9 @@ struct ReviewHintLine: View {
     static let changeAnimation: Animation = .snappy(duration: 0.25)
     /// The elapsed counts whole seconds ("1s", "2s", 9273:18007 / 18102), so it ticks once a second.
     static let tickInterval: TimeInterval = 1
-    /// The elapsed sits at half the message's strength (owner request; Figma draws it full white).
-    static let elapsedOpacity: Double = 0.5
+    /// The detail and the elapsed sit at half the headline's strength (Figma 9276:27749 / 9276:28049
+    /// `opacity-50`).
+    static let secondaryOpacity: Double = 0.5
 
     var body: some View {
         if let onTap {
@@ -311,17 +451,25 @@ struct ReviewHintLine: View {
                     .fill(Self.color(for: dot))
                     .frame(width: Self.dotSize, height: Self.dotSize)
             }
-            Text(hint.text)
-                .modifier(HintTextStyle())
-            if let elapsed {
-                // Figma `"lnum" 1, "tnum" 1`: tabular lining figures, so the width holds as it counts
-                Text(elapsed)
-                    .monospacedDigit()
+            HStack(spacing: Self.textSpacing) {
+                Text(hint.headline)
                     .modifier(HintTextStyle())
-                    // No Figma: the owner dimmed the counter so the message reads first
-                    .opacity(Self.elapsedOpacity)
-                    // A long agent message truncates first; the elapsed always shows in full
-                    .layoutPriority(1)
+                if let detail = hint.detail {
+                    Text(detail)
+                        .modifier(HintTextStyle())
+                        .opacity(Self.secondaryOpacity)
+                        // The detail gives way first when the line runs out of room
+                        .layoutPriority(-1)
+                }
+                if let elapsed {
+                    // Figma `"lnum" 1, "tnum" 1`: tabular lining figures, so the width holds as it counts
+                    Text(elapsed)
+                        .monospacedDigit()
+                        .modifier(HintTextStyle())
+                        .opacity(Self.secondaryOpacity)
+                        // A long agent message truncates first; the elapsed always shows in full
+                        .layoutPriority(1)
+                }
             }
             if onTap != nil {
                 Image(systemName: "chevron.right")

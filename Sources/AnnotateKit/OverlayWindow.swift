@@ -172,7 +172,7 @@ final class OverlayHostingController: UIHostingController<OverlayRoot> {
     @objc private func escape() { controller.escape() }
     @objc private func undo() { controller.undo() }
     @objc private func redo() { controller.redo() }
-    @objc private func send() { controller.send(keepAnnotating: false) }
+    @objc private func send() { controller.send(keepAnnotating: true) }
 
     // MARK: Status bar — defer to the app so the overlay window doesn't restyle it
 

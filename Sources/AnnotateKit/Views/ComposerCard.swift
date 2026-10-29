@@ -1,13 +1,12 @@
-// The comment card for the open pin (Figma 9272:16847 empty · 9272:16929 typed · 9272:17011 with
-// attachments): an optional strip with the element's own text quoted like a message being replied to
-// (no Figma: 2/3 of the card wide, two lines at most) and 64pt reference-image thumbnails with white
-// remove badges,
-// the comment field, and the paperclip / intent chip / undo / redo / ↑ row. The intent chip (no
-// Figma frame) picks what the user wants done with the pin (Fix, Question, Move) and the
-// placeholder follows it. Undo and redo step through the strokes drawn since the card opened
+// The comment card for the open pin (Figma 9276:27099 empty · 9276:27185 typed · 9276:27272 with
+// attachments · 9276:27369 quoting): an optional strip with the element's own text quoted like a
+// message being replied to (236pt wide, two lines at most) and 64pt reference-image thumbnails with
+// white remove badges, the comment field, and the paperclip / intent chip / undo / redo / ↑ row.
+// The intent chip (9276:27109 shows "Fix") picks what the user wants done with the pin (Fix,
+// Question, Move) and the placeholder follows it. Undo and redo step through the strokes drawn since the card opened
 // (StrokeHistory); with nothing left to undo, undo turns into × and discards the pin, and redo dims
 // with nothing to redo. It only lays itself out at the width it is given; OverlayRoot docks it
-// to the keyboard and adds the 8pt inset. ↑ saves through the controller, which decides via
+// to the keyboard (8pt insets) or, with no keyboard, where the review bar sits (34pt insets). ↑ saves through the controller, which decides via
 // `chrome` whether the comment can be submitted (it needs text); Return types a
 // newline. A new drawing opens the card without the keyboard so the next stroke has the screen.
 
@@ -177,12 +176,17 @@ struct ComposerCard: View {
                 controller.discardDraft()
             }
         }
-        .contentTransition(.symbolEffect(.replace))
+        // Twice the system speed (owner request): the swap reads as a state change, not an animation
+        .contentTransition(.symbolEffect(.replace, options: .speed(Self.symbolSwapSpeed)))
     }
 
-    /// No Figma: derived chip. Same 44pt height and 5% fill as `CircleIcon` `.plain`, stretched to
-    /// a capsule around the intent title so the current choice reads without opening the menu.
-    private static let chipHorizontalPadding: CGFloat = 14
+    /// How much faster than the system default undo and × swap glyphs.
+    private static let symbolSwapSpeed: Double = 2
+
+    /// Figma 9276:27109: `px-[12px] w-[65px] h-[44px]`, 5% fill like `CircleIcon` `.plain`. 65 is the
+    /// width "Fix" draws at, so it is the minimum and longer titles grow the capsule.
+    private static let chipHorizontalPadding: CGFloat = 12
+    private static let chipMinWidth: CGFloat = 65
 
     /// Menu of every intent; picking one stores it on the draft through the controller.
     private var intentChip: some View {
@@ -201,15 +205,13 @@ struct ComposerCard: View {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
-                Text(intent.title)
-                    .font(.system(size: 15, weight: .medium))
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, Self.chipHorizontalPadding)
-            .frame(height: CircleIcon.size)
+            // 9276:27110 — SF Pro Medium 17 / 22, no chevron
+            Text(intent.title)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, Self.chipHorizontalPadding)
+                .frame(minWidth: Self.chipMinWidth)
+                .frame(height: CircleIcon.size)
             .background(Capsule().fill(Color.primary.opacity(CircleIcon.fillOpacity)))
             .contentShape(Capsule())
         }
@@ -251,9 +253,14 @@ struct ComposerCard: View {
     /// How far the badge pokes past the thumbnail's top and right edges (20 / 2 − 4 = 6).
     private static var badgeOverhang: CGFloat { badgeSize / 2 - badgeInset }
 
-    /// No Figma: the quote box is 2/3 of the card wide, as tall as a thumbnail, two lines at most.
-    private static let quoteWidthFraction: CGFloat = 2.0 / 3.0
-    private static let quotePadding: CGFloat = 12
+    /// Figma 9276:27374: `w-[236px] h-[64px] px-[16px]`, as tall as a thumbnail.
+    private static let quoteWidth: CGFloat = 236
+    private static let quoteHorizontalPadding: CGFloat = 16
+    /// Figma centers two 20pt lines in the 64pt box (`py-[10px] justify-center`, 12pt above the
+    /// first) and keeps a single line at that same top (9276:27466), so the text hangs from here.
+    private static let quoteTopPadding: CGFloat = 12
+    /// Figma `opacity-75` on the quoted lines (9276:27375).
+    private static let quoteOpacity: Double = 0.75
 
     /// The selected element's own text, quoted ahead of any images; nil when there's none.
     private var quote: String? {
@@ -289,18 +296,17 @@ struct ComposerCard: View {
     }
 
     /// The element's text in a thumbnail-shaped box (same height, radius and fill as the card's
-    /// circle buttons), like the message a reply quotes. Two lines, then it truncates.
+    /// circle buttons), like the message a reply quotes. Figma 9276:27374: Loose Leading/Footnote
+    /// (13 / 20) at 75%, two lines, then it truncates.
     private func quoteBox(_ text: String) -> some View {
         Text(text)
-            .font(.subheadline)
-            .foregroundStyle(.primary.opacity(0.6))
+            .font(.footnote.leading(.loose))
+            .foregroundStyle(.primary.opacity(Self.quoteOpacity))
             .lineLimit(2)
             .truncationMode(.tail)
-            .padding(Self.quotePadding)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .frame(height: Self.thumbnailSize)
-            // 2/3 of the strip's visible width, which is the card's
-            .containerRelativeFrame(.horizontal) { width, _ in width * Self.quoteWidthFraction }
+            .padding(.horizontal, Self.quoteHorizontalPadding)
+            .padding(.top, Self.quoteTopPadding)
+            .frame(width: Self.quoteWidth, height: Self.thumbnailSize, alignment: .topLeading)
             .background(
                 Color.primary.opacity(CircleIcon.fillOpacity),
                 in: RoundedRectangle(cornerRadius: Self.thumbnailRadius, style: .continuous)

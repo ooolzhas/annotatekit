@@ -182,6 +182,32 @@ import Testing
         #expect(Self.delivery(stage).dot == expected)
     }
 
+    @Test("offline splits into a headline and a dimmed detail (Figma 9276:28048 / 9276:28049)")
+    func offlineParts() {
+        #expect(ReviewHint.offline.headline == "Agent offline")
+        #expect(ReviewHint.offline.detail == "Notes will be saved")
+        #expect(ReviewHint.offline.text == "Agent offline · Notes will be saved")
+    }
+
+    @Test("text is the headline, then the detail after a middle dot",
+          arguments: allKinds + allStages.map { delivery($0) } + [
+              delivery(.done(message: "Shipped")), delivery(.failed(message: "Build broke")),
+              delivery(.working(message: "a · b"))
+          ])
+    func textJoinsParts(hint: ReviewHint) {
+        let expected = hint.detail.map { "\(hint.headline) · \($0)" } ?? hint.headline
+        #expect(hint.text == expected)
+        #expect(!hint.headline.isEmpty)
+        #expect(hint.detail?.isEmpty != true)
+    }
+
+    @Test("an agent's working message stays whole, even with a middle dot in it")
+    func workingMessageNotSplit() {
+        let hint = Self.delivery(.working(message: "Built · reinstalling"))
+        #expect(hint.headline == "Built · reinstalling")
+        #expect(hint.detail == nil)
+    }
+
     @Test("elapsed time shows exactly while the delivery is still in flight", arguments: allStages)
     func showsElapsedTracksNonFinal(stage: DeliveryStage) {
         #expect(Self.delivery(stage).showsElapsed == !stage.isFinal)

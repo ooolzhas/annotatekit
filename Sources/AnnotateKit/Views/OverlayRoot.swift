@@ -1,7 +1,7 @@
 // Root of the overlay window: the launcher while idle, and while annotating the frozen screen
 // dimmed with a pulsing blue edge glow, the touch catcher that feeds the controller (draw / tap / hold),
-// every pin's white markers and number badges, and the bottom chrome docked to the keyboard or the
-// home indicator: the reply card while answering an agent's question about a sent pin, the comment
+// every pin's white markers and number badges (after a Send, the sent pins with spinners that turn
+// into the agent's outcome), and the bottom chrome docked to the keyboard or the home indicator: the reply card while answering an agent's question about a sent pin, the comment
 // card while a pin is open, the last Send's results card, otherwise the review bar with its hint
 // line above it (which also narrates the last Send while annotate mode is open, and opens the
 // results on tap once there are any), all over a blue gradient that runs from the chrome's top
@@ -86,12 +86,13 @@ private struct BottomChrome: View {
     let controller: AnnotateController
     @Binding var chromeTop: CGFloat?
 
-    /// Gap between the comment card and the keyboard / home indicator, and from the screen sides
-    /// (Figma 9272:16850: `pb-[8px] px-[8px]`).
-    private static let chromeInset: CGFloat = 8
-    /// Review bar inset from each screen side (Figma 9272:17106: `px-[34px]`). Its bottom has no
-    /// extra gap: Figma's `pb-[34px]` is the home-indicator inset, which `screenChromeBottom` already is.
-    private static let reviewBarInset: CGFloat = 34
+    /// A card over the keyboard: 8pt from the screen sides and 8pt above the keyboard (Figma
+    /// 9276:27184: `pb-[8px] px-[8px]`).
+    private static let keyboardInset: CGFloat = 8
+    /// The review bar, and a card with no keyboard up: 34pt from the screen sides (Figma 9276:27550 /
+    /// 9276:27098: `px-[34px]`). The bottom has no extra gap: Figma's `pb-[34px]` is the home-indicator
+    /// inset, which `screenChromeBottom` already is.
+    private static let screenInset: CGFloat = 34
     /// Space between the hint line's bottom and the review bar's top (Figma 9272:17120:
     /// `bottom-[110px]` = 34 inset + 60 bar + 16).
     private static let hintGap: CGFloat = 16
@@ -105,17 +106,19 @@ private struct BottomChrome: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Reply card, comment card or results card (all 8pt sides, 8pt above `chromeBottom`, so the
-    /// reply and comment cards dock to the keyboard), otherwise the review bar (34pt sides, bottom at
-    /// `screenChromeBottom`, never the keyboard) with the hint line 16pt above it. `chromeBottom` is
-    /// the keyboard top, or the top of the home-indicator area with no keyboard.
+    /// Reply card, comment card or results card: over the keyboard 8pt sides and 8pt above it, with
+    /// no keyboard where the review bar sits (34pt sides, bottom at `screenChromeBottom`). Otherwise
+    /// the review bar (34pt sides, bottom at `screenChromeBottom`, never the keyboard) with the hint
+    /// line 16pt above it. `chromeBottom` is the keyboard top, or `screenChromeBottom` with none.
     var body: some View {
         let bounds = controller.bounds
         // Distance from each chrome's bottom down to the screen's bottom edge. Each child carries its
         // own, so a card leaving with the keyboard and the bar arriving at the home indicator overlap
         // correctly while they swap
-        let belowCard = max(bounds.maxY - controller.chromeBottom, 0)
         let belowBar = max(bounds.maxY - controller.screenChromeBottom, 0)
+        let isKeyboardUp = controller.chromeBottom < controller.screenChromeBottom
+        let cardSides = isKeyboardUp ? Self.keyboardInset : Self.screenInset
+        let belowCard = max(bounds.maxY - controller.chromeBottom, 0) + (isKeyboardUp ? Self.keyboardInset : 0)
 
         // A ZStack, not a Group: the outgoing and incoming chrome overlap at the bottom while they swap,
         // and the measurement below reads the stack, not each child
@@ -126,23 +129,23 @@ private struct BottomChrome: View {
                 // `chromeBottom`
                 if let reply = controller.replyDraft {
                     ReplyCard(controller: controller, reply: reply)
-                        .padding(.horizontal, Self.chromeInset)
-                        .padding(.bottom, Self.chromeInset + belowCard)
+                        .padding(.horizontal, cardSides)
+                        .padding(.bottom, belowCard)
                         .transition(swapTransition)
                 }
             case .composing:
                 if let draft = controller.draft {
                     ComposerCard(controller: controller, draft: draft)
                         .id(draft.annotation.id)
-                        .padding(.horizontal, Self.chromeInset)
-                        .padding(.bottom, Self.chromeInset + belowCard)
+                        .padding(.horizontal, cardSides)
+                        .padding(.bottom, belowCard)
                         .transition(swapTransition)
                 }
             case .results:
-                // No Figma: placed like the comment card (8pt sides, 8pt above `chromeBottom`)
+                // No Figma: placed like the comment card
                 ResultsCard(controller: controller)
-                    .padding(.horizontal, Self.chromeInset)
-                    .padding(.bottom, Self.chromeInset + belowCard)
+                    .padding(.horizontal, cardSides)
+                    .padding(.bottom, belowCard)
                     .transition(swapTransition)
             case .review:
                 VStack(spacing: Self.hintGap) {
@@ -154,9 +157,9 @@ private struct BottomChrome: View {
                     )
                         // Delivery narration ("Changes applied, reinstalling 9s") runs wider than
                         // the gestures hint: keep it on one centered line within the bar's 34pt insets
-                        .padding(.horizontal, Self.reviewBarInset)
+                        .padding(.horizontal, Self.screenInset)
                     ReviewBar(controller: controller)
-                        .padding(.horizontal, Self.reviewBarInset)
+                        .padding(.horizontal, Self.screenInset)
                 }
                 // Anchored to the home indicator: the bar never rides the keyboard
                 .padding(.bottom, belowBar)
@@ -221,6 +224,8 @@ private struct ActiveOverlay: View {
         // Figma's composing frames show no badge for the pin being written: the open draft draws
         // its own marker from the live draft instead of its saved copy.
         let saved = controller.visibleAnnotations.filter { $0.id != openID }
+        // After a Send that kept annotate mode open: the sent pins, with their progress badges
+        let sent = controller.sentPinsOnScreen
 
         ZStack(alignment: .topLeading) {
             if let frozen = controller.frozenImage {
@@ -245,7 +250,7 @@ private struct ActiveOverlay: View {
 
             captureLayer
 
-            ForEach(saved) { annotation in
+            ForEach(saved + sent) { annotation in
                 PinMarker(
                     annotation: annotation,
                     strokes: annotation.sketchInScreenPoints,
@@ -274,8 +279,21 @@ private struct ActiveOverlay: View {
                 ))
                 .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
+
+            ForEach(sent) { pin in
+                SentPinBadge(number: pin.index, mark: controller.sentPinMark(for: pin)) {
+                    controller.openResults()
+                }
+                .position(OverlayPlacement.pinCenter(
+                    for: pin.pinAnchorFrame,
+                    radius: AnnotateStyle.badgeSize / 2,
+                    in: bounds
+                ))
+                .transition(.opacity)
+            }
         }
         .animation(.snappy(duration: 0.2), value: controller.annotations)
+        .animation(.snappy(duration: 0.2), value: sent.map(\.id))
     }
 
     /// Full-screen catcher: every touch goes to the controller, which tells draw, tap and hold apart.

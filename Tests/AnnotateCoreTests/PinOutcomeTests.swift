@@ -226,4 +226,37 @@ import Testing
         #expect(summary.contains(expected))
         if count == 1 { #expect(!summary.contains("questions")) }
     }
+
+    // MARK: SentPinMark
+
+    private static let spinningStages: [DeliveryStage] = [
+        .sent(count: 2), .delivered, .received, .working(message: nil), .question(pin: 1)
+    ]
+    private static let stillStages: [DeliveryStage] = [
+        .unclaimed, .done(message: nil), .failed(message: nil), .notSaved, .noAgent
+    ]
+
+    @Test("an open pin spins while the Send is on its way to the agent or with it", arguments: spinningStages)
+    func openPinSpins(stage: DeliveryStage) {
+        #expect(SentPinMark.resolve(outcome: .open, delivery: stage) == .progress)
+        #expect(SentPinMark.resolve(outcome: .answered(question: nil, reply: "r"), delivery: stage) == .progress)
+    }
+
+    @Test("an open pin shows its number once nothing is in flight", arguments: stillStages)
+    func openPinStill(stage: DeliveryStage) {
+        #expect(SentPinMark.resolve(outcome: .open, delivery: stage) == .number)
+    }
+
+    @Test("with no delivery tracked an open pin shows its number")
+    func noDeliveryShowsNumber() {
+        #expect(SentPinMark.resolve(outcome: .open, delivery: nil) == .number)
+    }
+
+    @Test("an outcome glyph wins over the spinner and the number",
+          arguments: [DeliveryStage?.none, .working(message: nil), .done(message: nil)])
+    func glyphWins(stage: DeliveryStage?) {
+        #expect(SentPinMark.resolve(outcome: .resolved(summary: nil), delivery: stage) == .symbol("checkmark", .success))
+        #expect(SentPinMark.resolve(outcome: .question("q"), delivery: stage) == .symbol("questionmark", .attention))
+        #expect(SentPinMark.resolve(outcome: .dismissed(reason: nil), delivery: stage) == .symbol("xmark", .muted))
+    }
 }

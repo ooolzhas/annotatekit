@@ -92,13 +92,16 @@ public enum OverlayChrome: Equatable, Sendable {
     /// here moved to the hint line above the bar, so the title just says there is nothing to count.
     public static let emptyTitle = "No notes yet"
 
-    /// Trash confirmation title. No Figma frame: trash wipes every pin at once with no undo, so it
-    /// asks first and names what goes.
+    /// Clear-all confirmation title. No Figma frame: clearing wipes every pin at once with no undo, so
+    /// it asks first and names what goes.
     public static func clearTitle(_ count: Int) -> String {
         count == 1 ? "Delete 1 note?" : "Delete \(max(count, 0)) notes?"
     }
-    /// Destructive button in the trash confirmation.
+    /// Destructive button in the clear-all confirmation.
     public static let clearAction = "Delete"
+    /// The clear-all item behind a hold on the review bar's count. No Figma frame: the bar lost its
+    /// trash button (9276:27550), so this is where clearing lives now.
+    public static let clearMenuTitle = "Delete All Notes"
 
     /// Review bar title (Figma 9272:17114, sample "4 notes"; the 4 is sample data): "4 notes", "1 note",
     /// and `emptyTitle` when there is nothing to count (0 or a negative input).
@@ -213,54 +216,68 @@ public enum ReviewHint: Equatable, Sendable {
         return trimmed
     }
 
+    /// The whole line, as VoiceOver reads it: `headline`, then `detail` after " · ".
     public var text: String {
+        let parts = parts
+        return parts.detail.map { "\(parts.headline) · \($0)" } ?? parts.headline
+    }
+
+    /// The line's lead, drawn at full strength.
+    public var headline: String { parts.headline }
+
+    /// The second half of a two-part line, drawn after `headline` at half strength (Figma 9276:28049:
+    /// "Notes will be saved" at opacity 50); nil for a one-part line. Only the offline line has a
+    /// frame; the other two-part lines are split the same way (derived).
+    public var detail: String? { parts.detail }
+
+    private var parts: (headline: String, detail: String?) {
         switch self {
         case .gestures:
             // Figma 9272:17121
-            "Draw, tap or hold to annotate"
+            ("Draw, tap or hold to annotate", nil)
         case .connected(let agent, .push):
             // Figma 9272:17215 (sample "Claude connected")
-            "\(Self.displayName(agent)) connected"
+            ("\(Self.displayName(agent)) connected", nil)
         case .connected(let agent, .pull):
             // No Figma frame (derived): a pull agent reads sessions only when asked, so the line
             // tells the user to ask it, matching `AgentPresence.accessibilityDescription`.
-            "\(Self.displayName(agent)) connected · ask it to check"
+            ("\(Self.displayName(agent)) connected", "ask it to check")
         case .offline:
-            // Figma 9272:17309
-            "Agent offline · Notes will be saved"
+            // Figma 9276:28048 / 9276:28049
+            ("Agent offline", "Notes will be saved")
         case .delivery(let stage, let agent):
             switch stage {
             case .sent(let count):
                 // No Figma frame (derived): the launcher's sent title, so the pill and the line agree
-                LauncherStatus.sentTitle(count)
+                (LauncherStatus.sentTitle(count), nil)
             case .unclaimed:
                 // No Figma frame (derived): launcher copy
-                "Not picked up yet"
+                ("Not picked up yet", nil)
             case .delivered:
                 // Figma 9273:18006 (sample "Delivered to Claude")
-                "Delivered to \(Self.displayName(agent))"
+                ("Delivered to \(Self.displayName(agent))", nil)
             case .received:
                 // Figma 9273:18101 (sample "Claude looking at it")
-                "\(Self.displayName(agent)) looking at it"
+                ("\(Self.displayName(agent)) looking at it", nil)
             case .question(let pin):
                 // No Figma frame (derived): the agent asked about one pin and waits for the reply
-                "\(Self.displayName(agent)) asked about note \(pin)"
+                ("\(Self.displayName(agent)) asked about note \(pin)", nil)
             case .working(let message):
                 // Figma 9273:18196 shows the agent's own status.json message (sample "Changes applied,
                 // reinstalling"); the fallback without a message is derived
-                Self.cleaned(message) ?? "\(Self.displayName(agent)) is working"
+                (Self.cleaned(message) ?? "\(Self.displayName(agent)) is working", nil)
             case .done(let message):
                 // No Figma frame (derived): launcher copy
-                Self.cleaned(message).map { "Done · \($0)" } ?? "Done"
+                ("Done", Self.cleaned(message))
             case .failed(let message):
                 // No Figma frame (derived): launcher copy, with the agent's name in the fallback
-                Self.cleaned(message).map { "Couldn't finish · \($0)" } ?? "\(Self.displayName(agent)) couldn't finish"
+                Self.cleaned(message).map { ("Couldn't finish", $0) } ?? ("\(Self.displayName(agent)) couldn't finish", nil)
             case .notSaved:
                 // No Figma frame (derived): launcher copy
-                "Couldn't save · prompt copied"
+                ("Couldn't save", "prompt copied")
             case .noAgent:
                 // No Figma frame (derived): launcher copy
-                "Saved · no agent connected"
+                ("Saved", "no agent connected")
             }
         }
     }
