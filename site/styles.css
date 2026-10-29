@@ -116,9 +116,10 @@ img { display: block; }
   letter-spacing: -0.2px;
   text-decoration: none;
 }
-.wordmark img {
+.wordmark-mark {
   width: 24px; height: 24px;
-  border-radius: 6px;
+  border-radius: 25%;
+  background: var(--text-faint);
   flex: none;
 }
 
@@ -225,19 +226,42 @@ h2 + h3 { margin-top: 0; }
 }
 .caption { margin: 20px 0 8px; }
 
+/* Hero: text and demo side by side when there's room, centered on the viewport like the column
+   but twice as wide. Below 1000px it stacks back into the column. */
+@media (min-width: 1000px) {
+  section#overview {
+    --hero-w: min(1160px, 100vw - var(--sidebar-w) - 48px);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 40px;
+    width: var(--hero-w);
+    margin-left: calc(max(var(--sidebar-w) + 24px, 50vw - 580px) - max(var(--sidebar-w) + 24px, 50vw - var(--col) / 2));
+  }
+  section#overview h1 { margin-top: 28px; }
+  section#overview .intro { margin-bottom: 0; }
+}
+
 /* Install line at the top */
 .install-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+.install-cmds {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 .install-meta {
   color: var(--text-muted);
   font-size: 13px;
   white-space: nowrap;
 }
-.install-bar .cmd { flex: 0 1 auto; min-width: 0; margin: 0; }
+.install-bar .cmd { min-width: 0; margin: 0; }
 
 /* #demo: width only; demo.css owns the height and internals. */
 #demo { width: 100%; }
@@ -306,6 +330,8 @@ pre {
   tab-size: 4;
 }
 pre code { font-size: inherit; }
+/* Prose-like output (the sample prompt) wraps instead of scrolling. */
+pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .code-block {
   position: relative;
@@ -472,7 +498,7 @@ main p a, main li a, main dd a {
   }
 
   .wordmark { margin: 0 4px 0 0; flex: none; gap: 7px; font-size: 13.5px; }
-  .wordmark img { width: 22px; height: 22px; border-radius: 5px; }
+  .wordmark-mark { width: 22px; height: 22px; }
 
   .nav-scroll {
     display: flex;
@@ -506,5 +532,6 @@ main p a, main li a, main dd a {
 
 @media (max-width: 520px) {
   .install-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .install-cmds { align-self: stretch; }
   .install-meta { order: 2; }
 }
