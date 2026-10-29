@@ -1,5 +1,6 @@
 /* annotatekit.com hero demo. Every selector is scoped under #demo or prefixed .ak-.
-   The stage is laid out at a fixed size (560 x 530, or 340 x 726 below 480px viewport width)
+   The stage is laid out at a fixed size (560 x 530, or 340 x 726 stacked below 480px;
+   from 1000px it fills the preview pane with the terminal docked, see "Docked")
    and scaled to the column by demo.js, so all lengths below are stage pixels. */
 
 #demo {
@@ -554,6 +555,41 @@
     0 6px 14px -6px rgba(0, 0, 0, .35);
 }
 .ak-narrow .ak-term { left: 14px; top: 530px; width: 312px; }
+/* Docked (preview pane from 1000px): demo.js moves the terminal out of the scaled stage, so these
+   are real pixels. A phone-only stage is centered above it. */
+.ak-docked .ak-stage { left: var(--ak-x, 0); top: var(--ak-y, 0); width: 260px; height: 526px; }
+.ak-docked .ak-phone { left: 8px; top: 8px; }
+.ak-docked .ak-term {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: 212px;
+  border-top: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 12px;
+  line-height: 19px;
+}
+.ak-docked .ak-term-head { height: 32px; padding: 0 14px; background: #141416; }
+.ak-docked .ak-term-head i { display: none; }
+.ak-docked .ak-term-title {
+  position: static;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .85);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .7);
+}
+.ak-docked .ak-term-body { padding: 10px 14px; }
+.ak-docked .ak-line { padding-left: 18px; }
+.ak-docked .ak-term-body.ak-ghost { top: 32px; }
+
 .ak-term-head {
   position: relative;
   height: 26px;

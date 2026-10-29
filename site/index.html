@@ -14,6 +14,9 @@
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="icon.jpg">
   <link rel="apple-touch-icon" href="icon.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="demo.css">
   <script>document.documentElement.classList.add('js');</script>
@@ -58,68 +61,66 @@
 
   <main id="main">
     <section id="overview" aria-labelledby="overview-title">
-      <div class="hero-text">
-        <div class="install-bar">
-          <span class="install-meta">iOS 17+ · SwiftUI and UIKit</span>
-          <div class="install-cmds">
-            <div class="cmd shell">
-              <code>brew install ooolzhas/tap/annotate</code>
-              <button class="copy" type="button" aria-label="Copy Homebrew install command"></button>
-            </div>
-            <div class="cmd shell">
-              <code>npm install -g annotate-ios</code>
-              <button class="copy" type="button" aria-label="Copy npm install command"></button>
-            </div>
+      <div class="install-bar">
+        <div class="cmd shell installer">
+          <div class="pm-switch" role="group" aria-label="Package manager">
+            <button type="button" data-pm="brew" aria-pressed="true">brew</button>
+            <button type="button" data-pm="npm" aria-pressed="false">npm</button>
           </div>
+          <code data-pm="brew">brew install ooolzhas/tap/annotate</code>
+          <code data-pm="npm" hidden>npm install -g annotate-ios</code>
+          <button class="copy" type="button" aria-label="Copy install command"></button>
         </div>
-
-        <h1 id="overview-title">Visual feedback for iOS apps that goes straight to your coding agent.</h1>
-        <p class="intro">
-          Freeze your running app, draw on it, tap an element or hold on an exact spot, and say what
-          should change. Hit send, and the agent already open on your Mac gets the screenshots, the
-          exact coordinates and your notes. You don't copy and paste anything or tag any views, and it
-          lives only in your DEBUG build.
-        </p>
+        <span class="install-meta">iOS 17+ · SwiftUI and UIKit</span>
       </div>
 
-      <div id="demo" class="demo" role="img" aria-label="Animated demo: annotating an iPhone app and Claude Code applying the changes"></div>
+      <h1 id="overview-title">Visual feedback for iOS apps, straight to your coding agent.</h1>
+      <p class="intro">
+        Freeze your running app, draw, tap an element or hold on a spot, and say what should change.
+        Hit send: the agent open on your Mac gets the screenshots, <span class="circled">exact coordinates</span> and your notes.
+        Nothing to paste, no views to tag, DEBUG builds only.
+      </p>
+
+      <div class="preview-pane">
+        <div id="demo" class="demo" role="img" aria-label="Animated demo: annotating an iPhone app and Claude Code applying the changes"></div>
+      </div>
     </section>
 
     <section id="how-it-works" aria-labelledby="how-title">
       <h2 id="how-title">How you use it</h2>
       <ol class="steps">
-        <li>Tap the <strong>Annotate</strong> pill in your running app. The screen freezes.</li>
-        <li><strong>Draw</strong> around anything, <strong>tap</strong> an element to outline it, or <strong>hold</strong> for half a second to pin an exact spot.</li>
-        <li>Type what should change. The chip says <strong>Fix</strong>; switch it to <strong>Question</strong> when you only want an explanation.</li>
-        <li>Add as many notes as you like. To cover another screen, leave annotate mode, navigate and come back. One send carries them all.</li>
-        <li>Hit <strong>↑</strong>. Claude Code, already open on your Mac, picks it up.</li>
-        <li>Keep watching the pill. It narrates the agent's progress, and each note's badge spins until it's handled, then turns into a green check.</li>
+        <li>Tap the <strong>Annotate</strong> pill. The screen freezes.</li>
+        <li><strong>Draw</strong> around anything, <strong>tap</strong> to outline an element, or <strong>hold</strong> half a second to pin an exact spot.</li>
+        <li>Type what should change. Switch the chip from <strong>Fix</strong> to <strong>Question</strong> when you only want an explanation.</li>
+        <li>Add as many notes as you like, across screens: leave annotate mode, navigate, come back. <span class="circled">One send</span> carries them all.</li>
+        <li>Hit <strong>↑</strong>. Your open Claude Code session picks it up.</li>
+        <li>The pill narrates the agent's progress; each note's badge spins until it's handled, then turns into a green check.</li>
       </ol>
       <p class="note">
-        It works the same from the Simulator and from a physical iPhone, with no extra setup. Every
-        overlay type is behind <code class="nw">#if DEBUG</code>, so none of it ships in Release.
+        Works the same in the Simulator and on a physical iPhone, with no extra setup. The whole
+        overlay is behind <code class="nw">#if DEBUG</code>, so none of it ships in Release.
       </p>
     </section>
 
     <section id="what-agents-get" aria-labelledby="gets-title">
       <h2 id="gets-title">What your agent gets</h2>
       <p>
-        An agent finds things by looking, so every note arrives with numbers it can check instead
-        of a description it has to interpret.
+        Agents find things by looking, so every note arrives as <span class="circled">numbers to check</span>, not a description
+        to interpret.
       </p>
       <ul class="bullets">
-        <li><strong>1x screenshots where pixel = point.</strong> A 402×874 pt screen is a 402×874 image, so a vision model sees it unscaled and a pin at (84, 322) is pixel (84, 322).</li>
-        <li><strong>Annotated screens and crops.</strong> A copy of each screen with numbered blue markers, outlines and your red drawings, plus a native-resolution crop around every pin.</li>
-        <li><strong>Exact coordinates.</strong> Each pin has an anchor (where you tapped, or a drawing's center), the element's frame, and its position as percentages across and down. All in iOS points, origin top-left.</li>
-        <li><strong>Nearby visible text.</strong> Each pin lists the text around it, and each screen lists every visible label with its frame. That's usually enough to grep straight to the right view.</li>
+        <li><strong>1x screenshots, pixel = point.</strong> A 402×874 pt screen is a 402×874 image: a vision model sees it unscaled, and a pin at (84, 322) is pixel (84, 322).</li>
+        <li><strong>Annotated screens and crops.</strong> Each screen with numbered blue markers, outlines and your red drawings, plus a native-resolution crop around every pin.</li>
+        <li><strong>Exact coordinates.</strong> Each pin's anchor (your tap, or a drawing's center), the element's frame, and its position as percentages across and down, in iOS points from the top-left.</li>
+        <li><strong>Nearby text.</strong> The text around each pin, and every visible label on the screen with its frame. Usually enough to grep straight to the right view.</li>
         <li><strong>Device info.</strong> Model, iOS version, screen size and scale, appearance and Dynamic Type size.</li>
       </ul>
       <p>
-        Without it, you write "the blue button near the bottom is too small" and the agent guesses
-        which one. With it, the agent reads <code>Button "Get started" at (24, 300, 120×44)</code>,
-        tapped at (84, 322), next to the text "Light that follows your day".
+        Without it, you write "the blue button near the bottom is too small" and the agent guesses.
+        With it, the agent reads <code>Button "Get started" at (24, 300, 120×44)</code>, tapped at
+        (84, 322), next to "Light that follows your day".
       </p>
-      <p class="caption">Part of the prompt the agent receives:</p>
+      <p class="caption">An excerpt of the agent's prompt:</p>
       <div class="code-block">
 <pre class="wrap"><code>UI annotations from the running app: 3 pins on 1 screen. Please make these changes in the code.
 
@@ -138,18 +139,18 @@ Coordinates are iOS points, origin top-left. Screen images are 1x, so pixel = po
 
     <section id="talk-back" aria-labelledby="talk-title">
       <h2 id="talk-title">Agents talk back</h2>
-      <p>Sending isn't the end of it. The agent reports to the phone while it works, pin by pin.</p>
+      <p>Sending isn't the end. The agent reports back to the phone <span class="circled">pin by pin</span> as it works.</p>
       <ul class="bullets">
-        <li><strong><code>annotation_wait</code></strong> blocks until you send (or answer a question), then returns everything. That gives hands-free delivery in any MCP client. The dot on the pill is green while an agent listens, yellow while it reconnects and red when nothing is listening.</li>
-        <li><strong>Resolve or dismiss.</strong> Each pin comes back resolved, with what changed, or dismissed, with why. Tap the note count to see them sorted into Current, In Progress, Resolved and Failed.</li>
-        <li><strong>Ask.</strong> When a pin is unclear, the agent asks about it. The pill says so, the notes sheet shows a Reply button, and your answer goes back to the agent, from a phone too.</li>
-        <li><strong>Intent.</strong> Every note carries its chip into the prompt: Fix to change the code, Question to explain it without editing.</li>
+        <li><strong><code>annotation_wait</code></strong> blocks until you send or answer a question, then returns everything: hands-free delivery in any MCP client. The pill's dot is green while an agent listens, yellow while it reconnects, red when nothing listens.</li>
+        <li><strong>Resolve or dismiss.</strong> Each pin comes back resolved (with what changed) or dismissed (with why). Tap the note count to see them sorted into Current, In Progress, Resolved and Failed.</li>
+        <li><strong>Ask.</strong> When a pin is unclear, the agent asks. The pill flags it, the notes sheet shows a Reply button, and your answer reaches the agent, even from a physical iPhone.</li>
+        <li><strong>Intent.</strong> Each note's chip travels into the prompt: Fix changes the code, Question explains it without editing.</li>
       </ul>
-      <p>Agents report with the MCP tools or with the CLI:</p>
+      <p>Agents report through the MCP tools or the CLI:</p>
       <div class="code-block">
-<pre><code>annotate resolve &lt;id&gt; &lt;pin&gt; "what changed"
-annotate dismiss &lt;id&gt; &lt;pin&gt; "why not"
-annotate ask &lt;id&gt; &lt;pin&gt; "question"      # waits for the answer and prints it</code></pre>
+<pre><code>annotate resolve &lt;id&gt; &lt;pin&gt; <span class="tk-str">"what changed"</span>
+annotate dismiss &lt;id&gt; &lt;pin&gt; <span class="tk-str">"why not"</span>
+annotate ask &lt;id&gt; &lt;pin&gt; <span class="tk-str">"question"</span>      <span class="tk-com"># waits for the answer and prints it</span></code></pre>
       </div>
     </section>
 
@@ -163,16 +164,16 @@ annotate ask &lt;id&gt; &lt;pin&gt; "question"      # waits for the answer and p
         <button class="copy" type="button" aria-label="Copy setup prompt"></button>
       </div>
       <p>
-        The repo ships an <code>annotate-setup</code> skill that walks the agent through every project
-        shape (Xcode project, XcodeGen, Tuist, SwiftPM), the CLI and the connection. In Claude Code,
-        the plugin brings the skill, the MCP server and the CLI in one step:
+        The repo's <code>annotate-setup</code> skill guides the agent through any project shape (Xcode
+        project, XcodeGen, Tuist, SwiftPM), the CLI and the connection. In Claude Code, one plugin
+        brings the skill, MCP server and CLI:
       </p>
       <div class="cmd">
         <code>/plugin install annotate --marketplace ooolzhas/annotatekit</code>
         <button class="copy" type="button" aria-label="Copy plugin install command"></button>
       </div>
       <p class="note">
-        On Claude Code older than 2.1.275, run <code>/plugin marketplace add ooolzhas/annotatekit</code>,
+        Before Claude Code 2.1.275: <code>/plugin marketplace add ooolzhas/annotatekit</code>,
         then <code>/plugin install annotate@annotatekit</code>.
       </p>
 
@@ -186,19 +187,19 @@ annotate ask &lt;id&gt; &lt;pin&gt; "question"      # waits for the answer and p
         <button class="copy" type="button" aria-label="Copy package URL"></button>
       </div>
       <div class="code-block">
-<pre><code>import AnnotateKit
+<pre><code><span class="tk-key">import</span> AnnotateKit
 
-@main
-struct MyApp: App {
-    init() {
-        Annotate.install()   // DEBUG-only; a no-op in Release
+<span class="tk-attr">@main</span>
+<span class="tk-key">struct</span> MyApp: App {
+    <span class="tk-key">init</span>() {
+        Annotate.install()   <span class="tk-com">// DEBUG-only; a no-op in Release</span>
     }
-    var body: some Scene { WindowGroup { ContentView() } }
+    <span class="tk-key">var</span> body: <span class="tk-key">some</span> Scene { WindowGroup { ContentView() } }
 }</code></pre>
         <button class="copy" type="button" aria-label="Copy Swift snippet"></button>
       </div>
       <p>Then add <code>.annotate/</code> to your <code>.gitignore</code>.</p>
-      <p><strong>2. The CLI.</strong> Skip this if you installed the Claude Code plugin. Pick one:</p>
+      <p><strong>2. The CLI.</strong> Not needed with the Claude Code plugin. Pick one:</p>
       <div class="cmd-stack">
         <div class="cmd shell">
           <code>brew install ooolzhas/tap/annotate</code>
@@ -222,55 +223,55 @@ struct MyApp: App {
         <div>
           <dt>Claude Code + channels <span class="tag">Recommended</span></dt>
           <dd>
-            Pushed into your open session the moment you hit send, even while Claude is idle. Start
-            with <code>claude --dangerously-load-development-channels plugin:annotate@annotatekit</code>,
-            or <code class="nw">server:annotate</code> without the plugin.
+            Sends land in your open session instantly, even while Claude is idle. Start with
+            <code>claude --dangerously-load-development-channels plugin:annotate@annotatekit</code>
+            (or <code class="nw">server:annotate</code> without the plugin).
           </dd>
         </div>
         <div>
           <dt>Claude Code, no flags</dt>
-          <dd>Run <code class="nw">/annotate-watch</code>. A watcher picks up each send.</dd>
+          <dd>Run <code class="nw">/annotate-watch</code>; a watcher picks up each send.</dd>
         </div>
         <div>
           <dt>Unattended</dt>
           <dd>
-            <code class="nw">annotate run</code> in the project root runs <code class="nw">claude -p</code> per send, with
+            <code class="nw">annotate run</code> in the project root runs <code class="nw">claude -p</code> for each send with
             <code>--permission-mode acceptEdits</code>, resuming the conversation.
           </dd>
         </div>
         <div>
           <dt>Cursor, Codex, VS Code, Claude desktop, any MCP client</dt>
           <dd>
-            Add the MCP server and ask the agent to "keep calling annotation_wait". Each call waits
-            for your next send. Or say "check my latest annotation" now and then.
+            Add the MCP server and tell the agent to "keep calling annotation_wait"; each call waits
+            for your next send. Or ask it to "check my latest annotation" when you like.
           </dd>
         </div>
       </dl>
       <p class="note">
-        Channels are a Claude Code research preview. The development-channels flag lifts the
-        allowlist check only for the server you name, and Claude Code asks you to confirm. Team and
-        Enterprise orgs need an admin to turn channels on.
+        Channels are a Claude Code research preview. The development-channels flag skips the
+        allowlist only for the server you name, after you confirm. On Team and Enterprise, an admin
+        must enable channels.
       </p>
 
       <details>
         <summary>MCP configs for Cursor, VS Code and Codex</summary>
-        <p>The server is <code class="nw">annotate mcp</code> over stdio, run from the project root.</p>
+        <p>The server is <code class="nw">annotate mcp</code> (stdio), run from the project root.</p>
         <div class="code-block">
-<pre><code>// Cursor: .cursor/mcp.json
-{ "mcpServers": { "annotate": { "command": "annotate", "args": ["mcp"] } } }
+<pre><code><span class="tk-com">// Cursor: .cursor/mcp.json</span>
+{ <span class="tk-str">"mcpServers"</span>: { <span class="tk-str">"annotate"</span>: { <span class="tk-str">"command"</span>: <span class="tk-str">"annotate"</span>, <span class="tk-str">"args"</span>: [<span class="tk-str">"mcp"</span>] } } }
 
-// Nothing installed? npx fetches the CLI on first run (macOS)
-{ "mcpServers": { "annotate": { "command": "npx", "args": ["-y", "annotate-ios", "mcp"] } } }
+<span class="tk-com">// Nothing installed? npx fetches the CLI on first run (macOS)</span>
+{ <span class="tk-str">"mcpServers"</span>: { <span class="tk-str">"annotate"</span>: { <span class="tk-str">"command"</span>: <span class="tk-str">"npx"</span>, <span class="tk-str">"args"</span>: [<span class="tk-str">"-y"</span>, <span class="tk-str">"annotate-ios"</span>, <span class="tk-str">"mcp"</span>] } } }
 
-// VS Code: .vscode/mcp.json
-{ "servers": { "annotate": { "type": "stdio", "command": "annotate", "args": ["mcp"] } } }</code></pre>
+<span class="tk-com">// VS Code: .vscode/mcp.json</span>
+{ <span class="tk-str">"servers"</span>: { <span class="tk-str">"annotate"</span>: { <span class="tk-str">"type"</span>: <span class="tk-str">"stdio"</span>, <span class="tk-str">"command"</span>: <span class="tk-str">"annotate"</span>, <span class="tk-str">"args"</span>: [<span class="tk-str">"mcp"</span>] } } }</code></pre>
           <button class="copy" type="button" aria-label="Copy JSON configs"></button>
         </div>
         <div class="code-block">
-<pre><code># Codex: ~/.codex/config.toml
+<pre><code><span class="tk-com"># Codex: ~/.codex/config.toml</span>
 [mcp_servers.annotate]
-command = "annotate"
-args = ["mcp"]</code></pre>
+command = <span class="tk-str">"annotate"</span>
+args = [<span class="tk-str">"mcp"</span>]</code></pre>
           <button class="copy" type="button" aria-label="Copy Codex config"></button>
         </div>
         <p class="note">Claude Code without the plugin: <code>claude mcp add annotate --scope project -- annotate mcp</code></p>
@@ -301,6 +302,19 @@ args = ["mcp"]</code></pre>
       btn.dataset.label = btn.getAttribute('aria-label') || 'Copy';
     });
 
+    // brew / npm switch on the install line: shows one command, and Copy copies the visible one.
+    document.querySelectorAll('.pm-switch button').forEach(function (choice) {
+      choice.addEventListener('click', function () {
+        var cmd = choice.closest('.cmd');
+        cmd.querySelectorAll('.pm-switch button').forEach(function (b) {
+          b.setAttribute('aria-pressed', String(b === choice));
+        });
+        cmd.querySelectorAll('code[data-pm]').forEach(function (code) {
+          code.hidden = code.dataset.pm !== choice.dataset.pm;
+        });
+      });
+    });
+
     function fallbackCopy(text) {
       var ta = document.createElement('textarea');
       ta.value = text;
@@ -326,7 +340,7 @@ args = ["mcp"]</code></pre>
     document.addEventListener('click', function (event) {
       var btn = event.target.closest('.copy');
       if (!btn) return;
-      var source = btn.parentElement.querySelector('pre, code');
+      var source = btn.parentElement.querySelector('pre, code:not([hidden])');
       var text = btn.dataset.copy || (source ? source.textContent : '');
       copyText(text.trim()).then(function (ok) {
         if (!ok) return;

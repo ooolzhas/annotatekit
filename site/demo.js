@@ -82,17 +82,37 @@
 
   // ---------- Scaling: the stage has a fixed size and is scaled to the column ----------
 
+  // Phones stack the terminal under the phone. From 1000px the demo fills the fixed preview pane:
+  // the phone-only stage (260 x 526) is centered and scaled above a terminal docked full width
+  // along the bottom at real pixel size, like an IDE's built-in terminal.
   var narrowQuery = window.matchMedia("(max-width: 479px)");
+  var dockedQuery = window.matchMedia("(min-width: 1000px)");
+  var term = $(".ak-term");
   function layout() {
-    var narrow = narrowQuery.matches;
+    var narrow = narrowQuery.matches, docked = dockedQuery.matches;
     root.classList.toggle("ak-narrow", narrow);
+    root.classList.toggle("ak-docked", docked);
+    var home = docked ? root : el.stage;
+    if (term.parentNode !== home) home.appendChild(term);
+    if (docked) {
+      var aw = root.clientWidth, ah = root.clientHeight - term.offsetHeight;
+      if (!aw || ah <= 0) return;
+      var s = Math.min(aw / 300, ah / 566);
+      root.style.setProperty("--ak-scale", String(s));
+      root.style.setProperty("--ak-x", (aw - 260 * s) / 2 + "px");
+      root.style.setProperty("--ak-y", (ah - 526 * s) / 2 + "px");
+      return;
+    }
     var w = root.clientWidth || mount.clientWidth;
     if (w) root.style.setProperty("--ak-scale", String(w / (narrow ? 340 : 560)));
   }
   layout();
   if ("ResizeObserver" in window) new ResizeObserver(layout).observe(root);
   else window.addEventListener("resize", layout);
-  if (narrowQuery.addEventListener) narrowQuery.addEventListener("change", layout);
+  if (narrowQuery.addEventListener) {
+    narrowQuery.addEventListener("change", layout);
+    dockedQuery.addEventListener("change", layout);
+  }
 
   // ---------- One timeline clock: virtual time that only advances while playing ----------
 
