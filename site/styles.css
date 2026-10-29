@@ -130,7 +130,7 @@ img { display: block; }
 }
 .wordmark-mark {
   width: 24px; height: 24px;
-  border-radius: 25%;
+  border-radius: 30%;
   corner-shape: round;
   background: var(--text-faint);
   flex: none;
@@ -181,6 +181,9 @@ section {
 section#overview { padding-top: 0; }
 
 p { margin: 0 0 14px; }
+/* Prose wraps "pretty" (no one-word last lines); headings balance their lines */
+main p, main li, main dd { text-wrap: pretty; }
+main h1, main h2, main h3 { text-wrap: balance; }
 
 strong { color: var(--text-strong); font-weight: 600; }
 
@@ -296,18 +299,24 @@ section#overview h1 { margin-top: 0; }
   pointer-events: none;
 }
 
-.note, .caption {
+/* Notes and captions share one small caption style (13px, muted), as does the requirements line */
+.note, .caption, .install-meta {
   color: var(--text-muted);
-  font-size: 15px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 19px;
 }
 .caption { margin: 20px 0 8px; }
+
+/* The pane's resize handle exists only where the pane is a side panel (from 1000px). */
+.pane-handle { display: none; }
+.is-resizing, .is-resizing * { cursor: col-resize !important; -webkit-user-select: none; user-select: none; }
 
 /* Demo as a fixed preview pane on the right, like a simulator pane in an IDE. Only the middle
    column scrolls; the column centers in the space between the sidebar and the pane. Below
    1000px the pane folds back into the overview. */
 @media (min-width: 1000px) {
-  :root { --pane-w: clamp(340px, 33.333vw, 600px); }
+  /* --pane-w-user is set by dragging the pane's edge (inline script in index.html) */
+  :root { --pane-w: var(--pane-w-user, clamp(340px, 33.333vw, 600px)); }
   main {
     /* Centered between the sidebar and the pane, nudged 66px right (rearranged by hand), with room
        above the headline; it narrows instead of sliding under the pane when space runs out. */
@@ -322,53 +331,44 @@ section#overview h1 { margin-top: 0; }
     width: var(--pane-w);
     background: var(--code-bg);
   }
+  .pane-handle {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    width: 8px;
+    z-index: 2;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .pane-handle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .pane-handle:hover::after, .pane-handle:focus-visible::after, .is-resizing .pane-handle::after { opacity: 1; }
+  .pane-handle:focus-visible { outline: none; }
   /* demo.js lays out the docked terminal and the phone inside the full pane. */
   .preview-pane #demo { width: 100%; height: 100%; aspect-ratio: auto; }
 }
 
-/* Install line: requirements, then one command with a brew / npm switch */
+/* Install line: the two install commands as one-liners, requirements underneath */
 .install-bar {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 8px;
 }
-.cmd.installer { padding: 4px; border-radius: 999px; }
-.cmd.installer .copy { border-radius: 999px; background: transparent; box-shadow: none; opacity: 1; }
-/* Sized to the longer command (with its "$ ") so switching never resizes the box. */
-.cmd.installer code { width: 36ch; }
-.pm-switch {
-  display: flex;
-  flex: none;
-  gap: 2px;
-  margin-right: 10px;
-  padding: 2px;
-  border-radius: 999px;
-  background: var(--code-bg);
-}
-.pm-switch button {
-  height: 26px;
-  padding: 0 11px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-muted);
-  font: 500 13px/1 var(--font);
-  cursor: pointer;
-}
-.pm-switch button:hover { color: var(--text-strong); }
-.pm-switch button[aria-pressed="true"] {
-  background: var(--bg);
-  box-shadow: 0 0 0 1px var(--code-border);
-  color: var(--text-strong);
-}
-html:not(.js) .pm-switch { display: none; }
-.install-meta {
-  color: var(--text-muted);
-  font-size: 15px;
-  white-space: nowrap;
-}
-.install-bar .cmd { max-width: 100%; margin: 0; }
+.install-bar .cmd-stack { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.install-meta { white-space: nowrap; }
+.install-bar .cmd { margin: 0; }
 
 /* #demo: width only; demo.css owns the height and internals. */
 #demo { width: 100%; }
@@ -444,7 +444,6 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 .code-block {
   position: relative;
   margin: 0 0 18px;
-  border: 1px solid var(--code-border);
   border-radius: 14px;
   background: var(--code-bg);
 }
@@ -465,14 +464,14 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 .tk-com { color: var(--tk-com); font-style: italic; }
 
 /* One-line commands */
-/* "lol, lmao even" beside "By hand": plain single-stroke letters (Hershey Sans) roughed up at build
-   time (jittered points, wandering baseline, uneven size, tilt and spacing) in the loops' blue ink.
-   When it scrolls into view an arrow draws back toward the heading first, then the letters. Strokes are in the SVG's units: 67 is 1.75px
-   at the 24px height. */
+/* "lol, lmao even" beside "By hand": single-stroke glyphs drawn after a handwriting reference
+   (neat print, slight right lean, single-story a, looped e) in the loops' blue ink. When it scrolls
+   into view an arrow draws back toward the heading first, then the letters. Strokes are in the
+   SVG's units: 13.4 is 1.3px at the 28px height. */
 .scribble {
   display: inline-block;
-  height: 24px;
-  aspect-ratio: 7562 / 868;
+  height: 28px;
+  aspect-ratio: 1433 / 289;
   margin-left: 8px;
   vertical-align: -4px;
   overflow: visible;
@@ -481,7 +480,7 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 .scribble path {
   fill: none;
   stroke: var(--accent);
-  stroke-width: 67;
+  stroke-width: 13.4;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 1;
@@ -521,7 +520,6 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   min-width: 0;
   margin: 0 0 18px;
   padding: 12px 12px 12px 18px;
-  border: 1px solid var(--code-border);
   border-radius: 14px;
   background: var(--code-bg);
 }
@@ -578,11 +576,7 @@ html:not(.js) .copy { display: none; }
 /* ---------- Delivery modes ---------- */
 
 .modes { margin: 0 0 16px; }
-.modes > div {
-  padding: 12px 0;
-  border-top: 1px solid var(--hairline);
-}
-.modes > div:last-child { border-bottom: 1px solid var(--hairline); }
+.modes > div { padding: 12px 0; }
 .modes dt {
   color: var(--text-strong);
   font-weight: 600;
@@ -603,15 +597,16 @@ html:not(.js) .copy { display: none; }
   vertical-align: 1px;
 }
 
+/* Same box as the code blocks: 14px corners, their fill, 18px sides, no border */
 details {
   margin-top: 8px;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--code-bg);
+  padding: 0 18px;
 }
-details[open] { padding-bottom: 4px; }
+details[open] { padding-bottom: 16px; }
 summary {
-  padding: 10px 0;
+  padding: 16px 0;
   color: var(--text-strong);
   font-size: 15px;
   font-weight: 500;

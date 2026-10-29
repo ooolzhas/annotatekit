@@ -66,19 +66,21 @@
       </p>
 
       <div class="install-bar">
-        <span class="install-meta">iOS 17+ · SwiftUI and UIKit</span>
-        <div class="cmd shell installer">
-          <div class="pm-switch" role="group" aria-label="Package manager">
-            <button type="button" data-pm="brew" aria-pressed="true">brew</button>
-            <button type="button" data-pm="npm" aria-pressed="false">npm</button>
+        <div class="cmd-stack">
+          <div class="cmd shell">
+            <code>brew install ooolzhas/tap/annotate</code>
+            <button class="copy" type="button" aria-label="Copy Homebrew install command"></button>
           </div>
-          <code data-pm="brew">brew install ooolzhas/tap/annotate</code>
-          <code data-pm="npm" hidden>npm install -g annotate-ios</code>
-          <button class="copy" type="button" aria-label="Copy install command"></button>
+          <div class="cmd shell">
+            <code>npm install -g annotate-ios</code>
+            <button class="copy" type="button" aria-label="Copy npm install command"></button>
+          </div>
         </div>
+        <span class="install-meta">iOS 17+ · SwiftUI and UIKit</span>
       </div>
 
       <div class="preview-pane">
+        <div class="pane-handle" role="separator" aria-orientation="vertical" aria-label="Resize the demo panel" aria-valuemin="320" tabindex="0"></div>
         <div id="demo" class="demo" role="img" aria-label="Recorded demo: annotating an iPhone app in the Simulator and Claude applying the changes"></div>
       </div>
     </section>
@@ -174,7 +176,7 @@ annotate ask &lt;id&gt; &lt;pin&gt; <span class="tk-str">"question"</span>      
         then <code>/plugin install annotate@annotatekit</code>.
       </p>
 
-      <h3>By hand <svg class="scribble" viewBox="-1063 -735 7562 868" aria-hidden="true"><path pathLength="1" style="--t:0s;--d:.45s" d="M-61 -208C-318 -331 -700 -148 -1000 -250"/><path pathLength="1" style="--t:.45s;--d:.16s" d="M-825 -440L-1003 -250L-779 -64"/><path pathLength="1" style="--t:0.70s" d="M355 -579L189 13"/><path pathLength="1" style="--t:0.85s" d="M632 -489L565 -443L496 -368L459 -280L463 -216L478 -118L538 -53L587 -39L708 -39L769 -59L828 -128L867 -243L884 -311L863 -412L819 -447L737 -504L646 -502"/><path pathLength="1" style="--t:1.00s" d="M1063 -675L998 -91"/><path pathLength="1" style="--t:1.15s" d="M1277 -141L1243 -108L1230 -128L1275 -153L1294 -120L1272 -66L1195 -37"/><path pathLength="1" style="--t:1.30s" d="M2071 -673L1853 23"/><path pathLength="1" style="--t:1.45s" d="M2103 -338L2074 73M2095 -232L2194 -329L2273 -366L2351 -387L2398 -342L2445 -273L2409 50M2440 -277L2519 -379L2600 -405L2677 -399L2723 -401L2755 -305L2739 -4"/><path pathLength="1" style="--t:1.60s" d="M3353 -351L3247 44M3343 -264L3310 -329L3231 -367L3153 -373L3077 -360L3010 -301L2948 -239L2950 -173L2945 -78L2973 5L3020 16L3131 25L3180 13L3271 -41"/><path pathLength="1" style="--t:1.75s" d="M3776 -481L3697 -453L3605 -402L3524 -300L3517 -237L3503 -128L3565 -42L3615 9L3719 20L3784 -4L3904 -67L3964 -149L3987 -222L3978 -337L3920 -414L3860 -455L3769 -461"/><path pathLength="1" style="--t:1.90s" d="M4399 -302L4805 -362L4789 -449L4772 -496L4746 -521L4675 -539L4571 -541L4522 -501L4441 -414L4408 -297L4413 -252L4456 -154L4524 -86L4564 -68L4665 -77L4733 -133L4800 -200"/><path pathLength="1" style="--t:2.05s" d="M5015 -555L5138 -56M5453 -531L5160 -35"/><path pathLength="1" style="--t:2.20s" d="M5539 -310L5905 -256L5938 -316L5935 -387L5924 -420L5850 -455L5756 -458L5693 -461L5599 -398L5542 -327L5526 -264L5532 -162L5574 -105L5603 -65L5716 -23L5780 -57L5877 -98"/><path pathLength="1" style="--t:2.35s" d="M6055 -513L6025 -27M6059 -374L6164 -478L6240 -543L6344 -541L6407 -508L6439 -423L6407 -51"/></svg></h3>
+      <h3>By hand <svg class="scribble" viewBox="-258 -246 1433 289" aria-hidden="true"><path pathLength="1" style="--t:0s;--d:.45s" d="M-22.8 -45.4 C-79.5 -71.4 -164.3 -33.7 -240.9 -50.1"/><path pathLength="1" style="--t:.45s;--d:.16s" d="M-198.4 -88.8 L-244.0 -49.1 L-205.4 -16.3"/><path pathLength="1" style="--t:0.70s" d="M65.1 -230.3C48.9 -148.5 31.0 -60.1 20.2 -11.5C17.8 -1.2 23.6 -0.3 29.4 -3.8"/><path pathLength="1" style="--t:0.83s" d="M158.0 -85.8C133.3 -104.2 95.4 -85.5 87.6 -47.4C79.0 -11.0 100.0 8.2 123.5 4.9C152.8 1.1 170.6 -33.4 167.8 -60.8C168.9 -86.6 149.1 -96.4 131.8 -94.2"/><path pathLength="1" style="--t:0.96s" d="M238.7 -227.1C224.9 -148.4 205.9 -59.2 196.5 -8.6C194.5 3.6 197.5 7.7 205.3 0.4"/><path pathLength="1" style="--t:1.09s" d="M260.6 -6.3C259.8 3.1 256.4 17.4 246.6 29.0"/><path pathLength="1" style="--t:1.22s" d="M388.8 -231.6C372.9 -148.1 354.2 -59.7 345.0 -10.3C340.9 2.3 346.1 4.8 352.9 0.3"/><path pathLength="1" style="--t:1.35s" d="M412.4 -97.2C405.7 -59.6 400.4 -31.4 394.0 -1.5M403.2 -59.1C419.2 -88.2 448.7 -105.3 453.0 -77.2C448.9 -50.6 443.1 -24.8 437.3 -2.8M451.2 -68.8C465.4 -94.8 494.3 -104.2 498.2 -75.6C492.7 -48.3 488.7 -24.7 482.1 -2.9"/><path pathLength="1" style="--t:1.48s" d="M594.3 -83.9C583.6 -103.8 542.2 -100.2 526.4 -57.4C515.1 -20.6 535.5 1.0 558.9 -6.7C577.0 -12.7 588.6 -44.9 594.2 -72.4M599.2 -99.8C592.0 -63.8 587.4 -26.2 591.3 -3.6"/><path pathLength="1" style="--t:1.61s" d="M715.4 -91.4C691.0 -112.7 650.1 -91.8 640.4 -53.5C630.0 -16.8 651.4 3.0 680.4 -0.4C708.8 -5.4 729.3 -38.4 727.7 -66.7C727.4 -92.7 705.4 -104.6 684.4 -101.0"/><path pathLength="1" style="--t:1.74s" d="M815.2 -45.1C837.4 -41.2 871.2 -49.4 882.1 -73.3C889.9 -90.9 862.4 -100.9 843.4 -89.0C821.3 -80.0 805.7 -45.2 807.8 -23.5C812.7 1.2 843.7 9.0 877.6 -10.6"/><path pathLength="1" style="--t:1.87s" d="M914.3 -91.7C923.8 -64.1 928.9 -30.5 934.6 2.3C952.6 -29.6 970.8 -67.6 991.0 -98.6"/><path pathLength="1" style="--t:2.00s" d="M1005.6 -47.0C1030.9 -43.4 1066.3 -52.4 1078.1 -74.0C1084.1 -95.3 1057.3 -104.3 1034.7 -92.1C1012.5 -81.5 997.3 -47.1 1000.0 -23.6C1005.5 2.6 1038.8 8.9 1072.2 -8.0"/><path pathLength="1" style="--t:2.13s" d="M1117.4 -97.0C1110.6 -58.7 1104.1 -29.0 1097.0 -1.4M1109.2 -59.5C1122.0 -90.6 1158.0 -109.0 1161.5 -76.3C1158.3 -51.5 1154.6 -25.2 1148.8 0.7"/></svg></h3>
       <p>
         <strong>1. The overlay.</strong> Add the package with Swift Package Manager and link
         <strong>AnnotateKit</strong> to your app target (iOS 17+).
@@ -271,7 +273,7 @@ command = <span class="tk-str">"annotate"</span>
 args = [<span class="tk-str">"mcp"</span>]</code></pre>
           <button class="copy" type="button" aria-label="Copy Codex config"></button>
         </div>
-        <p class="note">Claude without the plugin: <code>claude mcp add annotate --scope project -- annotate mcp</code></p>
+        <p>Claude without the plugin: <code>claude mcp add annotate --scope project -- annotate mcp</code></p>
       </details>
     </section>
 
@@ -282,7 +284,7 @@ args = [<span class="tk-str">"mcp"</span>]</code></pre>
         <li><a href="https://github.com/ooolzhas/annotatekit/blob/main/CHANGELOG.md">CHANGELOG.md</a></li>
         <li><a href="https://github.com/ooolzhas/annotatekit/blob/main/llms.txt">llms.txt</a></li>
       </ul>
-      <p>MIT licensed · Made by <a href="https://github.com/ooolzhas">@ooolzhas</a></p>
+      <p>MIT licensed · Made by <a href="https://x.com/ooolzhas">@ooolzhas</a></p>
     </footer>
   </main>
 
@@ -297,19 +299,6 @@ args = [<span class="tk-str">"mcp"</span>]</code></pre>
     document.querySelectorAll('.copy').forEach(function (btn) {
       btn.innerHTML = ICON_COPY + ICON_CHECK + '<span class="copy-done">Copied</span>';
       btn.dataset.label = btn.getAttribute('aria-label') || 'Copy';
-    });
-
-    // brew / npm switch on the install line: shows one command, and Copy copies the visible one.
-    document.querySelectorAll('.pm-switch button').forEach(function (choice) {
-      choice.addEventListener('click', function () {
-        var cmd = choice.closest('.cmd');
-        cmd.querySelectorAll('.pm-switch button').forEach(function (b) {
-          b.setAttribute('aria-pressed', String(b === choice));
-        });
-        cmd.querySelectorAll('code[data-pm]').forEach(function (code) {
-          code.hidden = code.dataset.pm !== choice.dataset.pm;
-        });
-      });
     });
 
     function fallbackCopy(text) {
@@ -430,6 +419,53 @@ args = [<span class="tk-str">"mcp"</span>]</code></pre>
     marks.forEach(function (m) {
       m.classList.add('draw-pending');
       io.observe(m);
+    });
+  })();
+  </script>
+  <script>
+  // The demo pane resizes from its left edge, like an IDE panel: drag, arrow keys (16px), or
+  // double-click to reset. The width stays between 320px and a third of the window, and is
+  // remembered per visitor (best effort: storage can be unavailable).
+  (function () {
+    var handle = document.querySelector('.pane-handle');
+    if (!handle) return;
+    var root = document.documentElement, KEY = 'annotatekit.paneWidth';
+    function clamp(w) { return Math.round(Math.min(Math.max(320, innerWidth / 3), Math.max(320, w))); }
+    function set(w, save) {
+      w = clamp(w);
+      root.style.setProperty('--pane-w-user', w + 'px');
+      handle.setAttribute('aria-valuenow', w);
+      if (save) { try { localStorage.setItem(KEY, String(w)); } catch (e) {} }
+    }
+    function reset() {
+      root.style.removeProperty('--pane-w-user');
+      handle.removeAttribute('aria-valuenow');
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    }
+    try { var saved = Number(localStorage.getItem(KEY)); if (saved) set(saved); } catch (e) {}
+
+    handle.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      document.body.classList.add('is-resizing');
+    });
+    handle.addEventListener('pointermove', function (e) {
+      if (handle.hasPointerCapture(e.pointerId)) set(innerWidth - e.clientX);
+    });
+    handle.addEventListener('pointerup', function (e) {
+      if (handle.hasPointerCapture(e.pointerId)) set(innerWidth - e.clientX, true);
+    });
+    handle.addEventListener('lostpointercapture', function () { document.body.classList.remove('is-resizing'); });
+    handle.addEventListener('dblclick', reset);
+    handle.addEventListener('keydown', function (e) {
+      var step = e.key === 'ArrowLeft' ? 16 : e.key === 'ArrowRight' ? -16 : 0;
+      if (!step) return;
+      e.preventDefault();
+      set(handle.parentElement.getBoundingClientRect().width + step, true);
+    });
+    window.addEventListener('resize', function () {
+      var w = parseFloat(root.style.getPropertyValue('--pane-w-user'));
+      if (w) set(w);
     });
   })();
   </script>

@@ -1,6 +1,6 @@
 /* annotatekit.com hero demo: the phone frame around demo.mp4 (a real AnnotateKit session recorded
    in the Simulator) and Claude's terminal. Every selector is scoped under #demo or prefixed .ak-.
-   The stage is laid out at a fixed size (560 x 530, or 340 x 726 stacked below 480px; from 1000px it
+   The stage is laid out at a fixed size (560 x 530, or 340 x 746 stacked below 480px; from 1000px it
    fills the preview pane with the terminal docked, see "Docked") and scaled by demo.js, so lengths
    below are stage pixels. The screen is 228 x 495.7, the recording's 1206 x 2622 aspect. */
 
@@ -9,7 +9,7 @@
   aspect-ratio: 560 / 530;
 }
 @media (max-width: 479px) {
-  #demo { aspect-ratio: 340 / 726; }
+  #demo { aspect-ratio: 340 / 746; }
 }
 
 .ak-demo {
@@ -24,7 +24,9 @@
   pointer-events: none;
 }
 .ak-demo *, .ak-demo *::before, .ak-demo *::after { box-sizing: border-box; }
-.ak-term-head i { corner-shape: round; }
+/* Plain round corners: the site squircles rounded corners, which would bend the frame off the
+   screen's own curve. */
+.ak-term-head i, .ak-phone, .ak-screen { corner-shape: round; }
 
 .ak-stage {
   position: absolute;
@@ -35,11 +37,53 @@
   transform-origin: 0 0;
   transform: scale(var(--ak-scale, 1));
 }
-.ak-narrow .ak-stage { width: 340px; height: 726px; }
+.ak-narrow .ak-stage { width: 340px; height: 746px; }
+
+/* ---------- Mesh background ---------- */
+
+/* A grayscale mesh behind the phone and terminal: a gray gradient base with four soft pools of
+   lighter and darker grays drifting over it, in a light and a dark set. They pause with the video
+   (offscreen or hidden tab) and hold still for reduced motion. */
+.ak-mesh {
+  --m-base: linear-gradient(160deg, #ececf0 0%, #dedee3 45%, #e6e6ea 100%);
+  --m1: #ffffff; --m2: #c7c7cc; --m3: #f5f5f7; --m4: #d1d1d6;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--m-base);
+}
+@media (prefers-color-scheme: dark) {
+  .ak-mesh {
+    --m-base: linear-gradient(160deg, #3a3a3d 0%, #2b2b2e 45%, #353538 100%);
+    --m1: #6e6e73; --m2: #8e8e93; --m3: #48484a; --m4: #636366;
+  }
+}
+.ak-mesh i {
+  position: absolute;
+  width: 80%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  corner-shape: round;
+  filter: blur(60px);
+  will-change: transform;
+}
+.ak-mesh i:nth-child(1) { left: -20%; top: -12%; background: var(--m1); opacity: .75; animation: ak-drift1 19s ease-in-out infinite alternate; }
+.ak-mesh i:nth-child(2) { right: -28%; top: 18%; background: var(--m2); opacity: .55; animation: ak-drift2 23s ease-in-out infinite alternate; }
+.ak-mesh i:nth-child(3) { left: 0; bottom: -28%; background: var(--m3); opacity: .7; animation: ak-drift3 29s ease-in-out infinite alternate; }
+.ak-mesh i:nth-child(4) { right: -12%; bottom: 8%; width: 60%; background: var(--m4); opacity: .6; animation: ak-drift4 17s ease-in-out infinite alternate; }
+@keyframes ak-drift1 { to { transform: translate(28%, 22%) scale(1.15); } }
+@keyframes ak-drift2 { to { transform: translate(-30%, 18%) scale(.9); } }
+@keyframes ak-drift3 { to { transform: translate(22%, -26%) scale(1.2); } }
+@keyframes ak-drift4 { to { transform: translate(-24%, -30%) scale(1.1); } }
+.ak-paused .ak-mesh i { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .ak-mesh i { animation: none; } }
+/* Only behind the side panel; phones and narrower windows show the demo on the page itself. */
+@media (max-width: 999px) { .ak-mesh { display: none; } }
 
 /* ---------- Phone ---------- */
 
-/* Black bezel; the recording's own screen mask is black too, so its corners need no clipping here. */
+/* Black bezel, concentric with the screen: the Simulator's display corner measures 62pt (188.5px
+   at @3x, the 62px of AnnotateKit's Figma), 35.2px at this 228px width, plus the 8px bezel. */
 .ak-phone {
   position: absolute;
   left: 20px;
@@ -47,7 +91,7 @@
   width: 244px;
   height: 511.7px;
   padding: 8px;
-  border-radius: 40.9px;
+  border-radius: 43.2px;
   background: #000;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, .14),
@@ -55,7 +99,7 @@
     0 8px 18px -8px rgba(0, 0, 0, .35);
 }
 .ak-narrow .ak-phone { left: 48px; top: 8px; }
-.ak-screen { width: 228px; height: 495.7px; background: #000; }
+.ak-screen { width: 228px; height: 495.7px; overflow: hidden; border-radius: 35.2px; background: #000; }
 .ak-video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
 
 /* ---------- Terminal (stage pixels) ---------- */
@@ -78,7 +122,8 @@
     0 22px 44px -14px rgba(0, 0, 0, .55),
     0 6px 14px -6px rgba(0, 0, 0, .35);
 }
-.ak-narrow .ak-term { left: 14px; top: 532px; width: 312px; }
+/* On phones the stage is close to 1:1, so the terminal gets readable type and room for all 8 lines */
+.ak-narrow .ak-term { left: 14px; top: 532px; width: 312px; height: 206px; font-size: 11.5px; line-height: 18px; }
 
 /* Docked (preview pane from 1000px): demo.js moves the terminal out of the scaled stage, so these
    are real pixels. A phone-only stage is centered above it. */

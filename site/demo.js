@@ -1,6 +1,7 @@
-/* annotatekit.com hero demo: a real AnnotateKit session, recorded in the Simulator (demo.mp4, black
-   screen mask, so its corners sit flush in the black bezel), with Claude's terminal printing in step
-   with the video. Every product pixel comes from the recording; nothing here redraws the overlay. */
+/* annotatekit.com hero demo: demo.mp4 is AnnotateKit's own overlay code performing a scripted session
+   in the Simulator (a reel app drives the real controller: draw, tap, type, send; the agent answers
+   through the CLI), recorded with the black screen mask so its corners sit flush in the bezel. It is a
+   video, so it looks the same in every browser and layout. Claude's terminal prints in step with it. */
 (function () {
   "use strict";
 
@@ -12,7 +13,9 @@
   }
 
   mount.innerHTML =
-    '<div class="ak-demo" aria-hidden="true"><div class="ak-stage">' +
+    '<div class="ak-demo" aria-hidden="true">' +
+      '<div class="ak-mesh"><i></i><i></i><i></i><i></i></div>' +
+      '<div class="ak-stage">' +
       '<div class="ak-phone"><div class="ak-screen">' +
         '<video class="ak-video" src="demo.mp4" poster="demo-poster.jpg" muted playsinline loop preload="auto"></video>' +
       "</div></div>" +
@@ -67,13 +70,13 @@
 
   // ---------- Terminal in step with the video ----------
 
-  // When each line prints, in demo.mp4 seconds: the send lands at 10.7, the agent reports working
-  // at 12.3, resolves pin 1 at 14.15 and pin 2 at 15.5, and finishes at 16.4.
+  // When each line prints, in demo.mp4 seconds, read off the reel: send at 18.3, received 20.5,
+  // working 21.3, pin 1 resolved 23.5, pin 2 at 24.3, done 25.8.
   var CUES = [
-    [".ak-t-recv", 11.0], [".ak-t-work", 12.3], [".ak-t-edit", 12.6],
-    [".ak-t-edit2", 12.9], [".ak-t-r1", 14.15], [".ak-t-r2", 15.5]
+    [".ak-t-recv", 20.4], [".ak-t-work", 21.3], [".ak-t-edit", 21.6],
+    [".ak-t-edit2", 21.9], [".ak-t-r1", 23.5], [".ak-t-r2", 24.3]
   ].map(function (c) { return [$(c[0]), c[1]]; });
-  var WORK_DONE = 16.4;
+  var WORK_DONE = 25.8;
   var work = $(".ak-t-work");
 
   function sync() {
@@ -105,7 +108,9 @@
       return;
     }
     if (!video.getAttribute("src")) { video.src = "demo.mp4"; video.poster = "demo-poster.jpg"; }
-    if (inView && !document.hidden) {
+    var playing = inView && !document.hidden;
+    root.classList.toggle("ak-paused", !playing);
+    if (playing) {
       var p = video.play();
       if (p && p.catch) p.catch(function () {});
     } else {
