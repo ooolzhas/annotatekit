@@ -33,6 +33,8 @@ struct NotesSheet: View {
     static let tagBarBottomPadding: CGFloat = 8
     /// Space between the tag bar and the first card.
     static let listTopMargin: CGFloat = 8
+    /// The empty state's symbol box: the four symbols have different shapes, so each is fitted into it.
+    static let emptyIconSize: CGFloat = 48
     static let tagChange: Animation = .snappy(duration: 0.2)
 
     var body: some View {
@@ -77,7 +79,15 @@ struct NotesSheet: View {
                 // A row under the tags rather than an overlay on the list, which would sit on them
                 if counts[filter] == 0 {
                     ContentUnavailableView {
-                        Label(filter.emptyTitle, systemImage: Self.emptySymbol(filter))
+                        Label {
+                            Text(filter.emptyTitle)
+                        } icon: {
+                            // One box for every tag's symbol, so the empty states line up (owner request)
+                            Image(systemName: Self.emptySymbol(filter))
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: Self.emptyIconSize, height: Self.emptyIconSize)
+                        }
                     } description: {
                         if filter == .current { Text(ReviewHint.gestures.headline) }
                     }
@@ -90,7 +100,7 @@ struct NotesSheet: View {
             .tagBar {
                 tags(selected: filter, counts: counts)
             }
-            .navigationTitle(controller.reviewTitle)
+            .navigationTitle(OverlayChrome.notesSheetTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -327,7 +337,7 @@ private struct NoteBadge: View {
         }
     }
 }
-/// One tag: its title and count in a capsule, filled with the label color while picked.
+/// One tag: its title and count (0 included) in a capsule, filled with the label color while picked.
 private struct NoteTag: View {
     let filter: NoteFilter
     let count: Int
@@ -348,11 +358,10 @@ private struct NoteTag: View {
         Button(action: action) {
             HStack(spacing: Self.countSpacing) {
                 Text(filter.title)
-                if count > 0 {
-                    Text("\(count)")
-                        .monospacedDigit()
-                        .opacity(Self.countOpacity)
-                }
+                // Every tag shows its count, 0 included (owner request)
+                Text("\(count)")
+                    .monospacedDigit()
+                    .opacity(Self.countOpacity)
             }
             .font(.subheadline.weight(.medium))
             .foregroundStyle(isSelected ? Self.selectedText : .primary)
@@ -362,7 +371,7 @@ private struct NoteTag: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(count > 0 ? "\(filter.title), \(count)" : filter.title)
+        .accessibilityLabel("\(filter.title), \(count)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

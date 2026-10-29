@@ -69,7 +69,8 @@ All notable changes to this project are documented here. The format is based on
     this replaces the old trash button) and the last Send's notes with their progress and Reply.
     With no notes it opens on an empty state that says how to add one. Tags under its toolbar
     (Current, In Progress, Resolved, Failed, each with a count) pick what it lists; it replaces the
-    results card, and the hint line is a plain label again.
+    results card, and the hint line is a plain label again. The sheet is titled "My Notes", every
+    tag shows its count (0 included), and the empty states fit their symbol into one 48pt box.
   - **Send keeps annotate mode open.** The sent pins stay on the frozen screen, and each badge shows
     a spinner while the agent has the pin, then a green check when it's resolved (`?` for a question,
     × when dismissed). The bar reads "N notes sent". Saving a new pin hides them; leaving annotate

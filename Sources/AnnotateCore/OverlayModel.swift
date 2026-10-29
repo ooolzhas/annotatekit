@@ -80,6 +80,8 @@ public enum OverlayChrome: Equatable, Sendable {
     }
     /// Destructive button in the clear-all confirmation.
     public static let clearAction = "Delete"
+    /// The notes sheet's title. No Figma frame (owner copy).
+    public static let notesSheetTitle = "My Notes"
     /// Clear-all button in the notes sheet's toolbar. No Figma frame: the bar lost its trash button
     /// (9276:27550), so clearing lives with the list now.
     public static let clearAllTitle = "Clear All"
