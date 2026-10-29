@@ -457,12 +457,20 @@ struct ToastView: View {
     /// Not in Figma: the toast's bottom edge sits this far above the hint line's top.
     static let gapAboveHint: CGFloat = 12
 
+    /// Where the bar sits, or would: the home indicator while the review bar shows, the keyboard-aware
+    /// chrome bottom over a card.
+    private var barBottom: CGFloat {
+        if case .review = controller.chrome { return controller.screenChromeBottom }
+        return controller.chromeBottom
+    }
+
     var body: some View {
         let safe = controller.safeInsets
         let width = controller.bounds.width - safe.left - safe.right - 48
-        // The review bar's bottom is AT `chromeBottom` and the hint line sits `hintGap` above it, so
-        // the toast's bottom edge goes `gapAboveHint` above the hint line's top
-        let toastBottom = controller.chromeBottom - AnnotateController.barHeight
+        // The review bar's bottom is AT `screenChromeBottom` (it ignores the keyboard) and the hint line
+        // sits `hintGap` above it, so the toast's bottom edge goes `gapAboveHint` above the hint line's
+        // top. Over a keyboard-docked card it measures from the keyboard instead, as before
+        let toastBottom = barBottom - AnnotateController.barHeight
             - Self.hintGap - Self.hintHeight - Self.gapAboveHint
 
         HStack {

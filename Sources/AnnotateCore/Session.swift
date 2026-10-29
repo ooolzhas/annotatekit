@@ -317,6 +317,19 @@ public enum AnnotationIntent: String, Codable, Sendable, CaseIterable {
     }
 }
 
+extension Annotation {
+    /// The element's own text, quoted on the comment card like a message being replied to: its
+    /// label, else its value, trimmed. Nil for spots, sketches, regions and elements with no text.
+    public var quotedText: String? {
+        guard kind == .element, let element else { return nil }
+        for candidate in [element.label, element.value] {
+            let text = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !text.isEmpty { return text }
+        }
+        return nil
+    }
+}
+
 public struct ElementInfo: Codable, Sendable, Equatable {
     /// Normalized role: "button", "text", "image", "header", "textField", "toggle", "view"…
     public var role: String

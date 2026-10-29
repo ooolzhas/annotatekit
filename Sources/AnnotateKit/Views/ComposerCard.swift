@@ -1,5 +1,7 @@
 // The comment card for the open pin (Figma 9272:16847 empty · 9272:16929 typed · 9272:17011 with
-// attachments): an optional strip of 64pt reference-image thumbnails with white remove badges,
+// attachments): an optional strip with the element's own text quoted like a message being replied to
+// (no Figma: 2/3 of the card wide, two lines at most) and 64pt reference-image thumbnails with white
+// remove badges,
 // the comment field, and the paperclip / intent chip / undo / redo / ↑ row. The intent chip (no
 // Figma frame) picks what the user wants done with the pin (Fix, Question, Move) and the
 // placeholder follows it. Undo and redo step through the strokes drawn since the card opened
@@ -27,7 +29,7 @@ struct ComposerCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !draft.images.isEmpty {
+            if quote != nil || !draft.images.isEmpty {
                 attachmentStrip
             }
 
@@ -54,9 +56,10 @@ struct ComposerCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .annotateGlass(in: RoundedRectangle(cornerRadius: 32, style: .continuous), interactive: true)
         // Glass alone isn't hit-testable: without this, a tap that misses a button falls through
-        // to the frozen screen and starts a new pin. A tap on the card focuses the comment instead.
+        // to the frozen screen and starts a new pin. No tap gesture here: the intent menu opens over
+        // the card, and a card-wide tap gesture took the taps meant for its items (owner report on
+        // iOS 27). The comment field focuses itself when tapped.
         .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .onTapGesture { isFocused = true }
         .onAppear { isFocused = !opensWithoutKeyboard }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
@@ -248,10 +251,22 @@ struct ComposerCard: View {
     /// How far the badge pokes past the thumbnail's top and right edges (20 / 2 − 4 = 6).
     private static var badgeOverhang: CGFloat { badgeSize / 2 - badgeInset }
 
+    /// No Figma: the quote box is 2/3 of the card wide, as tall as a thumbnail, two lines at most.
+    private static let quoteWidthFraction: CGFloat = 2.0 / 3.0
+    private static let quotePadding: CGFloat = 12
+
+    /// The selected element's own text, quoted ahead of any images; nil when there's none.
+    private var quote: String? {
+        draft.annotation.quotedText
+    }
+
     /// 9272:17019 — `flex gap-[8px] items-end pt-[16px] px-[16px]`.
     private var attachmentStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if let quote {
+                    quoteBox(quote)
+                }
                 // The remove badge's 32pt hit box reaches 12pt past its thumbnail's right edge,
                 // over the 8pt gap and 4pt into the next thumbnail. Later HStack siblings draw
                 // on top by default and would take that strip, so stack earlier thumbnails above
@@ -268,9 +283,30 @@ struct ComposerCard: View {
             // 10 + the 6pt room above = Figma's 16pt from the card top to the thumbnails
             .padding(.top, 16 - Self.badgeOverhang)
         }
-        // Four 64pt thumbnails plus gaps fit the card, so the strip never needs to scroll; don't
-        // let it rubber-band thumbnails into the card's rounded corners
+        // Four 64pt thumbnails plus gaps fit the card, so without a quote the strip never needs to
+        // scroll; don't let it rubber-band thumbnails into the card's rounded corners
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+    }
+
+    /// The element's text in a thumbnail-shaped box (same height, radius and fill as the card's
+    /// circle buttons), like the message a reply quotes. Two lines, then it truncates.
+    private func quoteBox(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(.primary.opacity(0.6))
+            .lineLimit(2)
+            .truncationMode(.tail)
+            .padding(Self.quotePadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .frame(height: Self.thumbnailSize)
+            // 2/3 of the strip's visible width, which is the card's
+            .containerRelativeFrame(.horizontal) { width, _ in width * Self.quoteWidthFraction }
+            .background(
+                Color.primary.opacity(CircleIcon.fillOpacity),
+                in: RoundedRectangle(cornerRadius: Self.thumbnailRadius, style: .continuous)
+            )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Quoting \(text)")
     }
 
     private func thumbnail(_ image: AnnotateController.AttachedImage) -> some View {

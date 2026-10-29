@@ -56,9 +56,9 @@ struct ReplyCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .annotateGlass(in: RoundedRectangle(cornerRadius: 32, style: .continuous), interactive: true)
         // Glass alone isn't hit-testable: without this, a tap that misses a button falls through
-        // to the frozen screen and starts a new pin. A tap on the card focuses the reply instead.
+        // to the frozen screen and starts a new pin. No card-wide tap gesture, as ComposerCard: it
+        // can take taps meant for a menu drawn over the card.
         .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .onTapGesture { isFocused = true }
         .onAppear { isFocused = true }
     }
 

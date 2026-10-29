@@ -840,11 +840,16 @@ final class AnnotateController {
     /// Extra touch slop around the pill on every side, so a near miss still opens annotate mode.
     static let launcherHitSlop: CGFloat = 4
 
-    /// Lowest y bottom chrome (comment card, review bar, toasts) may reach: above the home
-    /// indicator, or above the keyboard while it's up.
+    /// Lowest y the keyboard-docked chrome (comment and reply cards, results card, toasts, the
+    /// launcher) may reach: above the home indicator, or above the keyboard while it's up.
     var chromeBottom: CGFloat {
-        let screenBottom = bounds.maxY - max(safeInsets.bottom, 12)
-        return keyboardTop.map { min($0, screenBottom) } ?? screenBottom
+        keyboardTop.map { min($0, screenChromeBottom) } ?? screenChromeBottom
+    }
+
+    /// The review bar's bottom: above the home indicator whether or not a keyboard is up, so the bar
+    /// never rides a keyboard that's leaving with the card.
+    var screenChromeBottom: CGFloat {
+        bounds.maxY - max(safeInsets.bottom, 12)
     }
 
     /// What the launcher pill says: the delivery stage while one is showing, otherwise idle with
