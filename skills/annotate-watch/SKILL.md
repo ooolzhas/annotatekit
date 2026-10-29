@@ -41,7 +41,6 @@ user can annotate on their phone with no other setup. Run it from the checkout t
 5. Report each pin as you finish it: `annotate resolve <id> <pin> "<what changed>"`, or
    `annotate dismiss <id> <pin> "<why not>"` for a pin you won't change. Respect the pin's intent:
    - **[Question]:** answer it; don't edit code for it.
-   - **[Move]:** move the element to where the drawing points.
 
    If a pin is unclear, ask before guessing: `annotate ask <id> <pin> "<question>"`. It waits up to
    2 minutes and prints the user's answer (from a phone, the answer travels back through the

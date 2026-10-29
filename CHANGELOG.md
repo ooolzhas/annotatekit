@@ -8,7 +8,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 - Redesigned overlay (Figma SUNSET 9257:13754). Annotate mode dims the frozen screen 50% and draws
-  a blue inset glow along the screen edge (62pt radius) that pulses slowly while annotate mode is on
+  a blue inset glow along the screen edge (62pt radius) that drifts slowly while annotate mode is on
   (static with Reduce Motion).
   - **Drawing is the default:** a stroke is a white 4pt pen line, and further strokes join the open
     pin for as long as its comment card is up.
@@ -31,9 +31,9 @@ All notable changes to this project are documented here. The format is based on
     back chevron instead of ×, and counts "notes" instead of "comments" (also "Delete N notes?" and
     "N notes sent").
   - **Hint line above the bar:**
-    - "Draw, tap or hold to annotate" by default.
-    - "● Claude connected" for a few seconds after you open annotate mode.
-    - "● Agent offline · Notes will be saved" when nothing is listening. Send then reads Save.
+    - "Draw, tap or hold to annotate" for a few seconds after you open annotate mode.
+    - Then "● Claude connected", or "● Agent offline · Notes will be saved" when nothing is
+      listening, and it stays on that, following the connection.
     - While a Send is in flight it narrates it with a timer, e.g. "● Claude looking at it 2s" or
       the agent's own "Changes applied, reinstalling 9s".
   - **Background:** a blue gradient rises behind the bottom chrome.
@@ -62,19 +62,27 @@ All notable changes to this project are documented here. The format is based on
 
 - Overlay layout pass (Figma SUNSET 9276:28552):
   - **Review bar:** three glass pieces 8pt apart: a 52pt back button, the note count, and a 52pt ↑
-    tinted blue while there is something to send. The trash button is gone: hold the count for
-    "Delete All Notes", which still asks first. VoiceOver calls ↑ Save while no agent listens.
+    tinted blue while there is something to send. VoiceOver calls ↑ Save while no agent listens.
+  - **Notes sheet:** the count is a button that opens a sheet at a small detent, draggable to full
+    height. It lists the unsent notes (tap one to open it, swipe to delete, Delete All asks first;
+    this replaces the old trash button) and the last Send's notes with their progress and Reply.
   - **Send keeps annotate mode open.** The sent pins stay on the frozen screen, and each badge shows
     a spinner while the agent has the pin, then a green check when it's resolved (`?` for a question,
     × when dismissed). The bar reads "N notes sent". Saving a new pin hides them; leaving annotate
     mode drops them. `⌘↩` does the same.
   - **Comment card:** with no keyboard up it sits where the bar does (34pt sides, on the home
-    indicator); over the keyboard it keeps 8pt. The intent chip shows just the intent in 17pt, with no
-    chevron. Disabled glyphs (↑ with no text, redo with nothing to redo) are 25% instead of 50%.
+    indicator); over the keyboard it keeps 8pt. The intent chip's title is 17pt, still with its
+    up/down chevron. Move is gone from the intent menu (a saved `move` loads as Fix), leaving Fix and
+    Question. Disabled glyphs (↑ with no text, redo with nothing to redo) are 25% instead of 50%.
   - **Quote box:** 236pt wide, 13/20pt text at 75%, hanging from the top.
   - **Hint line:** two-part lines split into a headline and a dimmed detail ("Agent offline", "Notes
     will be saved"); the detail and the elapsed sit 4pt after the headline.
-  - The undo ↔ × glyph swap runs twice as fast.
+  - The undo ↔ × glyph swap runs four times as fast.
+  - **Fluid glow and frost:** the edge glow is two bands of uneven blues that turn slowly in
+    opposite directions, so it swells, thins and runs along the edge; the frost behind the bottom
+    chrome has soft blue pools drifting sideways. Reduce Motion holds both still.
+  - Entering and leaving annotate mode fades the dim, glow and frost over the same 0.3s the bar
+    takes to rise, on an ease so it reads as a fade rather than a pop.
 
 ### Added
 - **Agent loop** (ideas from Agentation):
@@ -91,7 +99,7 @@ All notable changes to this project are documented here. The format is based on
     - The pill and hint line say "Question on note N".
     - The results card's Reply opens a reply card.
     - The answer is saved to `replies.json` and travels back from a device too.
-  - **Intent per pin** (Fix · Question · Move), on a chip on the comment card. Prompts tag
+  - **Intent per pin** (Fix · Question), on a chip on the comment card. Prompts tag
     non-fix pins.
   - **`AnnotateOptions.promptDetail`:** `.compact`, `.standard` or `.detailed`.
   - **`SCHEMA.md`:** documents every file the app and agents exchange.
