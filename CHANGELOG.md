@@ -50,6 +50,16 @@ All notable changes to this project are documented here. The format is based on
   a light tick while the Send moves along, success when it's done, a warning for a question or when
   nobody picked it up, an error when it failed.
 
+- Motion: entering and leaving annotate mode, the bottom chrome rises into place and sinks away while
+  the frozen screen cross-fades; the bar, comment, reply and results cards swap with a short slide,
+  fade and scale; the launcher pill scales and fades in place. Reduce Motion keeps the fades.
+- The review bar stays at the bottom of the screen while a keyboard is up; only the cards dock to the
+  keyboard.
+- The comment card quotes an element pin's own text in a thumbnail-style box (2/3 of the card wide,
+  two lines at most), like the message a reply quotes.
+- The comment and reply cards no longer focus on a tap anywhere on the card; that gesture took taps
+  meant for intent-menu items drawn over the card. Tap the field itself to type.
+
 ### Added
 - **Agent loop** (ideas from Agentation):
   - **`annotation_wait` MCP tool:** blocks until you Send or answer a question, batches for 10 s and
