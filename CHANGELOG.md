@@ -7,10 +7,9 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
-- The npm package is `@annotatekit/cli` (it was announced as `annotate-ios`, which was never published; npm
-  blocks `annotatekit` as too close to an existing `annotate-kit`), under the project's own npm
-  organization: `npx -y @annotatekit/cli mcp`. Releases publish it
-  through npm Trusted Publishing (GitHub's OIDC identity), so there's no npm token to store or rotate.
+- Releases publish the npm package `annotate-ios` through npm Trusted Publishing (GitHub's OIDC
+  identity), so there's no npm token to store or rotate. (npm blocks `annotatekit` as too close to
+  an existing `annotate-kit`.)
 
 ## [0.2.1] - 2026-10-29
 

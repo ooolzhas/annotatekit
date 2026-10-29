@@ -1,4 +1,4 @@
-# @annotatekit/cli
+# annotate-ios
 
 The `annotate` CLI for [AnnotateKit](https://annotatekit.com): it delivers the visual feedback you
 draw on your running iOS app (screenshots, exact coordinates and your notes) to your coding agent.
@@ -12,7 +12,7 @@ caches it in `~/.cache/annotate`. macOS only.
 Run it from your project root, in any MCP client:
 
 ```json
-{ "mcpServers": { "annotate": { "command": "npx", "args": ["-y", "@annotatekit/cli", "mcp"] } } }
+{ "mcpServers": { "annotate": { "command": "npx", "args": ["-y", "annotate-ios", "mcp"] } } }
 ```
 
 Then ask your agent to *"keep calling annotation_wait"*: each call returns the notes as soon as you
@@ -21,7 +21,7 @@ hit Send in the app.
 ## Or install the command
 
 ```sh
-npm install -g @annotatekit/cli
+npm install -g annotate-ios
 annotate help
 ```
 

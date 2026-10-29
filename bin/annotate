@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Launcher for the `annotate` CLI, used by the Claude Code plugin (as its MCP server command and on
-# the Bash tool's PATH via bin/) and by the npm package `@annotatekit/cli` (`npx -y @annotatekit/cli mcp`).
+# the Bash tool's PATH via bin/) and by the npm package `annotate-ios` (`npx -y annotate-ios mcp`).
 # Resolves a real binary, then execs it with the same arguments:
 #   1. an `annotate` already installed on PATH (Homebrew, Mint) other than this script
 #   2. a cached copy for this version in the plugin's data folder
