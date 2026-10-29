@@ -393,5 +393,20 @@ args = ["mcp"]</code></pre>
   })();
   </script>
   <script src="demo.js" defer></script>
+  <script type="module">
+    // Agentation feedback toolbar for local previews only; annotatekit.com never loads it.
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      var deps = '?deps=react@18.3.1,react-dom@18.3.1';
+      var mods = await Promise.all([
+        import('https://esm.sh/react@18.3.1'),
+        import('https://esm.sh/react-dom@18.3.1/client'),
+        import('https://esm.sh/agentation@3.1.2' + deps)
+      ]);
+      var host = document.body.appendChild(document.createElement('div'));
+      mods[1].createRoot(host).render(
+        mods[0].createElement(mods[2].Agentation, { endpoint: 'http://localhost:4747' })
+      );
+    }
+  </script>
 </body>
 </html>
