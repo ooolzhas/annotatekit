@@ -1,8 +1,12 @@
 // Public entry point. Everything here exists in every configuration so call sites compile in
 // Release, but only DEBUG builds on UIKit platforms install the overlay; elsewhere these are no-ops.
-// Public: Annotate.install(_:file:), start(), stop(), toggle(), isActive; AnnotateOptions
+// Public: Annotate.install(_:file:), start(), stop(), toggle(), isActive; AnnotateOptions; PromptDetail
 
+import AnnotateCore
 import Foundation
+
+/// Re-exported so apps importing only AnnotateKit can write `promptDetail: .compact`.
+public typealias PromptDetail = AnnotateCore.PromptDetail
 
 public struct AnnotateOptions: Sendable {
     /// Floating button that enters annotate mode. Turn off if you trigger it yourself.
@@ -31,6 +35,9 @@ public struct AnnotateOptions: Sendable {
     public var includesHiResScreens: Bool
     /// Session folders kept in `.annotate/sessions`; older ones are deleted after each Send.
     public var keepsSessions: Int
+    /// How much each Send's prompt carries. `.compact` saves tokens; `.detailed` adds every
+    /// screen's visible text.
+    public var promptDetail: PromptDetail
 
     public init(
         showsLauncher: Bool = true,
@@ -41,7 +48,8 @@ public struct AnnotateOptions: Sendable {
         completionNote: String? = "When you're done, finish with a one-line summary of what you changed.",
         unclaimedAfter: Double = 10,
         includesHiResScreens: Bool = false,
-        keepsSessions: Int = 30
+        keepsSessions: Int = 30,
+        promptDetail: PromptDetail = .standard
     ) {
         self.showsLauncher = showsLauncher
         self.outputDirectory = outputDirectory
@@ -52,6 +60,7 @@ public struct AnnotateOptions: Sendable {
         self.unclaimedAfter = unclaimedAfter
         self.includesHiResScreens = includesHiResScreens
         self.keepsSessions = keepsSessions
+        self.promptDetail = promptDetail
     }
 }
 

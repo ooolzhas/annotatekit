@@ -17,7 +17,14 @@
 // Send → hands a SendJob to BundleRenderer off the main thread (1x/annotated images, crops,
 // attachments, PNG encoding, write, prune), then polls status.json; the launcher pill narrates each
 // stage (`delivery` → `launcherStatus`) instead of toasts, so progress stays on screen in one place
-// and toasts are left to in-mode messages. No copy/paste.
+// and toasts are left to in-mode messages. No copy/paste. Each pin carries an intent picked on the
+// comment card (`setIntent`; new pins start as Fix, and an Approve pin may be saved with no comment),
+// and the prompt's detail level comes from `AnnotateOptions.promptDetail`.
+// Agent loop: the last Send's pins are kept (`lastSend`) with the per-pin statuses the agent writes
+// into status.json (`pinStatuses`), shown on the results card (`pinResults`, `isShowingResults`).
+// A pin the agent asked about is answered on the device (`beginReply` → `submitReply`): the reply
+// is appended to the session's replies.json off the main thread and shown as answered at once. While
+// a question is open the pill narrates `.question(pin:)`, and annotate mode opens on the results.
 // The launcher is a pill centered horizontally above the home indicator, or above the keyboard
 // while one is up, whether docked or dragged (Figma 9265:14439); a drag moves it vertically only,
 // so it can get out of the way of an app's own bottom bar.
@@ -62,6 +69,21 @@ final class AnnotateController {
     struct Toast: Equatable {
         let id = UUID()
         let message: String
+    }
+
+    /// The most recent Send: where its session lives and the pins as sent, so their results can be
+    /// shown after the overlay cleared them.
+    struct SentBatch: Equatable {
+        let sessionID: String
+        let output: URL
+        let pins: [Annotation]
+    }
+
+    /// An answer being written to the agent's question about one sent pin.
+    struct ReplyDraft: Equatable {
+        let pin: Int
+        let question: String
+        var text: String
     }
 
     /// One freeze-frame. Pixels stay out of observation; views read `frozenImage`.
@@ -124,6 +146,14 @@ final class AnnotateController {
     private(set) var isConnectionNews = false
     /// Top of the software keyboard (or hardware-keyboard bar) in overlay points while it's up.
     private(set) var keyboardTop: CGFloat?
+    /// The last Send (or the session resumed after a relaunch); nil until one goes out.
+    private(set) var lastSend: SentBatch?
+    /// The agent's per-pin reports for `lastSend`, from its status.json, with local replies applied.
+    private(set) var pinStatuses: [PinStatus] = []
+    /// The results card is up (in place of the review bar).
+    private(set) var isShowingResults = false
+    /// Non-nil while the user answers a question; the reply card replaces the other bottom chrome.
+    private(set) var replyDraft: ReplyDraft?
 
     @ObservationIgnored private var screens: [Int: CapturedScreen] = [:]
     /// Saved pins' reference images in pick order. Kept off `Annotation` so pins stay Codable and
@@ -152,6 +182,11 @@ final class AnnotateController {
     /// A tap waiting for scans to match the frozen image; a newer interaction replaces it.
     @ObservationIgnored private var pendingTap: Task<Void, Never>?
     @ObservationIgnored private var pendingAttributions: [Task<Void, Never>] = []
+    /// Replies sent from this device, by pin. status.json keeps the pin as `.question` until the Mac
+    /// delivers the reply, so these keep it answered locally instead of flipping back each poll.
+    @ObservationIgnored private var localReplies: [Int: PinStatus] = [:]
+    /// `pinStatuses` as status.json last had them, before `localReplies` are applied.
+    @ObservationIgnored private var reportedStatuses: [PinStatus] = []
 
     static let cropPadding: CGFloat = 32
     static let spotSize: CGFloat = 44
@@ -198,11 +233,17 @@ final class AnnotateController {
         observeKeyboard()
         window?.activate()
         warmUpAccessibility()
+        // An agent waiting on an answer: open on the question rather than the review bar
+        if pinResults.contains(where: { $0.outcome.isQuestion }) {
+            isShowingResults = true
+        }
     }
 
     func stop() {
         guard isActive else { return }
         finishDraft()
+        cancelReply()
+        closeResults()
         selection = nil
         holdTask?.cancel()
         holdTask = nil
@@ -341,7 +382,9 @@ final class AnnotateController {
             return
         }
         selection = stack
-        draft = Draft(annotation: annotation(for: stack, updating: nil), isNew: true)
+        var pin = annotation(for: stack, updating: nil)
+        pin.intent = .fix
+        draft = Draft(annotation: pin, isNew: true)
     }
 
     /// ↑ (`expand`) / ↓ — retarget the unsaved pin: element → enclosing containers.
@@ -384,12 +427,13 @@ final class AnnotateController {
         }
         cancelPendingTap()
         selection = nil
-        let sketch = Annotation(
+        var sketch = Annotation(
             index: 0,
             screen: currentScreen,
             kind: .sketch,
             frame: AnnotationRect(strokeBounds([stroke]))
         )
+        sketch.intent = .fix
         draft = Draft(annotation: sketch, isNew: true, strokes: [stroke])
     }
 
@@ -408,19 +452,31 @@ final class AnnotateController {
             source: SourceResolver.resolve(frame: spot, in: AnnotatableRegistry.shared.visible(in: bounds))
         )
         pin.nearbyText = ScreenOutline.nearbyText(for: spot, in: elements(for: currentScreen))
+        pin.intent = .fix
         draft = Draft(annotation: pin, isNew: true)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     // MARK: Draft editing
 
-    /// What the overlay shows: the comment card while a pin is open, the review bar otherwise.
+    /// What the overlay shows: the reply card while answering a question, the comment card while a
+    /// pin is open, the results card when opened, the review bar otherwise.
     var chrome: OverlayChrome {
         OverlayChrome.resolve(.init(
             isDraftOpen: draft != nil,
             draftComment: draft?.annotation.comment ?? "",
-            pinCount: annotations.count
+            pinCount: annotations.count,
+            draftIntent: draft?.annotation.intent,
+            replyText: replyDraft?.text,
+            isShowingResults: isShowingResults,
+            resultCount: pinResults.count
         ))
+    }
+
+    /// The open pin's intent, from the card's chip. No pin open → nothing to set.
+    func setIntent(_ intent: AnnotationIntent) {
+        guard draft != nil else { return }
+        draft?.annotation.intent = intent
     }
 
     /// Text of the open draft's comment.
@@ -447,7 +503,8 @@ final class AnnotateController {
         draft?.images.removeAll { $0.id == id }
     }
 
-    /// ↑ / Return: saves only once there's a comment, so the button and key agree with `chrome`.
+    /// ↑ / Return: saves only once there's a comment (or the intent needs none, as Approve), so the
+    /// button and key agree with `chrome`.
     func submitDraft() {
         guard case .composing(canSubmit: true) = chrome else { return }
         saveDraft()
@@ -486,7 +543,9 @@ final class AnnotateController {
 
         let id = current.annotation.id
         let hasImages = !current.images.isEmpty
-        guard !current.annotation.isEmpty || hasImages else {
+        // An Approve pin says "this is right" by itself, so it needs no comment to be worth sending
+        let isSelfExplanatory = current.annotation.intent?.allowsEmptyComment ?? false
+        guard !current.annotation.isEmpty || hasImages || isSelfExplanatory else {
             if !current.isNew { removeAnnotation(id: id) }
             return
         }
@@ -521,8 +580,12 @@ final class AnnotateController {
     // MARK: Keys
 
     func escape() {
-        if draft != nil {
+        if replyDraft != nil {
+            cancelReply()
+        } else if draft != nil {
             cancelDraft()
+        } else if isShowingResults {
+            closeResults()
         } else if selection != nil {
             selection = nil
         } else {
@@ -537,6 +600,92 @@ final class AnnotateController {
             removeAnnotation(id: last.id)
             showToast("Removed pin \(last.index)")
         }
+    }
+
+    // MARK: Results
+
+    /// The last Send's pins with what the agent reported for each; empty before any Send.
+    var pinResults: [PinResult] {
+        guard let lastSend else { return [] }
+        return PinResult.results(for: lastSend.pins, statuses: pinStatuses)
+    }
+
+    func openResults() {
+        guard !pinResults.isEmpty else { return }
+        isShowingResults = true
+    }
+
+    func closeResults() {
+        isShowingResults = false
+    }
+
+    /// Opens the reply card for a pin the agent asked about; any other pin is ignored.
+    func beginReply(pin: Int) {
+        guard let result = pinResults.first(where: { $0.index == pin }), result.outcome.isQuestion else { return }
+        // The reply card takes the bottom chrome, so an open pin is finished first rather than hidden
+        finishDraft()
+        replyDraft = ReplyDraft(pin: pin, question: result.outcome.detail ?? "", text: "")
+    }
+
+    func setReplyText(_ text: String) {
+        replyDraft?.text = text
+    }
+
+    /// Writes the reply into the session's replies.json off the main thread and shows the pin as
+    /// answered at once; the Mac side delivers it to the agent.
+    func submitReply() {
+        guard case .replying(canSubmit: true) = chrome, let reply = replyDraft, let batch = lastSend else { return }
+        let text = reply.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pinReply = PinReply(index: reply.pin, text: text)
+        let answered = PinStatus(index: reply.pin, state: .answered, note: reply.question, reply: text, updatedAt: pinReply.at)
+        let previous = localReplies[reply.pin]
+        localReplies[reply.pin] = answered
+        pinStatuses = Self.applying(localReplies, to: reportedStatuses)
+        replyDraft = nil
+        showToast(OverlayChrome.replySentToast)
+
+        let sessionID = batch.sessionID
+        let output = batch.output
+        Task { [weak self] in
+            let failure = await Task.detached(priority: .userInitiated) { () -> String? in
+                do {
+                    try SessionInbox.appendReply(pinReply, id: sessionID, in: output)
+                    return nil
+                } catch {
+                    return error.localizedDescription
+                }
+            }.value
+            guard let self, let failure else { return }
+            // Undo the optimistic answer so the question can be answered again, unless a newer Send
+            // or a newer reply to the same pin replaced it meanwhile
+            guard self.lastSend == batch, self.localReplies[reply.pin] == answered else { return }
+            self.localReplies[reply.pin] = previous
+            self.pinStatuses = Self.applying(self.localReplies, to: self.reportedStatuses)
+            // No plan copy for this failure; the message names the cause
+            self.showToast("Reply not saved: \(failure)")
+        }
+    }
+
+    func cancelReply() {
+        replyDraft = nil
+    }
+
+    /// The agent's statuses with this device's replies laid over pins status.json still shows as
+    /// `.question` since before the reply: the Mac marks them answered only once it delivers them.
+    private static func applying(_ replies: [Int: PinStatus], to statuses: [PinStatus]) -> [PinStatus] {
+        guard !replies.isEmpty else { return statuses }
+        return statuses.map { status in
+            guard let local = replies[status.index], status.state == .question, status.updatedAt <= local.updatedAt else { return status }
+            return local
+        }
+    }
+
+    /// Takes the agent's latest per-pin statuses (status.json) and republishes them with local
+    /// replies applied; equal results are dropped so views don't redraw every poll.
+    private func updateReportedStatuses(_ statuses: [PinStatus]) {
+        reportedStatuses = statuses
+        let merged = Self.applying(localReplies, to: statuses)
+        if pinStatuses != merged { pinStatuses = merged }
     }
 
     // MARK: Send
@@ -581,12 +730,19 @@ final class AnnotateController {
             annotations: outgoing,
             outputDirectory: outputDirectory(),
             completionNote: options.completionNote,
+            promptDetail: options.promptDetail,
             includesHiRes: options.includesHiResScreens,
             keepSessions: options.keepsSessions,
             cropPadding: Self.cropPadding,
             attachments: attachmentImages.filter { outgoingIDs.contains($0.key) }
         )
 
+        // These pins are the ones the agent will report on; the previous Send's results are gone
+        lastSend = SentBatch(sessionID: job.sessionID, output: job.outputDirectory, pins: outgoing)
+        localReplies.removeAll()
+        updateReportedStatuses([])
+        cancelReply()
+        closeResults()
         annotations.removeAll()
         attachmentImages.removeAll()
         if keepAnnotating {
@@ -1005,7 +1161,10 @@ final class AnnotateController {
                     }
                     continue
                 }
-                let stage = Self.stage(for: status)
+                // Per-pin reports land whether or not the stage moved: a resolve doesn't change it
+                if self.lastSend?.sessionID == id { self.updateReportedStatuses(status.pins ?? []) }
+                // Mapped from the merged statuses, so a question answered here stops narrating at once
+                let stage = Self.stage(for: status, pins: self.lastSend?.sessionID == id ? self.pinStatuses : status.pins ?? [])
                 guard stage != lastStage else { continue }
                 lastStage = stage
                 // A status that lands while "not picked up" is still showing replaces it
@@ -1031,22 +1190,33 @@ final class AnnotateController {
     private func resumeDelivery() {
         let output = outputDirectory()
         Task { [weak self] in
-            let resumable = await Task.detached(priority: .utility) { () -> (id: String, createdAt: Date)? in
+            let resumable = await Task.detached(priority: .utility) { () -> (session: AnnotationSession, pins: [PinStatus])? in
                 guard let id = SessionInbox.sessionIDs(in: output).last,
                       let session = try? SessionInbox.loadSession(id: id, in: output),
                       Date().timeIntervalSince(session.createdAt) < Self.deliveryTrackingLimit else { return nil }
-                let resumed = (id: id, createdAt: session.createdAt)
-                guard let status = SessionInbox.readStatus(id: id, in: output), status.isFinal else { return resumed }
+                let status = SessionInbox.readStatus(id: id, in: output)
+                let resumed = (session: session, pins: status?.pins ?? [])
+                guard let status, status.isFinal else { return resumed }
                 return Date().timeIntervalSince(status.updatedAt) < Self.resumeFinalWindow ? resumed : nil
             }.value
             guard let self, let resumable, self.deliveryTask == nil, self.delivery == nil else { return }
-            self.deliveryStartedAt = resumable.createdAt
-            self.trackDelivery(id: resumable.id, in: output)
+            // The results card and replies work on the resumed Send as on a fresh one
+            let session = resumable.session
+            self.lastSend = SentBatch(sessionID: session.id, output: output, pins: session.annotations)
+            self.localReplies.removeAll()
+            self.updateReportedStatuses(resumable.pins)
+            self.deliveryStartedAt = session.createdAt
+            self.trackDelivery(id: session.id, in: output)
         }
     }
 
-    private static func stage(for status: SessionStatus) -> DeliveryStage {
-        switch status.state {
+    /// A final state maps to its final stage. Otherwise an open question (lowest pin first) wins over
+    /// the session state, since the agent is blocked on the user; else the state maps as is.
+    private static func stage(for status: SessionStatus, pins: [PinStatus]) -> DeliveryStage {
+        if !status.isFinal, let asked = pins.filter({ $0.state == .question }).map(\.index).min() {
+            return .question(pin: asked)
+        }
+        return switch status.state {
         case .delivered: .delivered
         case .received: .received
         case .working: .working(message: status.message)

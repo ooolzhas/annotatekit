@@ -19,6 +19,9 @@ public enum DeliveryStage: Equatable, Sendable {
     /// Figma 9273:18115 shows one ("Changes applied, reinstalling"): the agent is working; the message
     /// comes from its `status.json`.
     case working(message: String?)
+    /// No Figma frame; the agent asked about one pin (annotation_ask / annotate ask). Not final: the
+    /// Send is still open while the question waits for a reply.
+    case question(pin: Int)
     /// No Figma frame: the agent finished; the message comes from its `status.json`.
     case done(message: String?)
     /// No Figma frame: the agent gave up; the message comes from its `status.json`.
@@ -36,7 +39,7 @@ public enum DeliveryStage: Equatable, Sendable {
     public var isFinal: Bool {
         switch self {
         case .done, .failed, .notSaved, .noAgent: true
-        case .sent, .unclaimed, .delivered, .received, .working: false
+        case .sent, .unclaimed, .delivered, .received, .working, .question: false
         }
     }
 }
@@ -107,6 +110,9 @@ public enum LauncherStatus: Equatable, Sendable {
                 "Claude looking at it"
             case .working(let message):
                 Self.cleaned(message) ?? "Claude is working"
+            case .question(let pin):
+                // No Figma frame; the agent asked about one pin (annotation_ask / annotate ask)
+                "Question on note \(pin)"
             case .done(let message):
                 Self.cleaned(message).map { "Done · \($0)" } ?? "Done"
             case .failed(let message):

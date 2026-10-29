@@ -3,14 +3,36 @@
 // per pin: what it's on, where exactly (frame, anchor, percentages), the request, attached
 // reference images, any drawing, and grep hints.
 // Full frames, the visible-text outline and sketch vectors stay in session.json.
+// Pins with a non-fix intent carry a tag after their number ("[Question]"), explained by a legend
+// that lists only the tags present. A closing paragraph tells the agent how to report each pin
+// (resolve / dismiss) and how to ask about one, so results travel back to the device.
+// Detail levels: compact drops nearby text and the clean/hi-res paths to save tokens; standard is
+// the default; detailed adds each screen's visible text, since session.json is otherwise the only
+// place it lives.
 
 import Foundation
 
+/// How much the prompt spells out. Compact saves tokens, detailed adds every screen's visible text.
+public enum PromptDetail: String, Codable, Sendable, CaseIterable {
+    case compact, standard, detailed
+}
+
 public enum PromptRenderer {
+    /// Caps the detailed "Visible text:" line so a dense screen doesn't swamp the prompt;
+    /// the full list stays in session.json.
+    static let visibleTextLimit = 40
+
     /// - Parameters:
     ///   - sessionPath: absolute session directory, so image paths can be opened directly.
     ///   - completion: appended as the last paragraph, e.g. how to report back when done.
-    public static func render(_ session: AnnotationSession, sessionPath: String?, completion: String? = nil) -> String {
+    ///   - detail: how much to include; `.standard` matches the original output plus the tags,
+    ///     legend and reporting paragraph.
+    public static func render(
+        _ session: AnnotationSession,
+        sessionPath: String?,
+        completion: String? = nil,
+        detail: PromptDetail = .standard
+    ) -> String {
         let base = sessionPath.map { $0.hasSuffix("/") ? $0 : $0 + "/" } ?? ""
         var lines: [String] = []
 
@@ -27,21 +49,32 @@ public enum PromptRenderer {
             "Coordinates are iOS points, origin top-left. Screen images are 1x, so pixel = point. "
                 + "Open the annotated image first: each pin is a numbered blue marker there. Crops show detail."
         )
+        if let legend = legend(for: session.annotations) {
+            lines.append(legend)
+        }
 
         for screen in screens {
             lines.append("")
             var images: [String] = []
             if let annotated = screen.annotatedImage { images.append("annotated \(base)\(annotated)") }
-            if let image = screen.image { images.append("clean \(base)\(image)") }
-            if let hiRes = screen.hiResImage { images.append("hi-res \(base)\(hiRes)") }
+            // Compact keeps only the annotated image: it already shows every pin, the others are extra tokens.
+            if detail != .compact {
+                if let image = screen.image { images.append("clean \(base)\(image)") }
+                if let hiRes = screen.hiResImage { images.append("hi-res \(base)\(hiRes)") }
+            }
             let size = "\(Int(screen.size.width))×\(Int(screen.size.height)) pt"
             lines.append("Screen \(screen.index) (\(size))" + (images.isEmpty ? "" : " — " + images.joined(separator: " · ")))
+            if detail == .detailed, let visible = visibleText(screen.elements) {
+                lines.append(visible)
+            }
             for annotation in session.annotations(on: screen) {
                 lines.append("")
-                lines.append(contentsOf: item(annotation, screenSize: screen.size, base: base))
+                lines.append(contentsOf: item(annotation, screenSize: screen.size, base: base, detail: detail))
             }
         }
 
+        lines.append("")
+        lines.append(reportingParagraph(id: session.id))
         lines.append("")
         lines.append("Full detail (all frames, visible text per screen, sketch vectors): \(base)session.json")
         if let completion, !completion.isEmpty {
@@ -51,7 +84,51 @@ public enum PromptRenderer {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    static func item(_ annotation: Annotation, screenSize: AnnotationSize, base: String) -> [String] {
+    /// How to report each pin back and how to ask about one; the CLI and MCP tools write status.json,
+    /// which the app reads to show per-pin results.
+    static func reportingParagraph(id: String) -> String {
+        "Report each pin as you finish it: `annotate resolve \(id) <n> \"what changed\"` or "
+            + "`annotate dismiss \(id) <n> \"why not\"` (MCP: annotation_resolve / annotation_dismiss). "
+            + "If a pin is unclear, ask: `annotate ask \(id) <n> \"question\"` (MCP: annotation_ask); "
+            + "the user answers on the device."
+    }
+
+    /// One line explaining the intent tags actually used, in `AnnotationIntent.allCases` order;
+    /// nil when every pin is a plain fix, so untagged sessions render as before.
+    static func legend(for annotations: [Annotation]) -> String? {
+        let present = Set(annotations.compactMap(\.intent))
+        let entries: [String] = AnnotationIntent.allCases.compactMap { intent in
+            guard present.contains(intent), let tag = intent.promptTag, let meaning = legendMeaning(intent) else { return nil }
+            return "\(tag) \(meaning)"
+        }
+        guard !entries.isEmpty else { return nil }
+        return "Tags: " + entries.joined(separator: " · ") + "."
+    }
+
+    static func legendMeaning(_ intent: AnnotationIntent) -> String? {
+        switch intent {
+        case .fix: return nil
+        case .question: return "wants an answer, not a code change"
+        case .approve: return "already looks right, so leave it as is"
+        case .move: return "move it to where the drawing points"
+        }
+    }
+
+    /// Detailed only: the screen's visible text with frames, so the agent can place pins without
+    /// opening session.json. Blank labels are skipped; nil when nothing is left.
+    static func visibleText(_ elements: [ScreenElement]) -> String? {
+        let entries = elements
+            .filter { !$0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .prefix(visibleTextLimit)
+            .map { element -> String in
+                let f = element.frame
+                return "\"\(element.label)\" (\(num(f.x)), \(num(f.y)), \(num(f.width))×\(num(f.height)))"
+            }
+        guard !entries.isEmpty else { return nil }
+        return "Visible text: " + entries.joined(separator: ", ")
+    }
+
+    static func item(_ annotation: Annotation, screenSize: AnnotationSize, base: String, detail: PromptDetail = .standard) -> [String] {
         var lines: [String] = []
         let indent = "   "
         let f = annotation.frame
@@ -67,7 +144,8 @@ public enum PromptRenderer {
         let anchor = annotation.anchor
         let across = percent(anchor.x, of: screenSize.width), down = percent(anchor.y, of: screenSize.height)
         let verb = annotation.kind == .region || annotation.kind == .sketch ? "center" : "tapped"
-        lines.append("\(annotation.index). \(subject) at \(box) — \(verb) (\(num(anchor.x)), \(num(anchor.y))), \(across) across, \(down) down")
+        let tag = annotation.intent?.promptTag.map { "\($0) " } ?? ""
+        lines.append("\(annotation.index). \(tag)\(subject) at \(box) — \(verb) (\(num(anchor.x)), \(num(anchor.y))), \(across) across, \(down) down")
 
         if let edit = annotation.textEdit {
             lines.append("\(indent)Change the copy from \"\(edit.from)\" to \"\(edit.to)\"")
@@ -86,7 +164,7 @@ public enum PromptRenderer {
             let what = annotation.kind == .sketch ? "Drawn on the screen" : "Sketch of the desired layout drawn"
             lines.append("\(indent)\(what) in red (\(tools)); see the crop")
         }
-        if !annotation.nearbyText.isEmpty {
+        if detail != .compact, !annotation.nearbyText.isEmpty {
             lines.append("\(indent)Nearby text: " + annotation.nearbyText.map { "\"\($0)\"" }.joined(separator: ", "))
         }
         if let source = annotation.source {

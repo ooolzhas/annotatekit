@@ -42,6 +42,26 @@ All notable changes to this project are documented here. The format is based on
   now 4pt, and a crop covers the pin's drawing as well as its frame.
 
 ### Added
+- **Agent loop** (ideas from Agentation):
+  - **`annotation_wait` MCP tool:** blocks until you Send or answer a question, batches for 10 s and
+    returns everything. It gives hands-free delivery in Cursor, Codex, the Claude desktop app or any
+    MCP client, with no channels. A pending wait shows as a green dot.
+  - **Per-pin results:**
+    - MCP tools: `annotation_resolve` / `annotation_dismiss`.
+    - CLI: `annotate resolve|dismiss <id> <pin> "…"`.
+    - `status.json` gains `pins`.
+    - Tapping the hint line shows the last Send's results card.
+  - **Questions:**
+    - The agent asks about one pin with `annotation_ask` / `annotate ask`, which waits for the answer.
+    - The pill and hint line say "Question on note N".
+    - The results card's Reply opens a reply card.
+    - The answer is saved to `replies.json` and travels back from a device too.
+  - **Intent per pin** (Fix · Question · Approve · Move), on a chip on the comment card. Prompts tag
+    non-fix pins.
+  - **`AnnotateOptions.promptDetail`:** `.compact`, `.standard` or `.detailed`.
+  - **`SCHEMA.md`:** documents every file the app and agents exchange.
+  - **Schema (additive, still v1):** `Annotation.intent`, `SessionStatus.pins`, and the new
+    `replies.json`.
 - **Sends from a physical iPhone or iPad reach your agent**, with no setup in the app: no network
   permission and no Info.plist keys. `annotate mcp`, `watch` and `run` copy each new bundle from a
   paired device's development build over the developer connection (`devicectl`, USB or Wi-Fi) into

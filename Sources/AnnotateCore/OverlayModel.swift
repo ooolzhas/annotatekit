@@ -1,7 +1,9 @@
 // Pure state model for the annotate overlay (Figma PVX9n74hzo5BWauvymG141, group 9272:17592).
-// `OverlayChrome` decides which bottom chrome shows (the review bar or the comment card) and the copy it
-// carries; `ReviewHint` decides the line above the review bar (gestures, agent connected, offline, or
-// the last Send's delivery narration with its elapsed time) and whether the bar's action reads Send or
+// `OverlayChrome` decides which bottom chrome shows (the review bar, the comment card, the reply card for
+// an agent's question about one sent pin, or the last Send's results card) and the copy it carries,
+// including intent-aware submit (an Approve pin may be saved with no comment); `ReviewHint` decides the
+// line above the review bar (gestures, agent connected, offline, or the last Send's delivery narration
+// with its elapsed time, including an agent's open question) and whether the bar's action reads Send or
 // Save; `PointerIntent` classifies a touch on the frozen screen as a pen stroke, a hold or a tap.
 // Views and the controller switch on these instead of re-deriving the conditions, so the rules live
 // in one place and stay testable on Linux.
@@ -18,27 +20,71 @@ public enum OverlayChrome: Equatable, Sendable {
     /// `canSubmit: true` is Figma 9257:13403 (comment typed, ↑ filled blue), also Figma 9272:16867
     /// (typed) / 9272:16949 (typed, with 3 attached images; images come from the draft, not this state).
     case composing(canSubmit: Bool)
+    /// Answering an agent's question about one sent pin: the reply card docked above the keyboard.
+    /// No Figma frame (derived): `canSubmit` follows the reply text the way `composing` follows the comment.
+    case replying(canSubmit: Bool)
+    /// The last Send's per-pin results card (resolved, dismissed, questions).
+    /// No Figma frame (derived): shown only while opened and while there is at least one result.
+    case results(count: Int)
 
     public struct Inputs: Equatable, Sendable {
         public var isDraftOpen: Bool
         /// The open pin's comment; ignored when no pin is open.
         public var draftComment: String
         public var pinCount: Int
+        /// The open pin's intent; nil reads as `.fix`. Ignored when no pin is open.
+        public var draftIntent: AnnotationIntent?
+        /// The reply being typed, non-nil while answering an agent's question.
+        public var replyText: String?
+        /// The results card was opened (from the hint line, or on start with an open question).
+        public var isShowingResults: Bool
+        /// How many pins the last Send's results list.
+        public var resultCount: Int
 
-        public init(isDraftOpen: Bool, draftComment: String, pinCount: Int) {
+        /// The new inputs default to "not replying, no results, no intent", so existing callers keep
+        /// today's review / composing behavior.
+        public init(
+            isDraftOpen: Bool,
+            draftComment: String,
+            pinCount: Int,
+            draftIntent: AnnotationIntent? = nil,
+            replyText: String? = nil,
+            isShowingResults: Bool = false,
+            resultCount: Int = 0
+        ) {
             self.isDraftOpen = isDraftOpen
             self.draftComment = draftComment
             self.pinCount = pinCount
+            self.draftIntent = draftIntent
+            self.replyText = replyText
+            self.isShowingResults = isShowingResults
+            self.resultCount = resultCount
         }
     }
 
+    /// Precedence: a reply in progress, then an open draft, then the results card, then the review bar.
+    /// Replying wins because the agent is waiting on it and the reply card owns the keyboard; a draft
+    /// comes next for the same keyboard reason; results only replace the review bar, never a card the
+    /// user is typing into. No Figma frame for this ordering (derived).
     public static func resolve(_ inputs: Inputs) -> OverlayChrome {
+        if let reply = inputs.replyText {
+            // A blank reply tells the agent nothing, same rule as a blank comment
+            return .replying(canSubmit: !trimmed(reply).isEmpty)
+        }
         if inputs.isDraftOpen {
-            // Whitespace alone isn't a comment worth sending to the agent
-            let trimmed = inputs.draftComment.trimmingCharacters(in: .whitespacesAndNewlines)
-            return .composing(canSubmit: !trimmed.isEmpty)
+            // Whitespace alone isn't a comment worth sending to the agent, unless the intent itself is
+            // the message (Approve: "looks right as it is")
+            let allowsEmpty = inputs.draftIntent?.allowsEmptyComment ?? false
+            return .composing(canSubmit: !trimmed(inputs.draftComment).isEmpty || allowsEmpty)
+        }
+        if inputs.isShowingResults && inputs.resultCount > 0 {
+            return .results(count: inputs.resultCount)
         }
         return .review(count: max(inputs.pinCount, 0))
+    }
+
+    private static func trimmed(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Comment field placeholder (Figma 9257:13392 / 9272:16856).
@@ -68,12 +114,31 @@ public enum OverlayChrome: Equatable, Sendable {
         return count == 1 ? "1 note" : "\(count) notes"
     }
 
-    /// Send (and trash) are live only on the review bar with at least one pin; while composing,
-    /// the card's ↑ governs and Send isn't shown.
+    /// Reply field placeholder. No Figma frame (derived).
+    public static let replyPlaceholder = "Reply"
+    /// Results card row action on a question. No Figma frame (derived).
+    public static let replyAction = "Reply"
+    /// Toast after a reply is written for the agent. No Figma frame (derived).
+    public static let replySentToast = "Reply sent"
+
+    /// Results card title: "Last Send · 1 note" / "Last Send · N notes". No Figma frame (derived);
+    /// the count wording matches `countTitle` so the bar and the card agree.
+    public static func resultsTitle(_ count: Int) -> String {
+        count == 1 ? "Last Send · 1 note" : "Last Send · \(max(count, 0)) notes"
+    }
+
+    /// Reply card header, e.g. "Claude asks about note 2". No Figma frame (derived); the agent's name
+    /// goes through `ReviewHint.displayName` so it reads like the hint line.
+    public static func askedTitle(agent: String, pin: Int) -> String {
+        "\(ReviewHint.displayName(agent)) asks about note \(pin)"
+    }
+
+    /// Send (and trash) are live only on the review bar with at least one pin; while composing or
+    /// replying the card's ↑ governs, and the results card replaces the bar, so Send isn't shown.
     public var canSend: Bool {
         switch self {
         case .review(let count): count > 0
-        case .composing: false
+        case .composing, .replying, .results: false
         }
     }
 }
@@ -102,6 +167,9 @@ public enum ReviewHint: Equatable, Sendable {
         case connected
         /// Red (Figma 9272:17308).
         case offline
+        /// The agent is waiting on the user (an open question). No Figma frame (derived): neither
+        /// "going to plan" green nor "something failed" red, so it gets its own color.
+        case attention
     }
 
     public struct Inputs: Equatable, Sendable {
@@ -180,6 +248,9 @@ public enum ReviewHint: Equatable, Sendable {
             case .received:
                 // Figma 9273:18101 (sample "Claude looking at it")
                 "\(Self.displayName(agent)) looking at it"
+            case .question(let pin):
+                // No Figma frame (derived): the agent asked about one pin and waits for the reply
+                "\(Self.displayName(agent)) asked about note \(pin)"
             case .working(let message):
                 // Figma 9273:18196 shows the agent's own status.json message (sample "Changes applied,
                 // reinstalling"); the fallback without a message is derived
@@ -203,7 +274,7 @@ public enum ReviewHint: Equatable, Sendable {
     /// nil for the gestures hint, which has no dot in Figma 9272:17121.
     /// Delivery: green while things go to plan (Figma 9273:18004 / 18099 / 18194 for delivered, received
     /// and working; sent and done derived), red for the stages that need the user's attention (unclaimed,
-    /// failed, notSaved, noAgent; derived).
+    /// failed, notSaved, noAgent; derived), attention for an agent's open question (derived).
     public var dot: Dot? {
         switch self {
         case .gestures: nil
@@ -213,13 +284,14 @@ public enum ReviewHint: Equatable, Sendable {
             switch stage {
             case .sent, .delivered, .received, .working, .done: .connected
             case .unclaimed, .failed, .notSaved, .noAgent: .offline
+            case .question: .attention
             }
         }
     }
 
     /// Whether the line appends the time since Send (Figma 9273:18007 / 18102 / 18197, samples "1s",
-    /// "2s", "9s"). Only while a delivery is still in flight (derived for sent and unclaimed): once
-    /// the result is in, the figure stops mattering.
+    /// "2s", "9s"). Only while a delivery is still in flight (derived for sent, unclaimed and question,
+    /// which is non-final): once the result is in, the figure stops mattering.
     public var showsElapsed: Bool {
         switch self {
         case .delivery(let stage, _): !stage.isFinal

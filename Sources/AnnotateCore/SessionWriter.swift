@@ -7,6 +7,9 @@
 //   sessions/<id>/session.json written LAST: its presence means the bundle is complete
 //   sessions/<id>/status.json  written by the receiving side (received → working → done/failed);
 //                              the app polls it to show progress. Absent = not picked up yet.
+//                              Also carries per-pin results (`pins`: resolved / dismissed / question / answered).
+//   sessions/<id>/replies.json written by the APP: the user's answers to the agent's per-pin
+//                              questions, append-only (on a device DeviceMirror copies it to the Mac)
 //   agent.json, agents/<pid>.json   who is listening (AgentPresence.swift)
 // Simulator apps can write to the host file system, so the overlay locates the project root by
 // walking up from the `#filePath` of the `Annotate.install()` call site. On a device the bundle
@@ -83,14 +86,53 @@ public struct SessionStatus: Codable, Sendable, Equatable {
     /// Short human summary shown in the app, e.g. "Edited HomeView.swift, AlarmCard.swift".
     public var message: String?
     public var updatedAt: Date
+    /// Per-pin results reported by the agent. Optional so status.json files written before pins
+    /// existed still decode (schema changes are additive only).
+    public var pins: [PinStatus]?
 
-    public init(state: State, message: String? = nil, updatedAt: Date = Date()) {
+    public init(state: State, message: String? = nil, updatedAt: Date = Date(), pins: [PinStatus]? = nil) {
         self.state = state
         self.message = message
         self.updatedAt = updatedAt
+        self.pins = pins
     }
 
     public var isFinal: Bool { state == .done || state == .failed }
+}
+
+/// One pin's result as reported by the agent, stored in status.json.
+public struct PinStatus: Codable, Sendable, Equatable {
+    public enum State: String, Codable, Sendable, CaseIterable { case resolved, dismissed, question, answered }
+
+    /// Annotation.index within its session.
+    public var index: Int
+    public var state: State
+    /// resolved: what changed · dismissed: why not · question / answered: the question
+    public var note: String?
+    /// answered only: the user's reply
+    public var reply: String?
+    public var updatedAt: Date
+
+    public init(index: Int, state: State, note: String? = nil, reply: String? = nil, updatedAt: Date = Date()) {
+        self.index = index
+        self.state = state
+        self.note = note
+        self.reply = reply
+        self.updatedAt = updatedAt
+    }
+}
+
+/// The user's answer to an agent's question about one pin, written by the app to replies.json.
+public struct PinReply: Codable, Sendable, Equatable {
+    public var index: Int
+    public var text: String
+    public var at: Date
+
+    public init(index: Int, text: String, at: Date = Date()) {
+        self.index = index
+        self.text = text
+        self.at = at
+    }
 }
 
 /// The receiving side of the bundle directory: what's new, and reporting progress back.
@@ -98,6 +140,7 @@ public enum SessionInbox {
     public static let sessionFile = "session.json"
     public static let promptFile = "prompt.md"
     public static let statusFile = "status.json"
+    public static let repliesFile = "replies.json"
     static let claimMarker = ".claimed"
 
     public static func sessionDirectory(_ id: String, in outputDirectory: URL) -> URL {
@@ -146,9 +189,76 @@ public enum SessionInbox {
         return try? AnnotationSession.decoder.decode(SessionStatus.self, from: data)
     }
 
+    /// A status without `pins` keeps the per-pin results already on disk: `annotate status`, the
+    /// status tool and "received" all write a session-level state and must not wipe what the agent
+    /// reported pin by pin.
     public static func writeStatus(_ status: SessionStatus, id: String, in outputDirectory: URL) throws {
         let url = sessionDirectory(id, in: outputDirectory).appendingPathComponent(statusFile)
+        var status = status
+        if status.pins == nil, let existing = readStatus(id: id, in: outputDirectory)?.pins {
+            status.pins = existing
+        }
         try AnnotationSession.encoder.encode(status).write(to: url, options: .atomic)
+    }
+
+    /// Upserts one pin's status (matched by index), keeping the session's state and message. A session
+    /// with no status yet becomes `.working`. Returns the written status.
+    @discardableResult
+    public static func updatePin(_ pin: PinStatus, id: String, in outputDirectory: URL) throws -> SessionStatus {
+        // A pin report means the agent is on it, so an unclaimed session counts as working
+        var status = readStatus(id: id, in: outputDirectory) ?? SessionStatus(state: .working)
+        var pins = status.pins ?? []
+        if let existing = pins.firstIndex(where: { $0.index == pin.index }) {
+            pins[existing] = pin
+        } else {
+            pins.append(pin)
+        }
+        // Sorted so the file (and the app's diffing of it) is stable regardless of report order
+        status.pins = pins.sorted { $0.index < $1.index }
+        status.updatedAt = Date()
+        try writeStatus(status, id: id, in: outputDirectory)
+        return status
+    }
+
+    /// The user's replies for a session, in file order. [] when absent or unreadable.
+    public static func readReplies(id: String, in outputDirectory: URL) -> [PinReply] {
+        let url = sessionDirectory(id, in: outputDirectory).appendingPathComponent(repliesFile)
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        return (try? AnnotationSession.decoder.decode([PinReply].self, from: data)) ?? []
+    }
+
+    /// App side: appends to replies.json (atomic rewrite).
+    public static func appendReply(_ reply: PinReply, id: String, in outputDirectory: URL) throws {
+        let url = sessionDirectory(id, in: outputDirectory).appendingPathComponent(repliesFile)
+        // Rewrite the whole array atomically so the Mac (or the mirror) never reads a half-written file
+        let replies = readReplies(id: id, in: outputDirectory) + [reply]
+        try AnnotationSession.encoder.encode(replies).write(to: url, options: .atomic)
+    }
+
+    /// Replies to pins whose status is still `.question` and whose `at` >= that pin's `updatedAt`, oldest first.
+    public static func unansweredReplies(id: String, in outputDirectory: URL) -> [PinReply] {
+        guard let pins = readStatus(id: id, in: outputDirectory)?.pins else { return [] }
+        let asked = Dictionary(
+            pins.filter { $0.state == .question }.map { ($0.index, $0.updatedAt) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        guard !asked.isEmpty else { return [] }
+        // A reply older than the question answers an earlier one (the agent re-asked), so skip it
+        return readReplies(id: id, in: outputDirectory)
+            .filter { reply in asked[reply.index].map { reply.at >= $0 } ?? false }
+            .enumerated()
+            .sorted { ($0.element.at, $0.offset) < ($1.element.at, $1.offset) }
+            .map(\.element)
+    }
+
+    /// Marks the reply's pin `.answered` (note keeps the question, reply = text), so each reply is delivered once.
+    public static func markAnswered(_ reply: PinReply, id: String, in outputDirectory: URL) throws {
+        let question = readStatus(id: id, in: outputDirectory)?.pins?.first { $0.index == reply.index }?.note
+        try updatePin(
+            PinStatus(index: reply.index, state: .answered, note: question, reply: reply.text),
+            id: id,
+            in: outputDirectory
+        )
     }
 
     /// Atomically claims a pending session for one consumer. Returns false if another consumer

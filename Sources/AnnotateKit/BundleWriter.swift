@@ -1,7 +1,7 @@
 // The off-main half of Send. The controller snapshots everything into a SendJob on the main actor
 // (captures, pins, device info, destination); `BundleRenderer.write` then renders the 1x and
 // annotated screens and per-pin crops, PNG-encodes them, JPEG-encodes each pin's reference-image
-// attachments into `attachments/`, renders the prompt, writes the bundle and prunes old sessions —
+// attachments into `attachments/`, renders the prompt at the job's `PromptDetail`, writes the bundle and prunes old sessions —
 // all on a background task, so the overlay dismisses instantly.
 
 #if DEBUG && canImport(UIKit)
@@ -25,6 +25,8 @@ struct SendJob: @unchecked Sendable {
     let annotations: [Annotation]
     let outputDirectory: URL
     let completionNote: String?
+    /// How much the prompt says; the app's `AnnotateOptions.promptDetail`.
+    let promptDetail: PromptDetail
     let includesHiRes: Bool
     let keepSessions: Int
     let cropPadding: CGFloat
@@ -97,7 +99,7 @@ extension BundleRenderer {
             annotations: annotations
         )
         let sessionDirectory = SessionInbox.sessionDirectory(session.id, in: job.outputDirectory)
-        let prompt = PromptRenderer.render(session, sessionPath: sessionDirectory.path, completion: job.completionNote)
+        let prompt = PromptRenderer.render(session, sessionPath: sessionDirectory.path, completion: job.completionNote, detail: job.promptDetail)
 
         do {
             try SessionWriter.write(SessionBundle(session: session, images: images), prompt: prompt, to: job.outputDirectory)

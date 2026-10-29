@@ -1,8 +1,10 @@
 // The comment card for the open pin (Figma 9272:16847 empty · 9272:16929 typed · 9272:17011 with
 // attachments): an optional strip of 64pt reference-image thumbnails with white remove badges,
-// the comment field, and the paperclip / × / ↑ row. It only lays itself out at the width it is
-// given; OverlayRoot docks it to the keyboard and adds the 8pt inset. Return and ↑ save through
-// the controller, which decides via `chrome` whether the comment can be submitted.
+// the comment field, and the paperclip / intent chip / × / ↑ row. The intent chip (no Figma
+// frame) picks what the user wants done with the pin (Fix, Question, Approve, Move) and the
+// placeholder follows it. It only lays itself out at the width it is given; OverlayRoot docks it
+// to the keyboard and adds the 8pt inset. Return and ↑ save through the controller, which decides
+// via `chrome` whether the comment can be submitted (Approve may be saved with no text).
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -47,7 +49,7 @@ struct ComposerCard: View {
                 .focused($isFocused)
                 .accessibilityLabel("Comment")
                 // The drawn placeholder is hidden from VoiceOver; announce it as the hint instead
-                .accessibilityHint(OverlayChrome.placeholder)
+                .accessibilityHint(intent.placeholder)
                 .overlay(alignment: .topLeading) { placeholder }
                 .padding(.horizontal, 20)
                 // Figma centers the 17pt glyphs in a 24pt line; SwiftUI puts the extra leading
@@ -86,12 +88,18 @@ struct ComposerCard: View {
 
     // MARK: - Text
 
-    /// 9257:13392 — "Describe the change" at 50% opacity. Drawn over the field because iOS 26
-    /// ignores `prompt:` styling and renders the system placeholder color instead.
+    /// The pin's intent; drafts from before intents existed have none, which means Fix.
+    private var intent: AnnotationIntent {
+        draft.annotation.intent ?? .fix
+    }
+
+    /// 9257:13392 — "Describe the change" at 50% opacity (Fix); other intents swap the copy via
+    /// `AnnotationIntent.placeholder`. Drawn over the field because iOS 26 ignores `prompt:`
+    /// styling and renders the system placeholder color instead.
     @ViewBuilder
     private var placeholder: some View {
         if controller.commentText.isEmpty {
-            Text(OverlayChrome.placeholder)
+            Text(intent.placeholder)
                 .font(.body.leading(.loose))
                 .foregroundStyle(.primary.opacity(0.5))
                 .allowsHitTesting(false)
@@ -128,19 +136,24 @@ struct ComposerCard: View {
     }
 
     /// 9257:13393 — items-end, justify-between, pb 8, px 8; right group gap 6 (9257:13396).
+    /// No Figma: the left group (paperclip + intent chip) reuses the right group's 6pt gap.
     private var buttonRow: some View {
         // PhotosPicker's label closure is Sendable: read main-actor state before it
         let remaining = remaining
         let paperclipStyle: CircleIcon.Style = remaining == 0 ? .dimmed : .plain
         return HStack(alignment: .bottom, spacing: 0) {
-            // 9257:13394/13395
-            PhotosPicker(selection: $pickerItems, maxSelectionCount: max(remaining, 1), matching: .images) {
-                // At the attachment cap the picker is disabled; dim it like ↑ so it reads disabled
-                CircleIcon(systemName: "paperclip", style: paperclipStyle)
+            HStack(spacing: 6) {
+                // 9257:13394/13395
+                PhotosPicker(selection: $pickerItems, maxSelectionCount: max(remaining, 1), matching: .images) {
+                    // At the attachment cap the picker is disabled; dim it like ↑ so it reads disabled
+                    CircleIcon(systemName: "paperclip", style: paperclipStyle)
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .disabled(remaining == 0)
+                .accessibilityLabel("Attach image")
+
+                intentChip
             }
-            .buttonStyle(ChromeButtonStyle())
-            .disabled(remaining == 0)
-            .accessibilityLabel("Attach image")
 
             Spacer(minLength: 0)
 
@@ -152,6 +165,45 @@ struct ComposerCard: View {
         }
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
+    }
+
+    /// No Figma: derived chip. Same 44pt height and 5% fill as `CircleIcon` `.plain`, stretched to
+    /// a capsule around the intent title so the current choice reads without opening the menu.
+    private static let chipHorizontalPadding: CGFloat = 14
+
+    /// Menu of every intent; picking one stores it on the draft through the controller, which
+    /// also lets `chrome` allow an empty Approve.
+    private var intentChip: some View {
+        let intent = intent
+        return Menu {
+            ForEach(AnnotationIntent.allCases, id: \.self) { option in
+                Button {
+                    controller.setIntent(option)
+                } label: {
+                    Label {
+                        Text(option.title)
+                        Text(option.detail)
+                    } icon: {
+                        Image(systemName: option.symbol)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(intent.title)
+                    .font(.system(size: 15, weight: .medium))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, Self.chipHorizontalPadding)
+            .frame(height: CircleIcon.size)
+            .background(Capsule().fill(Color.primary.opacity(CircleIcon.fillOpacity)))
+            .contentShape(Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(ChromeButtonStyle())
+        .accessibilityLabel("Intent, \(intent.title)")
     }
 
     /// 9257:13399 (empty, dimmed glyph) · 9257:13480 (typed, blue). The state comes from

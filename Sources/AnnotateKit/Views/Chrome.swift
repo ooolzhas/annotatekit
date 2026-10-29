@@ -6,7 +6,9 @@
 // whose trash asks for confirmation first. Also owns the hint line drawn above that bar
 // (9272:17120 / 17213 / 17307), which says how to annotate or whether an agent is connected, and
 // narrates a Send with the seconds since it started (9273:18004 / 18099 / 18194); its copy and dot
-// come from `ReviewHint` in AnnotateCore. Also owns the launcher pill (9265:14439 / 9265:14691): a solid capsule
+// come from `ReviewHint` in AnnotateCore. Once the last Send has per-pin results, the hint line
+// becomes a button with a trailing chevron that opens the results card, and its dot turns orange
+// (`ReviewHint.Dot.attention`) when the agent asked about a pin. Also owns the launcher pill (9265:14439 / 9265:14691): a solid capsule
 // docked above the home indicator whose title narrates the last Send ("Annotate", "4 notes
 // sent", …) so delivery progress needs no separate toast or ring, with a connection dot showing
 // whether an agent is listening. The toast below predates the redesign and now only carries
@@ -229,10 +231,13 @@ struct ReviewBar: View {
 /// line of white text. While a Send is in flight (9273:18004 / 18099 / 18194) it also shows the
 /// time since the Send, ticking once a second. Copy, dot and whether the elapsed shows come from
 /// `ReviewHint`, so the view never decides which hint shows; OverlayRoot places it 16pt above the bar.
+/// With `onTap` set (the last Send has per-pin results) the line is a button that opens them.
 struct ReviewHintLine: View {
     let hint: ReviewHint
     /// When the current Send started (`controller.deliveryStartedAt`); nil hides the elapsed.
     let startedAt: Date?
+    /// Opens the results card. Nil keeps the line a passive label that touches pass through.
+    var onTap: (() -> Void)?
 
     /// Figma `gap-[6px]` between dot, text and elapsed (9273:18004).
     static let spacing: CGFloat = 6
@@ -242,6 +247,12 @@ struct ReviewHintLine: View {
     static let connectedColor = Color(uiColor: .systemGreen)
     /// Figma Primitive/Red #F8001A, exact: it is a primitive, not a semantic system red.
     static let offlineColor = Color(red: 248 / 255, green: 0, blue: 26 / 255)
+    /// No Figma: the agent asked about a pin. Orange, matching the question badge on the results
+    /// card and the dot on the reply card, so the three read as one signal.
+    static let attentionColor = Color(uiColor: .systemOrange)
+    /// No Figma: the trailing chevron that marks a tappable line, smaller than the 15pt text so it
+    /// reads as an affordance rather than content.
+    static let chevronSize: CGFloat = 11
     /// Figma `text-shadow 0 2 4 rgba(0,0,0,0.25)`; SwiftUI's radius is about half the CSS blur.
     /// It keeps white text legible over a light frozen screen.
     static let shadowOpacity: Double = 0.25
@@ -254,6 +265,23 @@ struct ReviewHintLine: View {
     static let tickInterval: TimeInterval = 1
 
     var body: some View {
+        if let onTap {
+            Button(action: onTap) {
+                line
+                    // The gaps between dot, text and chevron tap too
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(ChromeButtonStyle())
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Show results")
+        } else {
+            line
+                // A label over the frozen screen; touches go to the annotate canvas beneath it
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var line: some View {
         Group {
             if hint.showsElapsed, let startedAt {
                 // The timeline lives only in this branch, so an idle hint line never ticks. Anchored
@@ -268,8 +296,6 @@ struct ReviewHintLine: View {
         .animation(Self.changeAnimation, value: hint)
         // VoiceOver reads the text and the elapsed as one element, e.g. "Delivered to Claude, 1s"
         .accessibilityElement(children: .combine)
-        // A label over the frozen screen; touches go to the annotate canvas beneath it
-        .allowsHitTesting(false)
     }
 
     private func row(elapsed: String?) -> some View {
@@ -288,6 +314,17 @@ struct ReviewHintLine: View {
                     .modifier(HintTextStyle())
                     // A long agent message truncates first; the elapsed always shows in full
                     .layoutPriority(1)
+            }
+            if onTap != nil {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: Self.chevronSize, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(Self.shadowOpacity), radius: Self.shadowRadius,
+                            x: 0, y: Self.shadowY)
+                    // Like the elapsed, the affordance never truncates away
+                    .layoutPriority(1)
+                    // The button trait and hint already say it opens something
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -310,6 +347,7 @@ struct ReviewHintLine: View {
         switch dot {
         case .connected: connectedColor
         case .offline: offlineColor
+        case .attention: attentionColor
         }
     }
 }

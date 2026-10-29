@@ -80,7 +80,7 @@ brew install ooolzhas/tap/annotate      # or: mint install ooolzhas/annotate-ios
 | **Claude Code + channels** (recommended) | Pushed into your open session the moment you hit Send, even while Claude is idle. Start with `claude --dangerously-load-development-channels plugin:annotate@annotate-ios`, or `server:annotate` without the plugin. |
 | **Claude Code, no flags** | Run `/annotate-watch`. A watcher picks up each Send. |
 | **Unattended** | `annotate run` in the project root runs `claude -p` per Send (`--permission-mode acceptEdits`, resuming the conversation). |
-| **Cursor / Codex / VS Code / any MCP client** | Add the server (below), then say *"check my latest annotation"*. |
+| **Cursor / Codex / VS Code / Claude desktop / any MCP client** | Add the server (below) and ask the agent to *"keep calling annotation_wait"*: each call blocks until you Send, then returns the notes. Or say *"check my latest annotation"* now and then. |
 
 [Channels](https://code.claude.com/docs/en/channels) are a Claude Code research preview. During the
 preview, a channel server that isn't on Anthropic's allowlist has to be named with
@@ -109,8 +109,15 @@ command = "annotate"
 args = ["mcp"]
 ```
 
-Tools: `get_annotation_session` (prompt plus annotated screens and crops as images),
-`annotation_status` (report back to the device), and `list_annotation_sessions`.
+Tools:
+- `annotation_wait` blocks until you Send (or answer a question), batches for a few seconds and
+  returns everything. It gives hands-free delivery in any MCP client, and the pill's dot goes green
+  while an agent waits.
+- `get_annotation_session` returns the prompt plus annotated screens and crops as images.
+- `annotation_status` reports progress back to the device.
+- `annotation_resolve` / `annotation_dismiss` report per pin.
+- `annotation_ask` asks the user about one pin and waits for the answer.
+- `list_annotation_sessions` lists recent sessions.
 </details>
 
 ## Use
@@ -134,6 +141,28 @@ screen with pins on it.
 In the Simulator, `Return`, `Esc` and the arrow keys reach the app as long as the hardware keyboard
 is connected. ⌘-shortcuts go to the Simulator app unless *I/O → Keyboard → Send Keyboard
 Shortcuts to Device* is on. The on-screen buttons always work.
+
+## The loop back to you
+
+- **Intent per pin.** On the comment card, pick **Fix** (the default), **Question** (explain it, don't
+  edit), **Approve** (it already looks right) or **Move** (move it where you drew). Pins carry their
+  intent into the prompt.
+- **Per-pin results.** The agent reports each pin as resolved (with what changed) or dismissed (with
+  why). Tap the hint line above the review bar to see the last Send's results.
+- **Questions.** When a pin is unclear, the agent asks about it. The pill and hint line say so, and the
+  results card has a **Reply** button. Your answer goes back to the agent, from a phone too.
+- **Prompt size.** `AnnotateOptions(promptDetail: .compact)` saves tokens. `.detailed` adds every
+  screen's visible text.
+
+Agents report with the MCP tools above, or with the CLI:
+
+```sh
+annotate resolve <id> <pin> "what changed"
+annotate dismiss <id> <pin> "why not"
+annotate ask <id> <pin> "question"      # waits for the answer and prints it
+```
+
+Every file involved is documented in [SCHEMA.md](SCHEMA.md).
 
 ## Coordinates are the contract
 
@@ -194,7 +223,8 @@ When you're done, finish with a one-line summary of what you changed.
     screens/1.png  1-annotated.png  (1@3x.png with includesHiResScreens)
     crops/1.png …
     session.json                    written last, so it marks the bundle complete (schema v1)
-    status.json                     written by the receiver: delivered → received → working → done | failed
+    status.json                     written by the receiver: delivered → received → working → done | failed, plus per-pin results
+    replies.json                    your answers to the agent's questions
   agent.json                        who is listening (the pill's dot), merged from agents/<pid>.json
 ```
 

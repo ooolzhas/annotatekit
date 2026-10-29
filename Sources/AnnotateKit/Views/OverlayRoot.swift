@@ -1,9 +1,11 @@
 // Root of the overlay window: the launcher while idle, and while annotating the frozen screen
 // dimmed with a pulsing blue edge glow, the touch catcher that feeds the controller (draw / tap / hold),
 // every pin's white markers and number badges, and the bottom chrome docked to the keyboard or the
-// home indicator: the comment card while a pin is open, otherwise the review bar with its hint line
-// above it (which also narrates the last Send while annotate mode is open), both over a blue
-// gradient that runs from the chrome's top down to the screen's bottom.
+// home indicator: the reply card while answering an agent's question about a sent pin, the comment
+// card while a pin is open, the last Send's results card, otherwise the review bar with its hint
+// line above it (which also narrates the last Send while annotate mode is open, and opens the
+// results on tap once there are any), all over a blue gradient that runs from the chrome's top
+// down to the screen's bottom.
 // The whole tree ignores the safe area so SwiftUI coordinates equal window (= screen) points, which
 // is the space every frame from ElementScanner and the registry uses. Things are placed by top-left
 // offset inside a full-screen top-leading ZStack. The freeze-frame captured on start sits at the
@@ -139,9 +141,10 @@ private struct ActiveOverlay: View {
             )
     }
 
-    /// Comment card while a pin is open (8pt sides, 8pt above `chromeBottom`), otherwise the review
-    /// bar (34pt sides, bottom at `chromeBottom`) with the hint line 16pt above it. `chromeBottom`
-    /// is the keyboard top, or the top of the home-indicator area with no keyboard.
+    /// Reply card, comment card or results card (all 8pt sides, 8pt above `chromeBottom`; the reply
+    /// and comment cards dock to the keyboard), otherwise the review bar (34pt sides, bottom at
+    /// `chromeBottom`) with the hint line 16pt above it. `chromeBottom` is the keyboard top, or the
+    /// top of the home-indicator area with no keyboard.
     private var bottomChrome: some View {
         let bounds = controller.bounds
         // Distance from `chromeBottom` down to the screen's bottom edge
@@ -149,6 +152,14 @@ private struct ActiveOverlay: View {
 
         return Group {
             switch controller.chrome {
+            case .replying:
+                // No Figma: placed exactly like the comment card, keyboard-docked through
+                // `chromeBottom`
+                if let reply = controller.replyDraft {
+                    ReplyCard(controller: controller, reply: reply)
+                        .padding(.horizontal, Self.chromeInset)
+                        .padding(.bottom, Self.chromeInset)
+                }
             case .composing:
                 if let draft = controller.draft {
                     ComposerCard(controller: controller, draft: draft)
@@ -156,9 +167,19 @@ private struct ActiveOverlay: View {
                         .padding(.horizontal, Self.chromeInset)
                         .padding(.bottom, Self.chromeInset)
                 }
+            case .results:
+                // No Figma: placed like the comment card (8pt sides, 8pt above `chromeBottom`)
+                ResultsCard(controller: controller)
+                    .padding(.horizontal, Self.chromeInset)
+                    .padding(.bottom, Self.chromeInset)
             case .review:
                 VStack(spacing: Self.hintGap) {
-                    ReviewHintLine(hint: controller.reviewHint, startedAt: controller.deliveryStartedAt)
+                    ReviewHintLine(
+                        hint: controller.reviewHint,
+                        startedAt: controller.deliveryStartedAt,
+                        // Tapping the hint reopens the last Send's results, once there are any
+                        onTap: controller.pinResults.isEmpty ? nil : { controller.openResults() }
+                    )
                         // Delivery narration ("Changes applied, reinstalling 9s") runs wider than
                         // the gestures hint: keep it on one centered line within the bar's 34pt insets
                         .padding(.horizontal, Self.reviewBarInset)
