@@ -116,8 +116,25 @@ All notable changes to this project are documented here. The format is based on
     tap on a system menu item could be taken by the frozen screen's drawing gesture.
   - The review bar's back, count and ↑ share one glass container, so a pressed one swells into its
     neighbours. The edge glow's corners are 4pt tighter (58pt).
+  - The launcher pill follows Figma 9289:1305. It docks on the review bar's bottom edge (34pt above
+    the screen's bottom on a phone with a home indicator) instead of 8pt above it. It stays 34pt from
+    the sides, and its connection dot is 8pt. On a fresh open it no longer pops up with the window:
+    it waits for the app's first settled screen, then scales up and fades in like it does when
+    annotate mode closes.
 
 ### Added
+- **Launcher collision avoidance:** the idle pill keeps off the app's own bottom chrome. Once a
+  second it re-reads the bottom 240pt of the screen and springs to a clear spot: above whatever
+  covers the dock (a tab bar, a mini player on it), else to the trailing or leading side at dock
+  height. It counts visible tab bars, toolbars, text inputs and controls outside scroll views,
+  plus the extra bottom safe area a container reserves for its bars.
+  - Moving off something happens on the next check; settling back lower waits for two checks that
+    agree, so a bar that resizes while you scroll doesn't make the pill bob.
+  - A dragged pill stays where you put it, the keyboard dock still wins, and nothing moves while
+    annotating. The rule is pure and tested (`LauncherAvoidance` in AnnotateCore).
+- **`.annotateAvoid()`:** tags a view the launcher should keep off, for bars SwiftUI draws itself
+  (a custom tab bar, a floating button, a composer in `safeAreaBar`), which aren't UIKit views. It
+  is an empty stub in Release.
 - **Agent loop** (ideas from Agentation):
   - **`annotation_wait` MCP tool:** blocks until you Send or answer a question, batches for 10 s and
     returns everything. It gives hands-free delivery in Cursor, Codex, the Claude desktop app or any

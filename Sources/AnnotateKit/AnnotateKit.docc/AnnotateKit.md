@@ -22,7 +22,7 @@ struct MyApp: App {
 ```
 
 All overlay code is compiled only into DEBUG builds. In Release, ``Annotate/install(_:file:)`` and
-`annotatable(_:file:line:)` are empty stubs, so the calls can stay in place.
+`annotatable(_:file:line:)` and `annotateAvoid()` are empty stubs, so the calls can stay in place.
 
 ## Topics
 
@@ -35,3 +35,7 @@ All overlay code is compiled only into DEBUG builds. In Release, ``Annotate/inst
 ### Source mapping
 
 - ``SwiftUICore/View/annotatable(_:file:line:)``
+
+### Launcher
+
+- ``SwiftUICore/View/annotateAvoid()``

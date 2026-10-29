@@ -257,8 +257,9 @@ Foundation-only, so viewers, bots and other tools can depend on it without UIKit
   `.annotatable()` compile to empty stubs, and the package has no dependencies.
 - **Near-zero cost in DEBUG until you annotate.** The accessibility tree is switched on the first
   time you enter annotate mode, not at launch. `.annotatable()` views do no geometry work while
-  annotate mode is off. With the launcher hidden, no overlay window exists until
-  `Annotate.start()`.
+  annotate mode is off. The idle launcher re-reads the app's bottom chrome once a second with a
+  plain UIKit view walk (no accessibility tree, no capture) to keep off its bars. With the launcher
+  hidden, no overlay window exists until `Annotate.start()`.
 - **Instant enter, instant Send.** Entering annotate mode takes a single screen capture. The
   visible-text outline is scanned only when the first pin needs it. Send returns immediately,
   while rendering, PNG encoding and writing happen off the main thread, in 8-bit sRGB rather than
@@ -280,6 +281,10 @@ exact point.
 
 **Optional: exact source lines.** Add `.annotatable()` to a view and pins on or inside it carry its
 `file:line`. It's never required.
+
+**Optional: keep the launcher off your bar.** The idle pill moves off UIKit tab bars, toolbars, text
+inputs and controls by itself, lifting above them or moving to a side. A bar SwiftUI draws itself
+isn't a UIKit view, so tag it with `.annotateAvoid()`.
 
 ## Repository layout
 

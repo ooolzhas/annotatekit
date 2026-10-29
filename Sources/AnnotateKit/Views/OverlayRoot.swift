@@ -10,7 +10,8 @@
 // dim, the edge glow and the frost in and out over the same `modeDuration` the bottom chrome
 // (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; the bar,
 // comment card and reply card swap with a fade while their glass materializes (iOS 26; before it a
-// short slide, fade and scale from the bottom); the launcher pill scales down and fades about its own center. The edge glow and
+// short slide, fade and scale from the bottom); the launcher pill scales down and fades about its own center, and
+// comes in the same way once on a fresh open (`isLauncherRevealed`) instead of popping up. The edge glow and
 // the frost behind the chrome drift like liquid while annotate mode is on. Reduce Motion keeps the
 // fades only and holds the glow and frost still.
 // The whole tree ignores the safe area so SwiftUI coordinates equal window (= screen) points, which
@@ -51,7 +52,7 @@ struct OverlayRoot: View {
                 // views an `if` inserts run a transition, never their children
                 BottomChrome(controller: controller, chromeTop: $chromeTop)
                     .transition(chromeEntrance)
-            } else if controller.options.showsLauncher {
+            } else if controller.options.showsLauncher && controller.isLauncherRevealed {
                 LauncherButton(controller: controller)
                     .transition(launcherTransition)
             }
@@ -66,6 +67,7 @@ struct OverlayRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
         .animation(Self.modeAnimation, value: controller.isActive)
+        .animation(Self.modeAnimation, value: controller.isLauncherRevealed)
         .animation(.snappy(duration: 0.2), value: controller.toast)
     }
 

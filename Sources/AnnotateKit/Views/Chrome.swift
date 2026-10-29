@@ -594,16 +594,12 @@ private struct HintSwap: Transition {
 /// lives on `LauncherStatus` in AnnotateCore, so the wording stays testable on Linux.
 struct LauncherButton: View {
     let controller: AnnotateController
-    /// Vertical drag only: the pill stays centered, so a side-edge snap has nothing to do and the
-    /// user can only lift it off an app's own bottom bar.
+    /// Vertical drag only: the pill keeps its column (centered, or the side avoidance put it on).
     @GestureState private var dragOffset: CGFloat = 0
 
-    /// Figma's horizontal title padding (9265:14504 `px-[16px]`).
+    /// Figma's horizontal title padding (9289:1310 `px-[16px]`).
     static let horizontalPadding: CGFloat = 16
-    /// Figma container `px-[8px]` (9265:14502): 8pt on each side caps the pill at `bounds.width - 16`,
-    /// which is what a long agent message truncates against.
-    static let containerInset: CGFloat = 8
-    /// Figma title: SF Pro Medium 17 (9265:14505). Its 22pt leading is the 17pt default, so no
+    /// Figma title: SF Pro Medium 17 (9289:1312). Its 22pt leading is the 17pt default, so no
     /// line spacing modifier.
     static let titleSize: CGFloat = 17
     /// Drag threshold kept from the old launcher, so a tap with a little jitter still taps.
@@ -611,17 +607,19 @@ struct LauncherButton: View {
     /// Not in Figma (no motion context for either frame): title and width changes animate so the
     /// pill visibly grows into "4 notes sent" instead of jumping.
     static let statusAnimation: Animation = .snappy(duration: 0.25)
+    /// Not in Figma: the pill springs to a new spot when the app's chrome pushes it (or lets it back).
+    static let placementAnimation: Animation = .spring(duration: 0.4, bounce: 0.2)
 
-    /// Connection dot (no Figma frame): solid green when a Send starts an agent by itself, a ring
-    /// when one is connected but only reads when asked, absent when nothing listens. 8pt from the
-    /// title (owner request, 2pt more than before).
-    static let dotSize: CGFloat = 7
+    /// Connection dot, Figma 9289:1311 (8×8, `gap-[8px]` to the title, green `#34C759`): solid green
+    /// when a Send starts an agent by itself, a ring when one is connected but only reads when asked
+    /// (no Figma frame), absent when nothing listens.
+    static let dotSize: CGFloat = 8
     static let dotSpacing: CGFloat = 8
 
     var body: some View {
         let status = controller.launcherStatus
         let frame = controller.launcherFrame
-        let maxWidth = max(controller.bounds.width - Self.containerInset * 2, 0)
+        let maxWidth = max(controller.bounds.width - AnnotateController.launcherSideInset * 2, 0)
         let agent = controller.agent
 
         HStack(spacing: Self.dotSpacing) {
@@ -665,6 +663,7 @@ struct LauncherButton: View {
             // maxWidth-only frame grows to the proposal) instead of the pill's
             .frame(maxWidth: maxWidth)
             .position(x: frame.midX, y: frame.midY + dragOffset)
+            .animation(Self.placementAnimation, value: controller.launcherSpot)
     }
 }
 

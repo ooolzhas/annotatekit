@@ -26,9 +26,11 @@
 // A pin the agent asked about is answered on the device (`beginReply` → `submitReply`): the reply
 // is appended to the session's replies.json off the main thread and shown as answered at once. While
 // a question is open the pill narrates `.question(pin:)`, and annotate mode opens on the notes sheet.
-// The launcher is a pill centered horizontally above the home indicator, or above the keyboard
-// while one is up, whether docked or dragged (Figma 9265:14439); a drag moves it vertically only,
-// so it can get out of the way of an app's own bottom bar.
+// The launcher is a pill docked above the home indicator (Figma 9289:1305), or above the keyboard
+// while one is up. While it idles undragged it keeps off the app's bottom chrome: every
+// `placementInterval` it re-reads the tab bars, toolbars, inputs and `.annotateAvoid()` views
+// there (`LauncherObstacles`) and `LauncherAvoidance` lifts it above them or moves it to a side.
+// A drag moves it vertically and wins over avoidance; it fades in once the first layout settles.
 // The line above the review bar (`reviewHint`) opens on the gestures hint (`isIntro`), then settles on
 // the connection, connected or offline, and follows it from then on.
 // Live scans (taps, sketch attribution) wait until they match the frozen image: SwiftUI's
@@ -158,6 +160,11 @@ final class AnnotateController {
     /// The pill's measured size: its width follows the title, so the hit frame must too.
     /// Starts at the Figma "Annotate" pill (9265:14504) until the view reports.
     private(set) var launcherPillSize = CGSize(width: 104, height: 44)
+    /// Where avoidance put the idle, undragged pill: the dock, or clear of the app's bottom chrome.
+    private(set) var launcherSpot: LauncherSpot = .dock
+    /// False until the overlay's first layout has settled: the pill then fades in where it belongs
+    /// instead of popping up with the window.
+    private(set) var isLauncherRevealed = false
     /// The still image shown under the overlay while annotating.
     private(set) var frozenImage: UIImage?
     private(set) var currentScreen = 0
@@ -214,6 +221,9 @@ final class AnnotateController {
     /// Clears `isIntro` after the hold; a new start cancels it so the hold restarts.
     @ObservationIgnored private var introTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var avoidance = LauncherAvoidance()
+    @ObservationIgnored private var placementTask: Task<Void, Never>?
+    @ObservationIgnored private var revealTask: Task<Void, Never>?
     /// Delivery stage haptics. Kept and prepared on Send: a fresh generator per stage can lag the
     /// change it marks, since the Taptic Engine spins down between stages.
     @ObservationIgnored private lazy var tickFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -255,11 +265,16 @@ final class AnnotateController {
         observeLifecycle()
         startPresence()
         resumeDelivery()
+        startPlacementChecks()
     }
 
     func updateLayout(bounds: CGRect, safeInsets: UIEdgeInsets) {
+        guard self.bounds != bounds || self.safeInsets != safeInsets else { return }
         if self.bounds != bounds { self.bounds = bounds }
         if self.safeInsets != safeInsets { self.safeInsets = safeInsets }
+        // A rotation or a new safe area moves the dock, so check the chrome around the new one
+        refreshLauncherPlacement()
+        scheduleLauncherReveal()
     }
 
     // MARK: Mode
@@ -307,6 +322,8 @@ final class AnnotateController {
         stopObservingKeyboard()
         AnnotatableRegistry.shared.setCollecting(false)
         window?.deactivate()
+        // The app may have changed under the frozen screen; place the returning pill against it
+        refreshLauncherPlacement()
     }
 
     /// Launch-time start (`ANNOTATE=1`): freezes the first screen the app settles on instead of
@@ -320,27 +337,31 @@ final class AnnotateController {
             if let fixedDelay {
                 try? await Task.sleep(for: .seconds(max(fixedDelay, 0)))
             } else {
-                var settle = LaunchSettle()
-                var activeAge = 0.0
-                var lastTick = Date()
-                while !Task.isCancelled {
-                    guard let self else { return }
-                    let now = Date()
-                    // Only active time counts: a permission alert at first launch makes the scene
-                    // inactive, and apps often hold their splash still until they're active again
-                    if self.window?.windowScene?.activationState == .foregroundActive {
-                        activeAge += now.timeIntervalSince(lastTick)
-                        if settle.observe(Snapshotter.grayThumbnail(excluding: self.window), at: activeAge) { break }
-                    } else {
-                        settle.interrupt()
-                    }
-                    lastTick = now
-                    try? await Task.sleep(for: .seconds(LaunchSettle.interval))
-                }
+                await self?.waitForSettledScreen()
             }
             guard let self, !Task.isCancelled else { return }
             self.launchStart = nil
             self.start()
+        }
+    }
+
+    /// Returns once the app's screen has settled (`LaunchSettle`) or the task is cancelled.
+    private func waitForSettledScreen() async {
+        var settle = LaunchSettle()
+        var activeAge = 0.0
+        var lastTick = Date()
+        while !Task.isCancelled {
+            let now = Date()
+            // Only active time counts: a permission alert at first launch makes the scene
+            // inactive, and apps often hold their splash still until they're active again
+            if window?.windowScene?.activationState == .foregroundActive {
+                activeAge += now.timeIntervalSince(lastTick)
+                if settle.observe(Snapshotter.grayThumbnail(excluding: window), at: activeAge) { return }
+            } else {
+                settle.interrupt()
+            }
+            lastTick = now
+            try? await Task.sleep(for: .seconds(LaunchSettle.interval))
         }
     }
 
@@ -947,8 +968,17 @@ final class AnnotateController {
     static let barHeight: CGFloat = 52
     /// Launcher pill height, Figma 9265:14504 (`h-[44px]`; it wins over py-8 + the 22pt line).
     static let launcherHeight: CGFloat = 44
-    /// Gap between the docked pill and `chromeBottom`, Figma container 9265:14502 (`pb-[8px]`).
-    static let launcherBottomGap: CGFloat = 8
+    /// Gap between the pill and the keyboard while one is up. No Figma frame: the 8pt the comment
+    /// card keeps (9276:27184). Without a keyboard the pill sits on `screenChromeBottom`, which is
+    /// Figma 9289:1305's `pb-[34px]` on a phone with a home indicator.
+    static let launcherKeyboardGap: CGFloat = 8
+    /// Closest the pill gets to the screen's sides, Figma container 9289:1305 (`px-[34px]`): it caps
+    /// the pill's width (a long agent message truncates against it) and places a side spot.
+    static let launcherSideInset: CGFloat = 34
+    /// Seconds between re-checks of the app's bottom chrome while the pill idles. No Figma source:
+    /// soon enough after a screen change that a pill on a new tab bar isn't noticed, and the view
+    /// walk is cheap enough to go unnoticed itself.
+    static let placementInterval: Double = 1
     /// Extra touch slop around the pill on every side, so a near miss still opens annotate mode.
     static let launcherHitSlop: CGFloat = 4
 
@@ -997,46 +1027,104 @@ final class AnnotateController {
         ))
     }
 
-    /// The pill in overlay points: centered horizontally, docked 8pt above `chromeBottom` (so it
-    /// rides the keyboard like the rest of the bottom chrome) unless the user dragged it.
+    /// The pill in overlay points. Dragged: where the user left it, in its spot's column. Otherwise
+    /// docked above the keyboard while one is up (the keyboard wins over avoidance), else at the
+    /// spot avoidance picked: the dock on `screenChromeBottom`, or clear of the app's chrome.
     var launcherFrame: CGRect {
-        let height = Self.launcherHeight
-        let width = launcherPillSize.width
+        let layout = launcherLayout
         // Clamped on read too: a rotation or safe-area change can leave a dragged position off screen
-        let centerY = launcherCenterY.flatMap { clampedLauncherCenterY($0) }
-        let maxY = centerY.map { $0 + height / 2 } ?? chromeBottom - Self.launcherBottomGap
-        return CGRect(x: bounds.midX - width / 2, y: maxY - height, width: width, height: height)
+        if let centerY = launcherCenterY.flatMap({ clampedLauncherCenterY($0) }) {
+            let frame = LauncherAvoidance.frame(for: launcherSpot, in: layout)
+            return frame.offsetBy(dx: 0, dy: centerY - frame.midY)
+        }
+        return LauncherAvoidance.frame(for: isKeyboardUp ? .dock : launcherSpot, in: layout)
     }
 
     /// Touch target the overlay window accepts while annotate mode is off.
     var launcherHitFrame: CGRect {
-        guard options.showsLauncher else { return .zero }
+        guard options.showsLauncher, isLauncherRevealed else { return .zero }
         return launcherFrame.insetBy(dx: -Self.launcherHitSlop, dy: -Self.launcherHitSlop)
     }
 
     /// The pill's measured size from the view. Equal sizes are dropped: every write would
-    /// invalidate `launcherFrame` readers even when nothing moved.
+    /// invalidate `launcherFrame` readers even when nothing moved. A new title can make the pill
+    /// wide enough to reach the app's chrome, so the placement is checked again.
     func updateLauncherSize(_ size: CGSize) {
         guard launcherPillSize != size else { return }
         launcherPillSize = size
+        refreshLauncherPlacement()
     }
 
-    /// Vertical drag only: x stays centered, y is clamped so the whole pill stays in the safe area.
+    /// Vertical drag only: x stays in the spot's column, y is clamped so the whole pill stays in
+    /// the safe area. From here on the user's height wins over avoidance.
     func moveLauncher(toCenterY y: CGFloat) {
         guard let clamped = clampedLauncherCenterY(y) else { return }
         if launcherCenterY != clamped { launcherCenterY = clamped }
     }
 
-    /// Range a dragged pill's center may take. The lowest center is the docked one, derived from
-    /// `chromeBottom` like the docked frame, so there's one bottom edge either way (`safeBounds`
-    /// would differ when the bottom inset is under 12). nil before the first layout, when the
-    /// area is smaller than the pill and there's nothing to clamp to.
+    /// Re-reads the app's bottom chrome and moves the idle pill clear of it (LauncherButton springs
+    /// it there). Only the undragged pill avoids, and only while idle with no keyboard up: a drag
+    /// and the keyboard win, and nothing moves while annotating.
+    func refreshLauncherPlacement() {
+        guard options.showsLauncher, !isActive, launcherCenterY == nil, !isKeyboardUp,
+              let window, bounds.width > 0, UIApplication.shared.applicationState == .active else { return }
+        let layout = launcherLayout
+        let obstacles = LauncherObstacles.scan(band: layout.band, overlay: window)
+        let spot = avoidance.update(layout, obstacles: obstacles)
+        if launcherSpot != spot { launcherSpot = spot }
+    }
+
+    /// The pill's size and the room it has: docked on `screenChromeBottom` (or above the keyboard),
+    /// no closer than `launcherSideInset` to the sides, no higher than the safe area.
+    private var launcherLayout: LauncherAvoidance.Layout {
+        LauncherAvoidance.Layout(
+            bounds: bounds,
+            pillSize: CGSize(width: launcherPillSize.width, height: Self.launcherHeight),
+            dockBottom: launcherDockBottom,
+            topLimit: safeBounds.minY,
+            sideInset: Self.launcherSideInset
+        )
+    }
+
+    /// The docked pill's bottom edge: on the review bar's bottom edge (`screenChromeBottom`), or
+    /// `launcherKeyboardGap` above the keyboard while one is up.
+    private var launcherDockBottom: CGFloat {
+        isKeyboardUp ? chromeBottom - Self.launcherKeyboardGap : screenChromeBottom
+    }
+
+    /// Range a dragged pill's center may take. The lowest center is the docked one, so there's one
+    /// bottom edge either way. nil before the first layout, when the area is smaller than the pill
+    /// and there's nothing to clamp to.
     private func clampedLauncherCenterY(_ y: CGFloat) -> CGFloat? {
         let half = Self.launcherHeight / 2
         let top = safeBounds.minY + half
-        let bottom = chromeBottom - Self.launcherBottomGap - half
+        let bottom = launcherDockBottom - half
         guard bottom >= top else { return nil }
         return min(max(y, top), bottom)
+    }
+
+    /// The re-check loop; `refreshLauncherPlacement` skips its ticks while there's nothing to do.
+    private func startPlacementChecks() {
+        guard options.showsLauncher, placementTask == nil else { return }
+        placementTask = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.refreshLauncherPlacement()
+                try? await Task.sleep(for: .seconds(Self.placementInterval))
+            }
+        }
+    }
+
+    /// Once, after the first real layout: wait for the app's first settled screen (past its launch
+    /// screen and splash, like a launch-time start), place the pill against it, then let it fade in
+    /// (OverlayRoot animates the reveal), so it appears where it stays.
+    private func scheduleLauncherReveal() {
+        guard !isLauncherRevealed, revealTask == nil, bounds.width > 0 else { return }
+        revealTask = Task { [weak self] in
+            await self?.waitForSettledScreen()
+            guard let self, !Task.isCancelled else { return }
+            self.refreshLauncherPlacement()
+            self.isLauncherRevealed = true
+        }
     }
 
     func showToast(_ message: String, duration: Double = 2.6) {
@@ -1314,7 +1402,10 @@ final class AnnotateController {
     func updateKeyboardGuide(top: CGFloat) {
         let restingTop = bounds.maxY - safeInsets.bottom
         let newTop: CGFloat? = top < restingTop - 1 ? top : nil
-        if keyboardTop != newTop { keyboardTop = newTop }
+        guard keyboardTop != newTop else { return }
+        keyboardTop = newTop
+        // Back from the keyboard dock: place the pill against the app's chrome again
+        if newTop == nil { refreshLauncherPlacement() }
     }
 
     private func stopObservingKeyboard() {
@@ -1488,7 +1579,7 @@ final class AnnotateController {
     }
 
     /// Presence pauses in the background: nobody sees the dot, and on a device a stale `app.json`
-    /// is what tells the Mac to poll slowly.
+    /// is what tells the Mac to poll slowly. Becoming active re-checks the pill's placement.
     private func observeLifecycle() {
         guard lifecycleObservers.isEmpty else { return }
         let center = NotificationCenter.default
@@ -1498,6 +1589,10 @@ final class AnnotateController {
             },
             center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.startPresence() }
+            },
+            // Back from the app switcher or a system alert, the screen may have changed meanwhile
+            center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshLauncherPlacement() }
             }
         ]
     }
