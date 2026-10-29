@@ -63,7 +63,7 @@ jobs:
           echo "sha256 \"${{ steps.package.outputs.sha256 }}\"" >> "$GITHUB_STEP_SUMMARY"
 
   npm:
-    name: npm package (annotatekit)
+    name: npm package (@annotatekit/cli)
     needs: cli
     # Trusted Publishing: npm trusts this workflow through GitHub's OIDC token, so no secret is
     # stored. Skipped until the package exists and its Trusted Publisher is set on npmjs.com
