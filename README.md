@@ -19,9 +19,10 @@ Tap, draw and comment on your running app. Hit Send. Your agent gets the screens
 1. In your app in the Simulator, tap the pencil. The screen freezes.
 2. **Tap anything** to pin a comment: an element, or the exact spot. **Drag** a region and sketch
    in it, or flip on **Draw** and scribble anywhere. Retype a label in place.
-3. Hit **Send**. Claude Code, already open on your Mac, starts working. The pill narrates it:
-   *Delivered → Claude picked it up → Done · Edited AlarmCard.swift*. A green dot on the pill
-   means an agent is listening. It works the same from a physical iPhone, with no extra setup.
+3. Hit **↑**. Claude Code, already open on your Mac, starts working. Annotate mode stays open and
+   narrates it: *Delivered to Claude → Claude looking at it → Changes applied*, while each pin's
+   badge spins until the agent resolves it and then turns into a green check. A green dot on the
+   pill means an agent is listening. It works the same from a physical iPhone, with no extra setup.
 
 No copy/paste and no tagging views: every pixel is annotatable. It works with SwiftUI and UIKit,
 and everything is compiled out of Release builds.
@@ -134,7 +135,8 @@ Tools:
 | Draw anywhere on the screen | Scribble button in the toolbar. The drawing becomes one pin, attributed to the view under it |
 | Undo / redo a stroke | The card's undo and redo buttons, or `⌘Z` / `⇧⌘Z`. `⌘Z` with no pin open removes the last pin |
 | Back out | `Esc` |
-| Send | **Send** or `⌘Return`. The chevron menu has *Send and keep annotating* and *Clear all* |
+| Send | **↑** on the bar or `⌘Return`. Annotate mode stays open with the sent pins' progress |
+| Clear all | Hold the note count on the bar, then *Delete All Notes* |
 
 To annotate another screen, leave annotate mode, navigate, and come back. One Send carries every
 screen with pins on it.
@@ -257,7 +259,7 @@ Foundation-only, so viewers, bots and other tools can depend on it without UIKit
   annotate mode is off. With the launcher hidden, no overlay window exists until
   `Annotate.start()`.
 - **Instant enter, instant Send.** Entering annotate mode takes a single screen capture. The
-  visible-text outline is scanned only when the first pin needs it. Send dismisses immediately,
+  visible-text outline is scanned only when the first pin needs it. Send returns immediately,
   while rendering, PNG encoding and writing happen off the main thread, in 8-bit sRGB rather than
   the 16-bit wide-color default.
 - **Small bundles.** A 1x screen (pixel = point), an annotated copy, and one native-resolution crop

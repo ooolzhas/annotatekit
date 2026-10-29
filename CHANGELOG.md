@@ -55,10 +55,26 @@ All notable changes to this project are documented here. The format is based on
   fade and scale; the launcher pill scales and fades in place. Reduce Motion keeps the fades.
 - The review bar stays at the bottom of the screen while a keyboard is up; only the cards dock to the
   keyboard.
-- The comment card quotes an element pin's own text in a thumbnail-style box (2/3 of the card wide,
-  two lines at most), like the message a reply quotes.
+- The comment card quotes an element pin's own text in a thumbnail-style box (two lines at most),
+  like the message a reply quotes.
 - The comment and reply cards no longer focus on a tap anywhere on the card; that gesture took taps
   meant for intent-menu items drawn over the card. Tap the field itself to type.
+
+- Overlay layout pass (Figma SUNSET 9276:28552):
+  - **Review bar:** three glass pieces 8pt apart: a 52pt back button, the note count, and a 52pt ↑
+    tinted blue while there is something to send. The trash button is gone: hold the count for
+    "Delete All Notes", which still asks first. VoiceOver calls ↑ Save while no agent listens.
+  - **Send keeps annotate mode open.** The sent pins stay on the frozen screen, and each badge shows
+    a spinner while the agent has the pin, then a green check when it's resolved (`?` for a question,
+    × when dismissed). The bar reads "N notes sent". Saving a new pin hides them; leaving annotate
+    mode drops them. `⌘↩` does the same.
+  - **Comment card:** with no keyboard up it sits where the bar does (34pt sides, on the home
+    indicator); over the keyboard it keeps 8pt. The intent chip shows just the intent in 17pt, with no
+    chevron. Disabled glyphs (↑ with no text, redo with nothing to redo) are 25% instead of 50%.
+  - **Quote box:** 236pt wide, 13/20pt text at 75%, hanging from the top.
+  - **Hint line:** two-part lines split into a headline and a dimmed detail ("Agent offline", "Notes
+    will be saved"); the detail and the elapsed sit 4pt after the headline.
+  - The undo ↔ × glyph swap runs twice as fast.
 
 ### Added
 - **Agent loop** (ideas from Agentation):
