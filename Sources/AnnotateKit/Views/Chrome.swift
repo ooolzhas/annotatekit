@@ -316,7 +316,6 @@ struct ReviewBar: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(ChromeButtonStyle())
-            .disabled(!controller.hasNotesToList)
             .accessibilityHint("Show the notes")
 
             // 9276:27561 — white ↑ on blue-tinted glass; plain glass and a dimmed glyph with nothing to send

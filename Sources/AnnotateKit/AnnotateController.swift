@@ -657,13 +657,8 @@ final class AnnotateController {
         return OverlayChrome.countTitle(annotations.count)
     }
 
-    /// Whether the notes sheet has anything to list: pins waiting to be sent, or the last Send's.
-    var hasNotesToList: Bool {
-        !annotations.isEmpty || !pinResults.isEmpty
-    }
-
+    /// Opens the notes sheet, empty or not: with nothing to list it says how to add a note.
     func openNotes() {
-        guard hasNotesToList else { return }
         finishDraft()
         isShowingNotes = true
     }

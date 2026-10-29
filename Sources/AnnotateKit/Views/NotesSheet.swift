@@ -1,7 +1,8 @@
 // The note list behind the review bar's count (no Figma: owner request). A sheet that opens at a
 // small detent and drags up to full height. It lists the pins waiting to be sent, numbered like their
 // badges: a tap opens one on the comment card (pins on another screen can't open here, so they only
-// list), a swipe deletes one, and Delete All clears them all after asking. Below them come the last
+// list), a swipe deletes one (a trash icon, no label), and Clear All clears them all after asking.
+// With nothing to list it shows an empty state that says how to add a note. Below them come the last
 // Send's pins with what the agent reported, the same spinner / glyph / number as their badges, and
 // Reply on a question. Row copy comes from `PinResult` and `PinOutcome` in AnnotateCore.
 
@@ -32,10 +33,15 @@ struct NotesSheet: View {
                     Section {
                         ForEach(pending) { note in
                             pendingRow(note)
-                        }
-                        .onDelete { offsets in
-                            let ids = offsets.compactMap { annotationID(for: pending[$0].index) }
-                            ids.forEach(controller.deleteNote)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        if let id = annotationID(for: note.index) { controller.deleteNote(id) }
+                                    } label: {
+                                        // Icon only (owner request); VoiceOver still hears the action
+                                        Image(systemName: "trash")
+                                    }
+                                    .accessibilityLabel(OverlayChrome.clearAction)
+                                }
                         }
                     } header: {
                         if !sent.isEmpty { Text(OverlayChrome.unsentTitle) }
@@ -50,6 +56,15 @@ struct NotesSheet: View {
                         Text(OverlayChrome.resultsTitle(sent.count))
                     } footer: {
                         if let summary = PinResult.summary(sent) { Text(summary) }
+                    }
+                }
+            }
+            .overlay {
+                if pending.isEmpty, sent.isEmpty {
+                    ContentUnavailableView {
+                        Label(OverlayChrome.emptyTitle, systemImage: "note.text")
+                    } description: {
+                        Text(ReviewHint.gestures.headline)
                     }
                 }
             }

@@ -101,7 +101,7 @@ public enum OverlayChrome: Equatable, Sendable {
     public static let clearAction = "Delete"
     /// Clear-all button in the notes sheet's toolbar. No Figma frame: the bar lost its trash button
     /// (9276:27550), so clearing lives with the list now.
-    public static let clearAllTitle = "Delete All"
+    public static let clearAllTitle = "Clear All"
     /// Notes sheet section header for the pins not sent yet, shown when the last Send's pins list
     /// below them. No Figma frame (derived).
     public static let unsentTitle = "Not sent yet"
