@@ -119,9 +119,28 @@ final class OverlayHostingController: UIHostingController<OverlayRoot> {
         fatalError("init(coder:) is not supported")
     }
 
+    /// 1pt hidden view pinned to the keyboard layout guide: its position is where the keyboard's top
+    /// really is, suggestion bar included, which keyboard notifications don't always report.
+    private let keyboardProbe = UIView()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        keyboardProbe.isHidden = true
+        keyboardProbe.isUserInteractionEnabled = false
+        keyboardProbe.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(keyboardProbe)
+        NSLayoutConstraint.activate([
+            keyboardProbe.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            keyboardProbe.widthAnchor.constraint(equalToConstant: 1),
+            keyboardProbe.heightAnchor.constraint(equalToConstant: 1),
+            keyboardProbe.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor)
+        ])
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         controller.updateLayout(bounds: view.bounds, safeInsets: view.safeAreaInsets)
+        controller.updateKeyboardGuide(top: keyboardProbe.frame.maxY)
     }
 
     override func viewSafeAreaInsetsDidChange() {

@@ -1,20 +1,28 @@
 // Annotate-mode state machine, observed by the overlay views.
 // Start → freeze-frame: the app is captured (pixels + visible-text outline) and the overlay shows
 // that still image, so what you annotate is exactly what gets sent and coordinates can't drift.
-// Tap → SelectionStack of everything under the finger; a tap on nothing distinct pins the spot
-// itself, so every pixel is annotatable. ↑↓ walks spot → element → containers.
-// Drag → region with sketch tools. Draw mode → the whole frozen screen is a canvas; the drawing
-// becomes one pin framed by its bounds and attributed to the view it was drawn over.
-// Return saves, Esc backs out one level, ⌘Z undoes.
-// Send → hands a SendJob to BundleRenderer off the main thread (1x/annotated images, crops, PNG
-// encoding, write, prune), then polls status.json so the overlay can show the agent picking it up
-// and finishing. No copy/paste.
+// Every touch is classified by `PointerIntent`:
+// - Draw (the default): a touch that travels past the move threshold is a white pen stroke. With no
+//   pin open, the finished stroke opens a new sketch pin; while a pin is open, every further stroke
+//   joins that pin, whatever its kind, so you can keep drawing as long as the comment card is up.
+//   A saved sketch is framed by its strokes and attributed to the view it was drawn over.
+// - Tap: finishes the open pin, then selects the whole element under the finger (no label chip);
+//   nothing distinct under it → nothing happens. ↑↓ walks element → containers.
+// - Hold: finishes the open pin, then drops a spot pin at the touch-down point. The only way to
+//   make a spot.
+// The comment card docks to the keyboard (`chromeBottom`), never to the marker. A pin can carry up
+// to `maxAttachments` reference images, kept beside the pin and handed to Send. With no pin open the
+// review bar shows: × stops (pins kept), trash clears, Send sends and exits. `chrome` resolves which.
+// Return / ↑ saves a pin with a comment, × discards it, Esc backs out one level, ⌘Z undoes.
+// Send → hands a SendJob to BundleRenderer off the main thread (1x/annotated images, crops,
+// attachments, PNG encoding, write, prune), then polls status.json so the overlay can show the agent
+// picking it up and finishing. No copy/paste.
 // Live scans (taps, sketch attribution) wait until they match the frozen image: SwiftUI's
 // accessibility tree is built right after the bootstrap, and while the comment keyboard is up the
 // app's labeled elements must still sit where they froze (an app may re-lay out for any keyboard;
 // if it did, the scan waits for the keyboard to go). The overlay itself never moves for the
-// keyboard; the card and toolbar sit above it. A launch-time start waits for the first screen the
-// app settles on.
+// keyboard; the card and review bar sit above it. A launch-time start waits for the first screen
+// the app settles on.
 // Idle cost is near zero: the accessibility tree and `.annotatable()` frame tracking switch on
 // only while annotating, and the text outline is scanned once the tree is warm.
 
@@ -30,9 +38,19 @@ final class AnnotateController {
         /// `index` is 0 until a new draft is saved.
         var annotation: Annotation
         var isNew: Bool
-        var isEditingText = false
-        var replacementText = ""
-        var tool: Stroke.Tool = .pen
+        /// Pen strokes in screen points while the pin is open; rebased into `annotation.sketch` on save.
+        var strokes: [Stroke] = []
+        /// Reference images; they stay out of `Annotation` until Send writes them into the bundle.
+        var images: [AttachedImage] = []
+    }
+
+    /// One picked reference image. Equatable by id: comparing pixels on every draft change would be
+    /// costly, and an image never changes under its id.
+    struct AttachedImage: Identifiable, Equatable {
+        let id: UUID
+        let image: UIImage
+
+        static func == (lhs: AttachedImage, rhs: AttachedImage) -> Bool { lhs.id == rhs.id }
     }
 
     struct Toast: Equatable {
@@ -45,6 +63,8 @@ final class AnnotateController {
         let index: Int
         let capturedAt: Date
         let image: UIImage
+        /// Tiny grayscale sample, to recognize this screen when annotate mode starts on it again.
+        let thumbnail: [UInt8]?
         /// Visible-text outline; nil until first needed (see `elements(for:)`).
         var elements: [ScreenElement]?
     }
@@ -69,6 +89,14 @@ final class AnnotateController {
         }
     }
 
+    /// The touch in progress: identified by its start point (constant across a DragGesture's
+    /// changes), so the first change of a new touch can be told apart from a continuing one.
+    private struct TouchTrack {
+        let start: CGPoint
+        let began: Date
+        var intent: PointerIntent?
+    }
+
     // MARK: Configuration
 
     @ObservationIgnored private(set) var options = AnnotateOptions()
@@ -87,19 +115,24 @@ final class AnnotateController {
     private(set) var annotations: [Annotation] = []
     private(set) var selection: SelectionStack?
     private(set) var draft: Draft?
-    private(set) var dragRect: CGRect?
+    /// The stroke under the finger, in screen points; joins a pin when the finger lifts.
+    private(set) var liveStroke: Stroke?
     private(set) var toast: Toast?
     private(set) var launcherCenter: CGPoint?
     /// The still image shown under the overlay while annotating.
     private(set) var frozenImage: UIImage?
     private(set) var currentScreen = 0
     private(set) var delivery: Delivery?
-    /// Draw mode: drags make strokes anywhere instead of selecting or making regions.
-    private(set) var isDrawing = false
     /// Top of the software keyboard (or hardware-keyboard bar) in overlay points while it's up.
     private(set) var keyboardTop: CGFloat?
 
     @ObservationIgnored private var screens: [Int: CapturedScreen] = [:]
+    /// Saved pins' reference images in pick order. Kept off `Annotation` so pins stay Codable and
+    /// cheap to compare; Send hands them to the bundle writer.
+    @ObservationIgnored private var attachmentImages: [UUID: [UIImage]] = [:]
+    @ObservationIgnored private var touch: TouchTrack?
+    /// Fires the hold once a touch has stayed still for `PointerIntent.holdDuration`.
+    @ObservationIgnored private var holdTask: Task<Void, Never>?
     @ObservationIgnored private var deliveryTask: Task<Void, Never>?
     @ObservationIgnored private var launchStart: Task<Void, Never>?
     @ObservationIgnored private var accessibilityWarmUp: Task<Void, Never>?
@@ -113,11 +146,14 @@ final class AnnotateController {
     @ObservationIgnored private var pendingAttributions: [Task<Void, Never>] = []
 
     static let cropPadding: CGFloat = 32
-    static let minimumRegionSide: CGFloat = 16
-    static let dragThreshold: CGFloat = 6
     static let spotSize: CGFloat = 44
-    /// Selection chip height plus its gap above the box.
-    static let chipClearance: CGFloat = 24
+    /// Reference images per pin. No Figma frame; keeps bundles small.
+    static let maxAttachments = 4
+    /// Pen samples closer than this to the previous one are dropped, keeping paths light (as 0.1.x did).
+    private static let strokeSampleSpacing: CGFloat = 1.5
+    /// Padding around a drawing's strokes when it becomes a pin's frame. OverlayRoot undoes it to
+    /// place the sketch badge on the strokes' own corner.
+    nonisolated static let sketchPadding: CGFloat = 8
     /// Longest wait for SwiftUI's accessibility tree after the bootstrap; pure UIKit apps never
     /// grow accessibility nodes and wait this out once.
     static let warmUpTimeout: Double = 0.8
@@ -156,7 +192,10 @@ final class AnnotateController {
         guard isActive else { return }
         finishDraft()
         selection = nil
-        dragRect = nil
+        holdTask?.cancel()
+        holdTask = nil
+        touch = nil
+        liveStroke = nil
         isActive = false
         frozenImage = nil
         accessibilityWarmUp?.cancel()
@@ -209,21 +248,56 @@ final class AnnotateController {
 
     // MARK: Pointer
 
-    func dragChanged(from start: CGPoint, to location: CGPoint) {
-        guard hypot(location.x - start.x, location.y - start.y) > Self.dragThreshold || dragRect != nil else { return }
-        if dragRect == nil { finishDraft() }
-        dragRect = CGRect.spanning(start, location)
-    }
-
-    func dragEnded(from start: CGPoint, to location: CGPoint) {
-        guard let rect = dragRect else {
-            tap(at: location)
+    /// Every change of the overlay's touch; the first call of a touch is its touch-down.
+    func touchChanged(start: CGPoint, location: CGPoint) {
+        if touch?.start != start { beginTouch(at: start) }
+        guard var track = touch else { return }
+        switch track.intent {
+        case nil:
+            let distance = Double(hypot(location.x - start.x, location.y - start.y))
+            let elapsed = Date().timeIntervalSince(track.began)
+            guard PointerIntent.classify(distance: distance, duration: elapsed, isEnded: false) == .draw else { return }
+            track.intent = .draw
+            touch = track
+            holdTask?.cancel()
+            holdTask = nil
+            liveStroke = Stroke(tool: .pen, points: [AnnotationPoint(start), AnnotationPoint(location)])
+        case .draw:
+            appendToLiveStroke(location)
+        case .hold, .tap:
+            // A hold already dropped its spot; moving afterwards doesn't turn it into a stroke
             return
         }
-        dragRect = nil
-        if rect.width >= Self.minimumRegionSide && rect.height >= Self.minimumRegionSide {
-            beginRegion(rect)
-        } else {
+    }
+
+    func touchEnded(start: CGPoint, location: CGPoint) {
+        holdTask?.cancel()
+        holdTask = nil
+        guard let track = touch, track.start == start else {
+            touch = nil
+            liveStroke = nil
+            return
+        }
+        touch = nil
+        let distance = Double(hypot(location.x - start.x, location.y - start.y))
+        let elapsed = Date().timeIntervalSince(track.began)
+        // An ended touch always classifies; `.tap` is only the fallback for the optional's sake
+        let intent = track.intent ?? PointerIntent.classify(distance: distance, duration: elapsed, isEnded: true) ?? .tap
+        switch intent {
+        case .draw:
+            // A fast flick can end before any change crossed the threshold: start the stroke here
+            var stroke = liveStroke ?? Stroke(tool: .pen, points: [AnnotationPoint(start)])
+            if stroke.points.last != AnnotationPoint(location) {
+                stroke.points.append(AnnotationPoint(location))
+            }
+            liveStroke = nil
+            commitStroke(stroke)
+        case .hold:
+            liveStroke = nil
+            // The timer already dropped the spot unless the touch lifted just before it fired
+            if track.intent == nil { hold(at: start) }
+        case .tap:
+            liveStroke = nil
             tap(at: location)
         }
     }
@@ -246,88 +320,93 @@ final class AnnotateController {
         let candidates = ElementScanner.candidates(at: point, excluding: window)
             + AnnotatableRegistry.shared.visible(in: bounds).map(\.candidate)
         let stack = SelectionStack(candidates: candidates, at: point, screenArea: bounds.area)
+        // Spots come only from a hold; a tap on nothing distinct does nothing
+        guard stack.current != nil else {
+            selection = nil
+            return
+        }
         selection = stack
         draft = Draft(annotation: annotation(for: stack, updating: nil), isNew: true)
     }
 
-    /// ↑ (`expand`) / ↓ — retarget the unsaved pin: spot → element → enclosing containers.
+    /// ↑ (`expand`) / ↓ — retarget the unsaved pin: element → enclosing containers.
     func adjustSelection(expand: Bool) {
-        guard var stack = selection, var current = draft, current.isNew, !current.isEditingText else { return }
+        guard var stack = selection, var current = draft, current.isNew else { return }
         guard expand ? stack.expand() : stack.narrow() else { return }
         selection = stack
         current.annotation = annotation(for: stack, updating: current.annotation)
         draft = current
     }
 
-    func beginRegion(_ rect: CGRect) {
-        finishDraft()
-        selection = nil
-        var region = Annotation(
-            index: 0,
-            screen: currentScreen,
-            kind: .region,
-            frame: AnnotationRect(rect),
-            source: SourceResolver.resolve(frame: rect, in: AnnotatableRegistry.shared.visible(in: bounds)),
-            sketch: Sketch(size: AnnotationSize(rect.size))
-        )
-        region.nearbyText = ScreenOutline.nearbyText(for: rect, in: elements(for: currentScreen))
-        draft = Draft(annotation: region, isNew: true)
-    }
-
-    // MARK: Draw mode
-
-    func toggleDrawing() {
-        if isDrawing {
-            saveDraft()
-        } else {
-            beginDrawing()
+    private func beginTouch(at start: CGPoint) {
+        holdTask?.cancel()
+        touch = TouchTrack(start: start, began: Date(), intent: nil)
+        holdTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(PointerIntent.holdDuration))
+            guard let self, !Task.isCancelled, var track = self.touch, track.start == start, track.intent == nil else { return }
+            track.intent = .hold
+            self.touch = track
+            self.hold(at: start)
         }
     }
 
-    /// Opens a full-screen sketch draft; strokes stay in screen points until it's saved.
-    func beginDrawing() {
-        finishDraft()
+    private func appendToLiveStroke(_ location: CGPoint) {
+        guard var stroke = liveStroke else { return }
+        if let last = stroke.points.last?.cgPoint,
+           hypot(location.x - last.x, location.y - last.y) < Self.strokeSampleSpacing {
+            return
+        }
+        stroke.points.append(AnnotationPoint(location))
+        liveStroke = stroke
+    }
+
+    /// A finished stroke joins the open pin, or opens a new sketch pin when none is open.
+    private func commitStroke(_ stroke: Stroke) {
+        guard stroke.points.count >= 2 else { return }
+        if draft != nil {
+            draft?.strokes.append(stroke)
+            return
+        }
+        cancelPendingTap()
         selection = nil
-        let canvas = Annotation(
+        let sketch = Annotation(
             index: 0,
             screen: currentScreen,
             kind: .sketch,
-            frame: AnnotationRect(bounds),
-            sketch: Sketch(size: AnnotationSize(bounds.size))
+            frame: AnnotationRect(strokeBounds([stroke]))
         )
-        draft = Draft(annotation: canvas, isNew: true)
-        isDrawing = true
+        draft = Draft(annotation: sketch, isNew: true, strokes: [stroke])
     }
 
-    /// Bounds of what's been drawn so far, in screen points (nil before the first stroke).
-    var drawingBounds: CGRect? {
-        guard let draft, draft.annotation.kind == .sketch else { return nil }
-        let points = (draft.annotation.sketch?.strokes ?? []).flatMap(\.points)
-        guard let first = points.first else { return nil }
-        var minX = first.x, minY = first.y, maxX = first.x, maxY = first.y
-        for point in points {
-            minX = min(minX, point.x); minY = min(minY, point.y)
-            maxX = max(maxX, point.x); maxY = max(maxY, point.y)
-        }
-        let origin = isDrawing ? CGPoint.zero : draft.annotation.frame.cgRect.origin
-        return CGRect(x: minX + origin.x, y: minY + origin.y, width: maxX - minX, height: maxY - minY)
-    }
-
-    /// What the comment card and toolbar should stay clear of for `draft`.
-    func focusFrame(for draft: Draft) -> CGRect {
-        if draft.annotation.kind == .sketch, isDrawing {
-            // Before anything is drawn, park the card near the bottom
-            return drawingBounds?.padded(by: 8)
-                ?? CGRect(x: bounds.midX, y: bounds.maxY - safeInsets.bottom - 60, width: 0, height: 0)
-        }
-        let frame = draft.annotation.frame.cgRect
-        guard draft.annotation.kind == .element || draft.annotation.kind == .point else { return frame }
-        // Leave room for the selection chip above the box, so a card placed above doesn't cover it
-        let chip = Self.chipClearance
-        return CGRect(x: frame.minX, y: frame.minY - chip, width: frame.width, height: frame.height + chip)
+    /// Drops a spot pin at the touch-down point. Needs no scan: a spot is pinned to the pixel.
+    private func hold(at point: CGPoint) {
+        finishDraft()
+        selection = nil
+        let side = Self.spotSize
+        let spot = CGRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side).clipped(to: bounds)
+        var pin = Annotation(
+            index: 0,
+            screen: currentScreen,
+            kind: .point,
+            anchor: AnnotationPoint(point),
+            frame: AnnotationRect(spot),
+            source: SourceResolver.resolve(frame: spot, in: AnnotatableRegistry.shared.visible(in: bounds))
+        )
+        pin.nearbyText = ScreenOutline.nearbyText(for: spot, in: elements(for: currentScreen))
+        draft = Draft(annotation: pin, isNew: true)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     // MARK: Draft editing
+
+    /// What the overlay shows: the comment card while a pin is open, the review bar otherwise.
+    var chrome: OverlayChrome {
+        OverlayChrome.resolve(.init(
+            isDraftOpen: draft != nil,
+            draftComment: draft?.annotation.comment ?? "",
+            pinCount: annotations.count
+        ))
+    }
 
     /// Text of the open draft's comment.
     var commentText: String {
@@ -342,85 +421,92 @@ final class AnnotateController {
         draft?.annotation.comment = text
     }
 
-    /// Bindable text of the in-place retype field.
-    var replacementText: String {
-        get { draft?.replacementText ?? "" }
-        set { draft?.replacementText = newValue }
+    func addAttachments(_ images: [UIImage]) {
+        guard let current = draft else { return }
+        let room = Self.maxAttachments - current.images.count
+        guard room > 0 else { return }
+        draft?.images.append(contentsOf: images.prefix(room).map { AttachedImage(id: UUID(), image: $0) })
     }
 
-    func selectTool(_ tool: Stroke.Tool) {
-        draft?.tool = tool
+    func removeAttachment(_ id: UUID) {
+        draft?.images.removeAll { $0.id == id }
     }
 
-    func addStroke(_ stroke: Stroke) {
-        draft?.annotation.sketch?.strokes.append(stroke)
+    /// ↑ / Return: saves only once there's a comment, so the button and key agree with `chrome`.
+    func submitDraft() {
+        guard case .composing(canSubmit: true) = chrome else { return }
+        saveDraft()
     }
 
-    var canEditText: Bool {
-        guard let draft, draft.annotation.kind == .element, let element = draft.annotation.element else { return false }
-        return !(element.label ?? "").isEmpty && ["text", "header", "button", "link"].contains(element.role)
-    }
-
-    func beginTextEdit() {
-        guard canEditText, var current = draft else { return }
-        current.isEditingText = true
-        current.replacementText = current.annotation.textEdit?.to ?? current.annotation.element?.label ?? ""
-        draft = current
+    /// ×: a new pin is dropped, a reopened one is deleted.
+    func discardDraft() {
+        guard let current = draft else { return }
+        if !current.isNew { removeAnnotation(id: current.annotation.id) }
+        clearDraft()
     }
 
     /// Saves the draft as a pin, or drops it when there is nothing to act on.
     func saveDraft() {
         guard var current = draft else { return }
-        var drawnArea: CGRect?
-        if current.isNew, current.annotation.kind == .sketch, isDrawing {
-            drawnArea = drawingBounds
-            current.annotation = settledSketch(current.annotation)
-        }
-        if current.isEditingText {
-            let original = current.annotation.element?.label ?? ""
-            let replacement = current.replacementText
-            current.annotation.textEdit = replacement == original ? nil : TextEdit(from: original, to: replacement)
-        }
         defer { clearDraft() }
 
-        guard !current.annotation.isEmpty else {
-            if !current.isNew { removeAnnotation(id: current.annotation.id) }
+        if current.strokes.isEmpty {
+            current.annotation.sketch = nil
+        } else {
+            if current.annotation.kind == .sketch {
+                // A drawing's pin is framed by what was drawn, not where it started
+                let area = strokeBounds(current.strokes).padded(by: Self.sketchPadding).clipped(to: bounds)
+                current.annotation.frame = AnnotationRect(area)
+                current.annotation.anchor = AnnotationPoint(x: area.midX, y: area.midY)
+                current.annotation.nearbyText = ScreenOutline.nearbyText(for: area, in: elements(for: currentScreen))
+            }
+            let frame = current.annotation.frame.cgRect
+            current.annotation.sketch = Sketch(
+                size: AnnotationSize(frame.size),
+                strokes: current.strokes.map { stroke in
+                    Stroke(tool: stroke.tool, points: stroke.points.map { AnnotationPoint(x: $0.x - frame.minX, y: $0.y - frame.minY) })
+                }
+            )
+        }
+
+        let id = current.annotation.id
+        let hasImages = !current.images.isEmpty
+        guard !current.annotation.isEmpty || hasImages else {
+            if !current.isNew { removeAnnotation(id: id) }
             return
         }
+        attachmentImages[id] = hasImages ? current.images.map(\.image) : nil
         if current.isNew {
             current.annotation.index = annotations.count + 1
             annotations.append(current.annotation)
-            if let drawnArea { attributeSketch(current.annotation.id, drawn: drawnArea) }
-        } else if let position = annotations.firstIndex(where: { $0.id == current.annotation.id }) {
+            if current.annotation.kind == .sketch {
+                attributeSketch(id, drawn: strokeBounds(current.strokes))
+            }
+        } else if let position = annotations.firstIndex(where: { $0.id == id }) {
             annotations[position] = current.annotation
         }
     }
 
+    /// Esc: closes the card without saving; a reopened pin stays as it was.
     func cancelDraft() {
-        clearDraft()
-    }
-
-    func deleteDraft() {
-        if let current = draft, !current.isNew {
-            removeAnnotation(id: current.annotation.id)
-        }
         clearDraft()
     }
 
     func openExisting(_ id: UUID) {
         finishDraft()
-        guard let annotation = annotations.first(where: { $0.id == id }) else { return }
-        draft = Draft(annotation: annotation, isNew: false)
+        guard let pin = annotations.first(where: { $0.id == id }) else { return }
+        draft = Draft(
+            annotation: pin,
+            isNew: false,
+            strokes: pin.sketchInScreenPoints,
+            images: (attachmentImages[id] ?? []).map { AttachedImage(id: UUID(), image: $0) }
+        )
     }
 
     // MARK: Keys
 
     func escape() {
-        if isDrawing {
-            cancelDraft()
-        } else if draft?.isEditingText == true {
-            draft?.isEditingText = false
-        } else if draft != nil {
+        if draft != nil {
             cancelDraft()
         } else if selection != nil {
             selection = nil
@@ -430,8 +516,8 @@ final class AnnotateController {
     }
 
     func undo() {
-        if let strokes = draft?.annotation.sketch?.strokes, !strokes.isEmpty {
-            draft?.annotation.sketch?.strokes.removeLast()
+        if let strokes = draft?.strokes, !strokes.isEmpty {
+            draft?.strokes.removeLast()
         } else if draft == nil, let last = visibleAnnotations.last {
             removeAnnotation(id: last.id)
             showToast("Removed pin \(last.index)")
@@ -443,6 +529,7 @@ final class AnnotateController {
     func clearAll() {
         clearDraft()
         annotations.removeAll()
+        attachmentImages.removeAll()
         screens = screens.filter { $0.key == currentScreen }
     }
 
@@ -450,7 +537,7 @@ final class AnnotateController {
     /// and writes the bundle off the main thread; the toast and delivery ring follow when it lands.
     func send(keepAnnotating: Bool) {
         finishDraft()
-        guard !annotations.isEmpty else {
+        guard chrome.canSend else {
             showToast("Nothing to send yet")
             return
         }
@@ -468,6 +555,7 @@ final class AnnotateController {
             guard let captured = screens[index] else { return nil }
             return SendJob.Capture(index: index, capturedAt: captured.capturedAt, image: captured.image, elements: elements(for: index))
         }
+        let outgoingIDs = Set(outgoing.map(\.id))
         let appWindow = ElementScanner.appWindows(excluding: window).first
         let job = SendJob(
             sessionID: SessionWriter.makeSessionID(),
@@ -479,10 +567,12 @@ final class AnnotateController {
             completionNote: options.completionNote,
             includesHiRes: options.includesHiResScreens,
             keepSessions: options.keepsSessions,
-            cropPadding: Self.cropPadding
+            cropPadding: Self.cropPadding,
+            attachments: attachmentImages.filter { outgoingIDs.contains($0.key) }
         )
 
         annotations.removeAll()
+        attachmentImages.removeAll()
         if keepAnnotating {
             screens = screens.filter { $0.key == currentScreen }
         } else {
@@ -510,30 +600,7 @@ final class AnnotateController {
 
     // MARK: Chrome
 
-    var hint: String {
-        if let draft {
-            if isDrawing { return "Draw anywhere · Return to save · ⌘Z undo" }
-            if draft.isEditingText { return "Return to save · Esc to cancel" }
-            if draft.annotation.kind == .region { return "Draw to sketch · ⌘Z undo · Esc cancel" }
-            return draft.isNew ? "Return to save · ↑↓ to adjust" : "Return to save · Esc to close"
-        }
-        return "Tap anything · Drag for an area"
-    }
-
-    /// Short title for the selection chip: the element, or the spot's coordinates.
-    func chipTitle(for annotation: Annotation) -> String {
-        let name: String
-        switch annotation.kind {
-        case .element: name = annotation.element?.displayName(maxLabelLength: 22) ?? "Element"
-        case .point: name = "Spot \(Int(annotation.anchor.x)), \(Int(annotation.anchor.y))"
-        case .region: name = "Region \(Int(annotation.frame.width)) × \(Int(annotation.frame.height))"
-        case .sketch: name = annotation.element.map { "Sketch over \($0.displayName(maxLabelLength: 18))" } ?? "Sketch"
-        }
-        guard let source = annotation.source else { return name }
-        return "\(name) · \(source.shortDescription)"
-    }
-
-    /// Bounds inside the safe area with a small margin; cards and chips stay within it.
+    /// Bounds inside the safe area with a small margin; the launcher stays within it.
     var safeBounds: CGRect {
         bounds.inset(by: UIEdgeInsets(
             top: safeInsets.top + 8,
@@ -543,18 +610,12 @@ final class AnnotateController {
         ))
     }
 
-    /// The toolbar moves to the top while the user works in the lower part of the screen.
-    var toolbarAtTop: Bool {
-        let focus = dragRect ?? draft.map { focusFrame(for: $0) }
-        guard let focus, bounds.height > 0 else { return false }
-        return focus.maxY > (keyboardTop ?? bounds.height) * 0.6
-    }
-
-    static let toolbarHeight: CGFloat = 44
+    /// Review bar height, Figma 9257:13549.
+    static let barHeight: CGFloat = 60
     static let launcherSize: CGFloat = 44
 
-    /// Lowest y bottom chrome (toolbar, toasts) may reach: above the home indicator, or above the
-    /// keyboard while it's up.
+    /// Lowest y bottom chrome (comment card, review bar, toasts) may reach: above the home
+    /// indicator, or above the keyboard while it's up.
     var chromeBottom: CGFloat {
         let screenBottom = bounds.maxY - max(safeInsets.bottom, 12)
         return keyboardTop.map { min($0, screenBottom) } ?? screenBottom
@@ -594,16 +655,26 @@ final class AnnotateController {
 
     // MARK: Private
 
-    /// Captures the app as it looks right now. A previous screen with no pins is replaced, so
-    /// opening and closing annotate mode doesn't pile up empty screens.
+    /// Captures the app as it looks right now. Back on a screen that already has pins, that screen's
+    /// freeze-frame comes back instead, so its pins show again exactly where they were drawn.
+    /// Otherwise it's a new screen; screens with no pins are dropped, so opening and closing
+    /// annotate mode doesn't pile up empty ones.
     private func freezeScreen() {
         guard let image = Snapshotter.captureApp(excluding: window) else {
             frozenImage = nil
             return
         }
-        let reuse = currentScreen > 0 && !annotations.contains { $0.screen == currentScreen }
-        let index = reuse ? currentScreen : (screens.keys.max() ?? 0) + 1
-        screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image)
+        let thumbnail = Snapshotter.grayThumbnail(of: image)
+        let pinned = Set(annotations.map(\.screen))
+        screens = screens.filter { pinned.contains($0.key) }
+        let candidates = screens.values.compactMap { screen in screen.thumbnail.map { (index: screen.index, pixels: $0) } }
+        if let thumbnail, let index = ScreenMatch.match(thumbnail, among: candidates), let revisited = screens[index] {
+            currentScreen = index
+            frozenImage = revisited.image
+            return
+        }
+        let index = (screens.keys.max() ?? 0) + 1
+        screens[index] = CapturedScreen(index: index, capturedAt: Date(), image: image, thumbnail: thumbnail)
         currentScreen = index
         frozenImage = image
     }
@@ -652,22 +723,18 @@ final class AnnotateController {
         return result
     }
 
-    /// Commits a draft with content, drops an empty one. Called before any new interaction.
+    /// Commits a draft with content, drops an empty one (`saveDraft` decides). Called before any
+    /// new interaction.
     private func finishDraft() {
         cancelPendingTap()
-        guard let current = draft else { return }
-        if current.isNew && current.annotation.isEmpty && !current.isEditingText {
-            clearDraft()
-        } else {
-            saveDraft()
-        }
+        guard draft != nil else { return }
+        saveDraft()
     }
 
     private func clearDraft() {
         cancelPendingTap()
         draft = nil
         selection = nil
-        isDrawing = false
     }
 
     private func cancelPendingTap() {
@@ -675,23 +742,16 @@ final class AnnotateController {
         pendingTap = nil
     }
 
-    /// Turns a full-screen drawing into a pin: frame = stroke bounds (padded), points rebased to
-    /// it, and nearby text. `attributeSketch` names the view it was drawn over.
-    private func settledSketch(_ annotation: Annotation) -> Annotation {
-        guard let drawn = drawingBounds, let strokes = annotation.sketch?.strokes, !strokes.isEmpty else { return annotation }
-        let frame = drawn.padded(by: 8).clipped(to: bounds)
-        var result = annotation
-        result.frame = AnnotationRect(frame)
-        result.anchor = AnnotationPoint(x: frame.midX, y: frame.midY)
-        result.sketch = Sketch(
-            size: AnnotationSize(frame.size),
-            strokes: strokes.map { stroke in
-                Stroke(tool: stroke.tool, points: stroke.points.map { AnnotationPoint(x: $0.x - frame.minX, y: $0.y - frame.minY) })
-            }
-        )
-
-        result.nearbyText = ScreenOutline.nearbyText(for: frame, in: elements(for: currentScreen), excluding: nil)
-        return result
+    /// Bounds of every point in `strokes`, screen points; a zero-size rect at a lone point.
+    private func strokeBounds(_ strokes: [Stroke]) -> CGRect {
+        let points = strokes.flatMap(\.points)
+        guard let first = points.first else { return .zero }
+        var minX = first.x, minY = first.y, maxX = first.x, maxY = first.y
+        for point in points {
+            minX = min(minX, point.x); minY = min(minY, point.y)
+            maxX = max(maxX, point.x); maxY = max(maxY, point.y)
+        }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
     /// Attributes a saved drawing to the smallest real view under it that encloses it. That takes a
@@ -791,9 +851,9 @@ final class AnnotateController {
         if captured.elements == nil { screens[index]?.elements = normalized }
     }
 
-    /// The comment keyboard: `keyboardTop` keeps the card and toolbar above it, and live scans
-    /// wait until it's fully gone (`isKeyboardShown` holds until didHide), because an app may
-    /// re-lay out for any keyboard while the overlay keeps showing the frozen image.
+    /// The comment keyboard: `keyboardTop` keeps the card above it, and live scans wait until it's
+    /// fully gone (`isKeyboardShown` holds until didHide), because an app may re-lay out for any
+    /// keyboard while the overlay keeps showing the frozen image.
     private func observeKeyboard() {
         guard keyboardObservers.isEmpty else { return }
         let center = NotificationCenter.default
@@ -802,25 +862,29 @@ final class AnnotateController {
                 let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
                 MainActor.assumeIsolated { self?.keyboardFrameWillChange(to: end) }
             },
-            center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.keyboardTop = nil }
-            },
             center.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.isKeyboardShown = false }
             }
         ]
     }
 
+    /// Only marks the keyboard as up for scan gating; where it sits comes from the layout guide
+    /// (`updateKeyboardGuide`), because notifications can end on a stale frame.
     private func keyboardFrameWillChange(to screenFrame: CGRect?) {
         guard let screenFrame, let window else { return }
         let frame = window.convert(screenFrame, from: window.screen.coordinateSpace)
         // Off screen or zero height: hidden, undocked or floating
-        guard frame.height >= 1, frame.minY < bounds.maxY else {
-            keyboardTop = nil
-            return
-        }
-        keyboardTop = frame.minY
+        guard frame.height >= 1, frame.minY < bounds.maxY else { return }
         isKeyboardShown = true
+    }
+
+    /// The keyboard's top edge from OverlayHostingController's keyboard layout guide, which sits on the
+    /// safe-area bottom when there's no keyboard. Notifications alone left the card 27pt low after the
+    /// photo picker: the suggestion bar can appear without a frame-change notification.
+    func updateKeyboardGuide(top: CGFloat) {
+        let restingTop = bounds.maxY - safeInsets.bottom
+        let newTop: CGFloat? = top < restingTop - 1 ? top : nil
+        if keyboardTop != newTop { keyboardTop = newTop }
     }
 
     private func stopObservingKeyboard() {
@@ -829,11 +893,11 @@ final class AnnotateController {
         }
         keyboardObservers = []
         isKeyboardShown = false
-        keyboardTop = nil
     }
 
     private func removeAnnotation(id: UUID) {
         annotations.removeAll { $0.id == id }
+        attachmentImages[id] = nil
         for position in annotations.indices {
             annotations[position].index = position + 1
         }

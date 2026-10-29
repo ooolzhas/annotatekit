@@ -1,9 +1,11 @@
-// Root of the overlay window. The whole tree ignores the safe area so SwiftUI coordinates equal
-// window (= screen) points, which is the space every frame from ElementScanner and the registry
-// uses. Elements are placed by top-left offset inside a full-screen top-leading ZStack.
-// Safe-area-aware chrome reads insets from the controller instead.
-// While active, the freeze-frame captured on start sits at the bottom of the stack: the app looks
-// paused, and every coordinate refers to exactly that image.
+// Root of the overlay window: the launcher while idle, and while annotating the frozen screen
+// dimmed with a pulsing blue edge glow, the touch catcher that feeds the controller (draw / tap / hold),
+// every pin's white markers and number badges, and the bottom chrome (comment card while a pin is
+// open, review bar otherwise) docked to the keyboard or the home indicator.
+// The whole tree ignores the safe area so SwiftUI coordinates equal window (= screen) points, which
+// is the space every frame from ElementScanner and the registry uses. Things are placed by top-left
+// offset inside a full-screen top-leading ZStack. The freeze-frame captured on start sits at the
+// bottom of the stack: the app looks paused, and every coordinate refers to exactly that image.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -39,198 +41,223 @@ struct OverlayRoot: View {
 private struct ActiveOverlay: View {
     let controller: AnnotateController
 
+    /// Gap between the bottom chrome and the keyboard / home indicator, and from the screen sides
+    /// (Figma 9257:13386 / 9257:13548: `pb-[8px] px-[8px]`).
+    private static let chromeInset: CGFloat = 8
+
     var body: some View {
+        let bounds = controller.bounds
+        let openID = controller.draft?.annotation.id
+        // Figma's composing frames show no badge for the pin being written: the open draft draws
+        // its own marker from the live draft instead of its saved copy.
+        let saved = controller.visibleAnnotations.filter { $0.id != openID }
+
         ZStack(alignment: .topLeading) {
             if let frozen = controller.frozenImage {
                 Image(uiImage: frozen)
                     .resizable()
-                    .frame(width: controller.bounds.width, height: controller.bounds.height)
+                    .frame(width: bounds.width, height: bounds.height)
                     .allowsHitTesting(false)
             }
 
-            captureLayer
-
-            ScreenEdgeGlow()
+            Color.black.opacity(AnnotateStyle.dimOpacity)
+                .frame(width: bounds.width, height: bounds.height)
                 .allowsHitTesting(false)
 
-            ForEach(controller.visibleAnnotations) { annotation in
-                if controller.draft?.annotation.id != annotation.id {
-                    SavedOutline(annotation: annotation)
-                }
-            }
+            // Figma 9257:13546: the Overlay layer (dim + glow, 9257:13547) sits below every marker
+            // and badge, so pins near the edge stay pure white
+            ScreenGlow()
+                .frame(width: bounds.width, height: bounds.height)
+                .allowsHitTesting(false)
 
-            if controller.isDrawing, let draft = controller.draft {
-                DrawingCanvas(controller: controller, draft: draft)
-            }
+            captureLayer
 
-            if let draft = controller.draft, draft.annotation.kind == .element || draft.annotation.kind == .point {
-                SelectionHighlight(
-                    annotation: draft.annotation,
-                    title: controller.chipTitle(for: draft.annotation),
-                    safeBounds: controller.safeBounds
+            ForEach(saved) { annotation in
+                PinMarker(
+                    annotation: annotation,
+                    strokes: annotation.sketchInScreenPoints,
+                    bounds: bounds
                 )
             }
 
-            if let rect = controller.dragRect {
-                RegionDragPreview(rect: rect)
+            if let draft = controller.draft {
+                PinMarker(annotation: draft.annotation, strokes: draft.strokes, bounds: bounds)
             }
 
-            if let draft = controller.draft, draft.annotation.kind == .region {
-                RegionEditor(controller: controller, draft: draft)
+            if let live = controller.liveStroke {
+                SketchStrokes(strokes: [live])
+                    .frame(width: bounds.width, height: bounds.height)
+                    .allowsHitTesting(false)
             }
 
-            ForEach(controller.visibleAnnotations) { annotation in
-                PinBadge(
-                    number: annotation.index,
-                    isActive: controller.draft?.annotation.id == annotation.id
-                ) {
-                    controller.openExisting(annotation.id)
+            ForEach(saved) { pin in
+                PinBadge(number: pin.index) {
+                    controller.openExisting(pin.id)
                 }
                 .position(OverlayPlacement.pinCenter(
-                    for: annotation.pinAnchorFrame,
-                    radius: AnnotateStyle.pinRadius,
-                    in: controller.bounds
+                    for: pin.pinAnchorFrame,
+                    radius: AnnotateStyle.badgeSize / 2,
+                    in: bounds
                 ))
                 .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
 
-            if let draft = controller.draft {
-                if draft.isEditingText {
-                    InlineTextEditor(controller: controller, frame: draft.annotation.frame.cgRect)
-                } else {
-                    EditorCard(controller: controller, draft: draft)
-                        .id(draft.annotation.id)
-                }
-            }
-
-            OverlayToolbar(controller: controller)
+            bottomChrome
         }
         .animation(.snappy(duration: 0.2), value: controller.annotations)
     }
 
-    /// Full-screen catcher: a short touch selects, a drag draws a region.
+    /// Full-screen catcher: every touch goes to the controller, which tells draw, tap and hold apart.
     private var captureLayer: some View {
         Color.clear
             .contentShape(Rectangle())
+            .frame(width: controller.bounds.width, height: controller.bounds.height)
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                    .onChanged { controller.dragChanged(from: $0.startLocation, to: $0.location) }
-                    .onEnded { controller.dragEnded(from: $0.startLocation, to: $0.location) }
+                    .onChanged { controller.touchChanged(start: $0.startLocation, location: $0.location) }
+                    .onEnded { controller.touchEnded(start: $0.startLocation, location: $0.location) }
             )
+    }
+
+    /// Comment card while a pin is open, review bar otherwise; its bottom edge sits 8pt above
+    /// `chromeBottom` (keyboard top, or above the home indicator with no keyboard).
+    private var bottomChrome: some View {
+        Group {
+            switch controller.chrome {
+            case .composing:
+                if let draft = controller.draft {
+                    ComposerCard(controller: controller, draft: draft)
+                        .id(draft.annotation.id)
+                }
+            case .review:
+                ReviewBar(controller: controller)
+            }
+        }
+        .padding(.horizontal, Self.chromeInset)
+        .padding(.bottom, max(controller.bounds.maxY - controller.chromeBottom + Self.chromeInset, 0))
+        .frame(width: controller.bounds.width, height: controller.bounds.height, alignment: .bottom)
+        // No Figma motion: follow the keyboard with a short snap rather than jumping
+        .animation(.snappy(duration: 0.25), value: controller.keyboardTop)
     }
 }
 
 extension Annotation {
-    /// Where the numbered pin attaches: a box's top-trailing corner, or just beside a spot.
+    /// Where the numbered badge attaches: the drawn box's outer top-trailing corner, just beside a
+    /// spot, or a sketch's own stroke corner.
     var pinAnchorFrame: CGRect {
-        let offset = AnnotateStyle.spotBadgeOffset
-        return kind == .point ? CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0) : frame.cgRect
+        switch kind {
+        case .point:
+            // Derived, no Figma row: SpotMarker.size / 2 (ring radius 9) plus badgeSize / 2 (12),
+            // along the 45° diagonal, so the ring and the badge touch without overlapping
+            let offset = AnnotateStyle.spotBadgeOffset
+            return CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0)
+        case .sketch:
+            // The controller pads stroke bounds; Figma puts the badge on the stroke's own corner
+            // (9257:13566 vs 9257:13562), so undo that same padding here.
+            let padding = AnnotateController.sketchPadding
+            return frame.cgRect.insetBy(dx: padding, dy: padding)
+        case .element, .region:
+            // Badge center on the box's outer corner (Figma 9257:13564 corner = 9257:13570 center);
+            // the box is the element frame grown by the outset, matching PinMarker
+            return frame.cgRect.insetBy(
+                dx: -AnnotateStyle.elementBoxOutset,
+                dy: -AnnotateStyle.elementBoxOutset
+            )
+        }
     }
 }
 
-/// Crosshair ring marking an exact spot (point pins).
-struct SpotMarker: View {
+/// Everything drawn for one pin except its badge: the element box (also used for legacy regions),
+/// the spot ring, and the pen strokes in screen points. Never takes touches.
+private struct PinMarker: View {
+    let annotation: Annotation
+    let strokes: [Stroke]
+    let bounds: CGRect
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            switch annotation.kind {
+            case .element, .region:
+                // Regions are no longer created; old in-memory sessions render like element boxes
+                let box = annotation.frame.cgRect.insetBy(
+                    dx: -AnnotateStyle.elementBoxOutset,
+                    dy: -AnnotateStyle.elementBoxOutset
+                )
+                RoundedRectangle(cornerRadius: AnnotateStyle.elementBoxRadius, style: .continuous)
+                    .strokeBorder(AnnotateStyle.marker, lineWidth: AnnotateStyle.elementBoxLineWidth)
+                    .frame(width: box.width, height: box.height)
+                    .offset(x: box.minX, y: box.minY)
+            case .point:
+                SpotMarker()
+                    .offset(
+                        x: annotation.anchor.x - SpotMarker.size / 2,
+                        y: annotation.anchor.y - SpotMarker.size / 2
+                    )
+            case .sketch:
+                EmptyView()
+            }
+
+            if !strokes.isEmpty {
+                SketchStrokes(strokes: strokes)
+                    .frame(width: bounds.width, height: bounds.height)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Ring marking an exact spot (hold pins). No Figma frame: the 0.1.x spot marker restyled white.
+private struct SpotMarker: View {
+    /// Outer ring diameter (0.1.x SpotMarker).
+    static let size: CGFloat = 18
+    /// Ring stroke width (0.1.x SpotMarker; matches the element box's 2pt border).
+    private static let ringWidth: CGFloat = 2
+    /// Center dot diameter (0.1.x SpotMarker).
+    private static let dotSize: CGFloat = 4
+
     var body: some View {
         ZStack {
-            Circle().strokeBorder(AnnotateStyle.accent, lineWidth: 2)
-            Circle().fill(AnnotateStyle.accent).frame(width: 4, height: 4)
+            Circle().strokeBorder(AnnotateStyle.marker, lineWidth: Self.ringWidth)
+            Circle().fill(AnnotateStyle.marker).frame(width: Self.dotSize, height: Self.dotSize)
         }
-        .frame(width: 18, height: 18)
-        .shadow(color: .black.opacity(0.25), radius: 2)
+        .frame(width: Self.size, height: Self.size)
     }
 }
 
-/// Thin accent line around the screen while annotate mode is on, like Cursor's framed browser.
-private struct ScreenEdgeGlow: View {
-    var body: some View {
-        Rectangle()
-            .strokeBorder(AnnotateStyle.accent.opacity(0.85), lineWidth: 3)
-            .ignoresSafeArea()
-    }
-}
+/// Blue inset glow along the screen's rounded edge while annotating (Figma 9257:13385:
+/// `rounded-[62px]`, `shadow-[inset_0_0_62px_0_rgba(0,136,255,0.5)]`). SwiftUI has no inset
+/// shadow, so a wide stroke is blurred and masked back inside the same shape.
+private struct ScreenGlow: View {
+    /// Trough of the pulse, as a fraction of the Figma glow (which is the peak). Low enough to read
+    /// as breathing, high enough that the edge never goes dark while annotating.
+    private static let pulseFloor: Double = 0.4
+    /// One half of the pulse (bright → dim). A slow breath, so it signals the mode without
+    /// pulling the eye away from what's being drawn.
+    private static let pulseHalfPeriod: Double = 1.2
 
-private struct SavedOutline: View {
-    let annotation: Annotation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let frame = annotation.frame.cgRect
-        Group {
-            if annotation.kind == .point {
-                SpotMarker()
-                    .offset(x: annotation.anchor.x - 9, y: annotation.anchor.y - 9)
-            } else {
-                ZStack(alignment: .topLeading) {
-                    if annotation.kind != .sketch {
-                        RoundedRectangle(cornerRadius: 3)
-                            .strokeBorder(
-                                AnnotateStyle.accent.opacity(0.55),
-                                style: StrokeStyle(lineWidth: 1.5, dash: annotation.kind == .region ? [5, 4] : [])
-                            )
-                    }
-                    if let sketch = annotation.sketch {
-                        SketchStrokes(strokes: sketch.strokes)
-                    }
-                }
-                .frame(width: frame.width, height: frame.height)
-                .offset(x: frame.minX, y: frame.minY)
+        let shape = RoundedRectangle(cornerRadius: AnnotateStyle.screenCornerRadius, style: .continuous)
+        // CSS `inset 0 0 62px`: the area just outside the edge, blurred inward (σ ≈ blur / 2) and
+        // clipped to the screen, so the edge itself sits at half strength and it fades within ~40pt
+        let glow = shape
+            .inset(by: -AnnotateStyle.glowBlur / 2)
+            .stroke(AnnotateStyle.glow, lineWidth: AnnotateStyle.glowBlur)
+            .blur(radius: AnnotateStyle.glowBlur / 2)
+            .mask(shape)
+
+        // Pulses while annotate mode is on (not in Figma, which has no motion). Only opacity
+        // animates, so the blur is rasterized once. Reduce Motion keeps the static Figma glow.
+        if reduceMotion {
+            glow
+        } else {
+            glow.phaseAnimator([false, true]) { content, isDim in
+                content.opacity(isDim ? Self.pulseFloor : 1)
+            } animation: { _ in
+                .easeInOut(duration: Self.pulseHalfPeriod)
             }
         }
-        .allowsHitTesting(false)
-    }
-}
-
-private struct SelectionHighlight: View {
-    let annotation: Annotation
-    let title: String
-    let safeBounds: CGRect
-
-    private let chipHeight: CGFloat = 20
-
-    var body: some View {
-        let frame = annotation.frame.cgRect
-        // Chip sits above the box, or inside its top edge when there's no room above
-        let chipAbove = frame.minY - chipHeight - 4 >= safeBounds.minY
-        let chipY = chipAbove ? frame.minY - chipHeight - 4 : frame.minY + 4
-        let chipX = min(max(frame.minX, safeBounds.minX), safeBounds.maxX - 120)
-
-        ZStack(alignment: .topLeading) {
-            if annotation.kind == .point {
-                SpotMarker()
-                    .offset(x: annotation.anchor.x - 9, y: annotation.anchor.y - 9)
-            } else {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(AnnotateStyle.accent.opacity(0.08))
-                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(AnnotateStyle.accent, lineWidth: 1.5))
-                    .frame(width: frame.width, height: frame.height)
-                    .offset(x: frame.minX, y: frame.minY)
-            }
-
-            ElementChip(title: title, height: chipHeight)
-                .frame(maxWidth: max(safeBounds.maxX - chipX, 60), alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .offset(x: chipX, y: chipY)
-        }
-        .allowsHitTesting(false)
-        .animation(.snappy(duration: 0.18), value: frame)
-    }
-}
-
-private struct RegionDragPreview: View {
-    let rect: CGRect
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(AnnotateStyle.accent.opacity(0.08))
-                .overlay(Rectangle().strokeBorder(AnnotateStyle.accent, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
-                .frame(width: rect.width, height: rect.height)
-                .offset(x: rect.minX, y: rect.minY)
-
-            ElementChip(title: "Region \(Int(rect.width)) × \(Int(rect.height))", height: 20)
-                .fixedSize()
-                .offset(x: rect.minX, y: max(rect.minY - 24, 0))
-        }
-        .allowsHitTesting(false)
     }
 }
 #endif

@@ -1,12 +1,13 @@
 // Pixels for the session bundle. `Snapshotter` (main actor) captures the app's windows, overlay
 // excluded, plus the tiny gray samples a launch-time start waits on. `BundleRenderer` is
 // nonisolated and runs off the main thread on Send: the 1x rescale (pixel = point, so session
-// coordinates index straight into it), per-pin crops, the annotated screen with numbered markers,
-// and PNG encoding. Every renderer uses the standard 8-bit sRGB range — the default on wide-color
-// screens is 16-bit extended range, twice the memory and much slower to encode, for no visible
-// gain in UI screenshots.
-// Also the shared sketch geometry (CGPath) and colors used by both the live overlay and the PNGs,
-// so what the user drew is exactly what the agent sees.
+// coordinates index straight into it), per-pin crops (frame plus any strokes reaching outside it),
+// the annotated screen with numbered markers, and PNG encoding. Every renderer uses the standard
+// 8-bit sRGB range — the default on wide-color screens is 16-bit extended range, twice the memory
+// and much slower to encode, for no visible gain in UI screenshots.
+// Also the shared sketch geometry (CGPath) and the design tokens (`AnnotateStyle`): the live
+// overlay's white-on-dim look from the Figma redesign, and the blue/red the bundle PNGs keep.
+// Stroke geometry and width are shared, so what the user drew is exactly what the agent sees.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -15,6 +16,9 @@ import UIKit
 
 enum AnnotateStyle {
     // Computed rather than stored: no global-state isolation questions for the Canvas renderer.
+    // The live overlay is white-on-dim (Figma PVX9n74hzo5BWauvymG141, group 9257:13754): the
+    // screen is dimmed, so white markers read on any app. The bundle PNGs are not dimmed, so they
+    // keep blue boxes and red strokes for contrast on any app.
     // Three blues: `accent` for strokes and outlines, `accentFill` under white text (pins, chips,
     // Send — deep enough for 4.5:1 at 11 pt), `accentText` for blue text and glyphs on materials.
     static var accentUI: UIColor { UIColor(red: 0.16, green: 0.49, blue: 0.96, alpha: 1) }
@@ -32,10 +36,38 @@ enum AnnotateStyle {
     }
     static var sketch: Color { Color(uiColor: sketchUI) }
     static var sketchFill: Color { Color(uiColor: sketchFillUI) }
-    /// Gap between a spot's crosshair and its numbered badge.
-    static let spotBadgeOffset: CGFloat = 14
-    static let pinRadius: CGFloat = 11
-    static let sketchLineWidth: CGFloat = 2.5
+
+    /// Live overlay markers (strokes, element boxes, spots) and badge fill: white on the dimmed screen. Figma 9257:13562 stroke=white, 9257:13564 border-white
+    static var marker: Color { .white }
+    /// Badge number. Figma 9257:13567 text-black
+    static var badgeText: Color { .black }
+    /// Edge glow: rgba(0,136,255,0.5) = Accents/Blue at 50%. Figma 9257:13385
+    static var glow: Color { Color(uiColor: .systemBlue).opacity(0.5) }
+    /// Fill of the primary actions (↑, Send). Accents/Blue #0088FF. Figma 9257:13480, 9257:13560
+    static var action: Color { Color(uiColor: .systemBlue) }
+    /// Dim over the frozen screen. Figma 9257:13385 bg-[rgba(0,0,0,0.5)]
+    static let dimOpacity: Double = 0.5
+    /// Corner radius the glow follows, matching the phone's screen curve. Figma 9257:13385 rounded-[62px]
+    static let screenCornerRadius: CGFloat = 62
+    /// Glow spread: inset shadow 0 0 62px. Figma 9257:13385
+    static let glowBlur: CGFloat = 62
+    /// Element box: border-2, rounded-[8px]. Figma 9257:13564
+    static let elementBoxLineWidth: CGFloat = 2
+    static let elementBoxRadius: CGFloat = 8
+    /// How far the box sits outside the element; Figma's hand-drawn boxes sit 1–7pt out (9257:13564/13565), so 2 is an estimate.
+    static let elementBoxOutset: CGFloat = 2
+    /// Number badge: 24pt circle. Figma 9257:13566 size-[24px]
+    static let badgeSize: CGFloat = 24
+
+    /// Per-axis offset from a spot's center to its badge's center (badge sits diagonally).
+    /// No Figma row for spots; derived so the badge touches the ring without overlapping it:
+    /// (ring radius 9 + badge radius 12, half of `badgeSize`) / √2 ≈ 14.85, rounded up to 15.
+    /// Shared by the live overlay and the bundle PNG markers.
+    static let spotBadgeOffset: CGFloat = 15
+    /// Half of `badgeSize` (Figma 9257:13566); the PNG markers use it too, so both match.
+    static let pinRadius: CGFloat = 12
+    /// Uniform 4pt pen, live and in the PNGs (user requirement; Figma SVG stroke-width 4, 9257:13562).
+    static let sketchLineWidth: CGFloat = 4
 }
 
 enum SketchPath {
@@ -99,15 +131,23 @@ enum Snapshotter {
     static func grayThumbnail(excluding overlay: UIWindow?, width: Int = 40) -> [UInt8]? {
         let pointWidth = overlay?.windowScene?.screen.bounds.width ?? 0
         guard pointWidth > 0,
-              let image = captureApp(excluding: overlay, scale: CGFloat(width) / pointWidth)?.cgImage else { return nil }
-        let pixelWidth = image.width, pixelHeight = image.height
+              let image = captureApp(excluding: overlay, scale: CGFloat(width) / pointWidth) else { return nil }
+        return grayThumbnail(of: image, width: width)
+    }
+
+    /// `image` drawn `width` gray pixels across (height to aspect), for "is this the same screen" checks.
+    static func grayThumbnail(of image: UIImage, width: Int = 40) -> [UInt8]? {
+        guard let cgImage = image.cgImage, cgImage.width > 0 else { return nil }
+        let pixelWidth = width
+        let pixelHeight = max(1, Int((Double(cgImage.height) * Double(width) / Double(cgImage.width)).rounded()))
         var pixels = [UInt8](repeating: 0, count: pixelWidth * pixelHeight)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
             guard let context = CGContext(
                 data: buffer.baseAddress, width: pixelWidth, height: pixelHeight, bitsPerComponent: 8,
                 bytesPerRow: pixelWidth, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
             ) else { return false }
-            context.draw(image, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+            context.interpolationQuality = .medium
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
             return true
         }
         return drawn ? pixels : nil
@@ -132,13 +172,33 @@ enum BundleRenderer {
     }
 
     /// Native-resolution crop around one pin with `padding` points of context, markup drawn in.
+    /// Covers the pin's frame and every stroke on it: drawings can reach outside the frame.
     static func crop(_ annotation: Annotation, from image: UIImage, padding: CGFloat) -> UIImage? {
-        let area = annotation.frame.cgRect.padded(by: padding).clipped(to: CGRect(origin: .zero, size: image.size))
+        var subject = annotation.frame.cgRect
+        if let strokes = strokeBounds(annotation.sketchInScreenPoints) {
+            subject = subject.union(strokes)
+        }
+        let area = subject.padded(by: padding).clipped(to: CGRect(origin: .zero, size: image.size))
         guard area.width >= 1, area.height >= 1 else { return nil }
         return UIGraphicsImageRenderer(size: area.size, format: format(scale: image.scale, opaque: true)).image { context in
             image.draw(at: CGPoint(x: -area.minX, y: -area.minY))
             drawMarkup(for: annotation, offset: area.origin, in: context.cgContext, numbered: false, bounds: CGRect(origin: .zero, size: area.size))
         }
+    }
+
+    /// Bounding box of every point in `strokes` (screen points); nil when there are none, so a pin
+    /// without a sketch crops exactly as before.
+    private static func strokeBounds(_ strokes: [Stroke]) -> CGRect? {
+        let points = strokes.flatMap(\.points)
+        guard let first = points.first else { return nil }
+        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
+        for point in points.dropFirst() {
+            minX = min(minX, point.x)
+            maxX = max(maxX, point.x)
+            minY = min(minY, point.y)
+            maxY = max(maxY, point.y)
+        }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
     /// Screen image with every pin's outline (or spot marker), sketch and number.
