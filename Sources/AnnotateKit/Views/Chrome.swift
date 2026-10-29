@@ -458,11 +458,11 @@ struct ReviewHintLine: View {
     static let tickInterval: TimeInterval = 1
     /// Not in Figma: the digit roll on each tick, well inside the second between ticks.
     static let tickAnimation: Animation = .snappy(duration: 0.3)
-    /// Not in Figma (owner request): the status dot blinks, fading to this and back. Reduce Motion
-    /// keeps it solid.
-    static let dotBlinkFloor: Double = 0.2
-    /// One fade of the blink (bright → faint or back).
-    static let dotBlinkHalfPeriod: Double = 0.6
+    /// Not in Figma (owner request): the status dot pulses, fading to this and back; a shallow,
+    /// slow breath so it reads as alive rather than alarming. Reduce Motion keeps it solid.
+    static let dotBlinkFloor: Double = 0.4
+    /// One fade of the pulse (bright → faint or back): a 2.8 s breath.
+    static let dotBlinkHalfPeriod: Double = 1.4
     /// The detail and the elapsed sit at half the headline's strength (Figma 9276:27749 / 9276:28049
     /// `opacity-50`).
     static let secondaryOpacity: Double = 0.5
