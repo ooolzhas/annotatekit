@@ -117,6 +117,10 @@ The MCP server is `annotate mcp`, over stdio, run with the project root as its w
   `server:annotate` for the non-plugin setup. That flag only lifts the preview allowlist for this
   server and asks for confirmation. Without channels, use the `annotate-watch` skill, or
   `annotate run` for unattended runs.
+  The plugin also installs a Stop hook (`annotate hook stop`) that keeps Claude from ending its
+  turn while a Send it worked on still shows as in progress on the device. Without the plugin, add
+  it to the project's `.claude/settings.json`:
+  `{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "annotate hook stop"}]}]}}`
 - **Cursor** `.cursor/mcp.json`: `{"mcpServers": {"annotate": {"command": "annotate", "args": ["mcp"]}}}`
 - **VS Code** `.vscode/mcp.json`: `{"servers": {"annotate": {"type": "stdio", "command": "annotate", "args": ["mcp"]}}}`
 - **Codex** `~/.codex/config.toml`: `[mcp_servers.annotate]`, `command = "annotate"`, `args = ["mcp"]`

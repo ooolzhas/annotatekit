@@ -1,0 +1,16 @@
+{
+  "description": "Keeps Claude from ending its turn while a Send it worked on still shows as in progress on the user's device (annotate hook stop).",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/annotate\" hook stop",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

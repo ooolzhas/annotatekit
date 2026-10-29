@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-29
+
+### Added
+- **Stop hook** (`annotate hook stop`, installed with the Claude Code plugin): when Claude tries to
+  end its turn while a Send from this conversation still shows as in progress on the device, the
+  hook blocks the stop once and tells it to report each note and `done` (or `failed`). Only Sends
+  the conversation's transcript mentions count, a note waiting on the user's answer is left alone,
+  and the second stop always goes through. Without the plugin, add it to `.claude/settings.json`
+  (see the setup skill).
+
+### Changed
+- The `annotate-watch` skill reports `done` right after the reinstall: building and checking come
+  before it, so the device stops saying Claude is working as soon as the change is in.
+
 ## [0.2.0] - 2026-10-29
 
 A redesigned overlay, a two-way loop with your agent (per-note results, questions, replies), Sends
@@ -150,7 +164,8 @@ First release.
   tracking and the text outline all start on first use.
 - Send renders, encodes and writes off the main thread, in 8-bit sRGB.
 
-[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/ooolzhas/annotatekit/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ooolzhas/annotatekit/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/ooolzhas/annotatekit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ooolzhas/annotatekit/releases/tag/v0.1.0

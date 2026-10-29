@@ -10,6 +10,8 @@
 //   annotate ask <id|latest> <pin> <question…> [--wait <seconds>]   blocks for the user's reply
 //                                    (stdout, exit 0) or times out (exit 3)
 //   annotate list
+//   annotate hook stop               Claude Code Stop hook: reads the hook's JSON on stdin and blocks
+//                                    the stop while a Send from this conversation is still open
 // resolve / dismiss / ask are the CLI counterparts of the MCP per-pin tools, so an agent driven by
 // `annotate watch` (no MCP) can report pins and ask questions too.
 // Every command takes --dir <path>; default is .annotate at the project root above the cwd.
@@ -28,6 +30,7 @@ public enum Command: Equatable, Sendable {
     case dismiss(sessionID: String, pin: Int, reason: String?)
     case ask(sessionID: String, pin: Int, question: String, wait: Double)
     case list
+    case hookStop
     case help
 
     public struct Invocation: Equatable, Sendable {
@@ -57,6 +60,8 @@ public enum Command: Equatable, Sendable {
                                        ask the user about one pin and wait for the reply (default 120s);
                                        prints it and exits 0, or exits 3 when none arrives in time
           annotate list                recent sessions and their status
+          annotate hook stop           Claude Code Stop hook: keeps Claude from stopping while a Send it
+                                       worked on still shows as in progress on the device
 
         OPTIONS
           --dir <path>                 sessions folder (default: <project root>/.annotate)
@@ -143,6 +148,9 @@ public enum Command: Equatable, Sendable {
         case "list":
             try expectEmpty(rest)
             return Invocation(command: .list, directory: directory)
+        case "hook":
+            guard rest == ["stop"] else { throw ParseError.missingArguments("annotate hook stop") }
+            return Invocation(command: .hookStop, directory: directory)
         case "help", "-h", "--help":
             return Invocation(command: .help, directory: directory)
         default:
@@ -190,6 +198,13 @@ public enum Command: Equatable, Sendable {
         switch invocation.command {
         case .help:
             writeLine(usage)
+            return 0
+
+        case .hookStop:
+            let input = FileHandle.standardInput.readDataToEndOfFile()
+            if let decision = StopHook.run(input: input, explicitDirectory: invocation.directory, workingDirectory: workingDirectory) {
+                writeLine(decision)
+            }
             return 0
 
         case .mcp:
