@@ -150,9 +150,10 @@ Shortcuts to Device* is on. The on-screen buttons always work.
 - **Intent per pin.** On the comment card, pick **Fix** (the default) or **Question** (explain it,
   don't edit). Pins carry their intent into the prompt.
 - **Per-pin results.** The agent reports each pin as resolved (with what changed) or dismissed (with
-  why). Tap the hint line above the review bar to see the last Send's results.
+  why). Tap the note count on the bar: the notes sheet sorts every note into Current, In Progress,
+  Resolved and Failed.
 - **Questions.** When a pin is unclear, the agent asks about it. The pill and hint line say so, and the
-  results card has a **Reply** button. Your answer goes back to the agent, from a phone too.
+  notes sheet has a **Reply** button. Your answer goes back to the agent, from a phone too.
 - **Prompt size.** `AnnotateOptions(promptDetail: .compact)` saves tokens. `.detailed` adds every
   screen's visible text.
 

@@ -51,8 +51,8 @@ All notable changes to this project are documented here. The format is based on
   nobody picked it up, an error when it failed.
 
 - Motion: entering and leaving annotate mode, the bottom chrome rises into place and sinks away while
-  the frozen screen cross-fades; the bar, comment, reply and results cards swap with a short slide,
-  fade and scale; the launcher pill scales and fades in place. Reduce Motion keeps the fades.
+  the frozen screen cross-fades; the bar, comment and reply cards swap with a short slide, fade and
+  scale (a card that closes leaves at once, with its keyboard); the launcher pill scales and fades in place. Reduce Motion keeps the fades.
 - The review bar stays at the bottom of the screen while a keyboard is up; only the cards dock to the
   keyboard.
 - The comment card quotes an element pin's own text in a thumbnail-style box (two lines at most),
@@ -66,7 +66,9 @@ All notable changes to this project are documented here. The format is based on
   - **Notes sheet:** the count is a button that opens a sheet at a small detent, draggable to full
     height. It lists the unsent notes (tap one to open it, swipe to delete, Clear All asks first;
     this replaces the old trash button) and the last Send's notes with their progress and Reply.
-    With no notes it opens on an empty state that says how to add one.
+    With no notes it opens on an empty state that says how to add one. Tags under its toolbar
+    (Current, In Progress, Resolved, Failed, each with a count) pick what it lists; it replaces the
+    results card, and the hint line is a plain label again.
   - **Send keeps annotate mode open.** The sent pins stay on the frozen screen, and each badge shows
     a spinner while the agent has the pin, then a green check when it's resolved (`?` for a question,
     × when dismissed). The bar reads "N notes sent". Saving a new pin hides them; leaving annotate
@@ -84,6 +86,10 @@ All notable changes to this project are documented here. The format is based on
     chrome has soft blue pools drifting sideways. Reduce Motion holds both still.
   - Entering and leaving annotate mode fades the dim, glow and frost over the same 0.3s the bar
     takes to rise, on an ease so it reads as a fade rather than a pop.
+  - The intent chip opens our own dropdown above it instead of a system menu: on iOS 27 devices a
+    tap on a system menu item could be taken by the frozen screen's drawing gesture.
+  - The review bar's back, count and ↑ share one glass container, so a pressed one swells into its
+    neighbours. The edge glow's corners are 2pt tighter (60pt).
 
 ### Added
 - **Agent loop** (ideas from Agentation):
@@ -94,11 +100,11 @@ All notable changes to this project are documented here. The format is based on
     - MCP tools: `annotation_resolve` / `annotation_dismiss`.
     - CLI: `annotate resolve|dismiss <id> <pin> "…"`.
     - `status.json` gains `pins`.
-    - Tapping the hint line shows the last Send's results card.
+    - The notes sheet shows each sent note's result.
   - **Questions:**
     - The agent asks about one pin with `annotation_ask` / `annotate ask`, which waits for the answer.
     - The pill and hint line say "Question on note N".
-    - The results card's Reply opens a reply card.
+    - The notes sheet's Reply opens a reply card.
     - The answer is saved to `replies.json` and travels back from a device too.
   - **Intent per pin** (Fix · Question), on a chip on the comment card. Prompts tag
     non-fix pins.

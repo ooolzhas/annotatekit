@@ -112,7 +112,7 @@ how to report each pin.
 
 Writers: `annotate status|resolve|dismiss|ask`, or the MCP tools `annotation_status`, `annotation_resolve`,
 `annotation_dismiss` and `annotation_ask`. The app polls the file and narrates it on the launcher pill and the
-hint line. The results card lists each pin's state.
+hint line. The notes sheet lists each pin's state.
 
 ## replies.json: `[PinReply]` (app → agent)
 
