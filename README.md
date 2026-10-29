@@ -306,7 +306,7 @@ Sources/AnnotateCLI     the `annotate` executable
 skills/                 annotate-setup and annotate-watch (Agent Skills format)
 .claude-plugin/         Claude Code plugin + marketplace; bin/annotate is the plugin's launcher
 packaging/              Homebrew formula template and the npm package (`annotate-ios`)
-site/                   annotatekit.com, deployed to GitHub Pages by .github/workflows/pages.yml
+site/                   annotatekit.com (static, no build step), deployed by Vercel on every push to main
 ```
 
 `swift test` runs the AnnotateCore and AnnotateAgent suites on macOS and Linux. See

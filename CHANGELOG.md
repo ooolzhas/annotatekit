@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The format is based on
 - Releases publish the npm package `annotate-ios` through npm Trusted Publishing (GitHub's OIDC
   identity), so there's no npm token to store or rotate. (npm blocks `annotatekit` as too close to
   an existing `annotate-kit`.)
+- annotatekit.com is served by Vercel from `site/` (the redesigned landing page with the iPhone
+  demo), replacing the GitHub Pages workflow.
 
 ## [0.2.1] - 2026-10-29
 
