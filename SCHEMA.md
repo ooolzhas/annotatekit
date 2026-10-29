@@ -96,7 +96,7 @@ how to report each pin.
 | Field | Type | Notes |
 |---|---|---|
 | `state` | `delivered` · `received` · `working` · `done` · `failed` | `delivered`: handed to an agent; `received`: the agent opened it |
-| `message` | String, optional | one line shown on the device ("Edited HomeView.swift", "Changes applied, reinstalling") |
+| `message` | String, optional | one line shown on the device, a headline and its next step split by " · " ("All changes applied · Reinstalling"); the device dims the part after the dot |
 | `updatedAt` | Date | |
 | `pins` | [PinStatus], optional | per-pin results (below) |
 

@@ -28,7 +28,9 @@ user can annotate on their phone with no other setup. Run it from the checkout t
 
 ## For each session
 
-1. `annotate status <id> working "Looking at it"` so the device shows it was picked up.
+1. `annotate status <id> working` so the device shows "Claude is working…". A status message is
+   one short line, a headline and its next step split by " · " ("All changes applied · Reinstalling");
+   the device dims what follows the dot.
 2. Read `<session dir>/prompt.md`, then look at the images it lists: the annotated screen first
    (numbered blue markers are the pins, red strokes are drawings), then each pin's crop.
 3. Find the code. Coordinates are iOS points, origin top-left, and screen images are 1x, so
@@ -36,7 +38,7 @@ user can annotate on their phone with no other setup. Run it from the checkout t
    visible label on the screen with its frame. A `Source:` line, when present, is exact.
 4. Make the changes, following the project's own instructions (CLAUDE.md / AGENTS.md) as for any
    edit, and build if the project expects it. When you rebuild and reinstall the app so the user
-   can see the change, first run `annotate status <id> working "Changes applied, reinstalling"`:
+   can see the change, first run `annotate status <id> working "All changes applied · Reinstalling"`:
    the app shows it while it restarts, and picks the narration back up after relaunch.
 5. Report each pin as you finish it: `annotate resolve <id> <pin> "<what changed>"`, or
    `annotate dismiss <id> <pin> "<why not>"` for a pin you won't change. Respect the pin's intent:

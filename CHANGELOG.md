@@ -32,10 +32,11 @@ All notable changes to this project are documented here. The format is based on
     "N notes sent").
   - **Hint line above the bar:**
     - "Draw, tap or hold to annotate" for a few seconds after you open annotate mode.
-    - Then "● Claude connected", or "● Agent offline · Notes will be saved" when nothing is
+    - Then "● Claude connected", or "● No agent connected · Notes will be saved" when nothing is
       listening, and it stays on that, following the connection.
-    - While a Send is in flight it narrates it with a timer, e.g. "● Claude looking at it 2s" or
-      the agent's own "Changes applied, reinstalling 9s".
+    - While a Send is in flight it narrates it with a timer: "● Sending notes · 1/4", "● Claude has
+      your notes 1s", "● Claude is reading… 2s", the agent's own "All changes applied · Reinstalling
+      9s", then "● Claude is done · 4 notes" (owner copy: subject first, present tense).
   - **Background:** a blue gradient rises behind the bottom chrome.
   - **Comment card:** text sits at 20/16pt. Attached images are 64pt with a white remove badge.
 - The annotated screenshot and crops keep their blue and red markers for contrast. Their strokes are
@@ -78,7 +79,7 @@ All notable changes to this project are documented here. The format is based on
     up/down chevron. Move is gone from the intent menu (a saved `move` loads as Fix), leaving Fix and
     Question. Disabled glyphs (↑ with no text, redo with nothing to redo) are 25% instead of 50%.
   - **Quote box:** 236pt wide, 13/20pt text at 75%, hanging from the top.
-  - **Hint line:** two-part lines split into a headline and a dimmed detail ("Agent offline", "Notes
+  - **Hint line:** two-part lines split into a headline and a dimmed detail ("No agent connected", "Notes
     will be saved"); the detail and the elapsed sit 4pt after the headline.
   - The undo ↔ × glyph swap runs four times as fast.
   - **Fluid glow and frost:** the edge glow is two bands of uneven blues that turn slowly in
@@ -93,8 +94,8 @@ All notable changes to this project are documented here. The format is based on
   - Sending from a card with the keyboard up hides the card at once and saves once the keyboard has
     slid away, so the keyboard keeps its slide. Clear All is a trash icon and asks with a centered alert. The tag bar
     sits right under the toolbar.
-  - The hint line's elapsed counter rolls its digits on each tick, and its status dot blinks
-    (solid with Reduce Motion).
+  - The hint line's elapsed counter rolls its digits on each tick, and its status dot pulses slowly
+    to 40% and back every 2.8 s (solid with Reduce Motion).
   - The intent chip opens our own dropdown above it instead of a system menu: on iOS 27 devices a
     tap on a system menu item could be taken by the frozen screen's drawing gesture.
   - The review bar's back, count and ↑ share one glass container, so a pressed one swells into its
