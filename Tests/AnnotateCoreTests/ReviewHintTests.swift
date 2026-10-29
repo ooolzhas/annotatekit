@@ -20,8 +20,8 @@ import Testing
         AgentPresence(agent: agent, mode: mode, via: via, project: project, updatedAt: updatedAt)
     }
 
-    private static func resolve(_ agent: AgentPresence?, news: Bool) -> ReviewHint {
-        ReviewHint.resolve(ReviewHint.Inputs(agent: agent, isConnectionNews: news))
+    private static func resolve(_ agent: AgentPresence?, intro: Bool) -> ReviewHint {
+        ReviewHint.resolve(ReviewHint.Inputs(agent: agent, isIntro: intro))
     }
 
     private static let allKinds: [ReviewHint] = [
@@ -33,30 +33,31 @@ import Testing
 
     // MARK: resolve
 
-    @Test("no agent resolves to offline whatever the news flag", arguments: [true, false])
-    func noAgentIsOffline(news: Bool) {
-        #expect(Self.resolve(nil, news: news) == .offline)
+    @Test("annotate mode opens on the gestures hint whoever listens",
+          arguments: [nil, presence(mode: .push), presence(mode: .pull)])
+    func introIsGestures(agent: AgentPresence?) {
+        #expect(Self.resolve(agent, intro: true) == .gestures)
     }
 
-    @Test("agent with news resolves to connected, carrying the agent's name and mode",
+    @Test("after the intro no agent resolves to offline")
+    func noAgentIsOffline() {
+        #expect(Self.resolve(nil, intro: false) == .offline)
+    }
+
+    @Test("after the intro an agent resolves to connected, carrying the agent's name and mode",
           arguments: [AgentPresence.Mode.push, .pull])
-    func agentWithNewsIsConnected(mode: AgentPresence.Mode) {
+    func agentIsConnected(mode: AgentPresence.Mode) {
         let presence = Self.presence("Cursor", mode: mode)
-        #expect(Self.resolve(presence, news: true) == .connected(agent: "Cursor", mode: mode))
-    }
-
-    @Test("agent without news yields to the gestures hint", arguments: [AgentPresence.Mode.push, .pull])
-    func agentWithoutNewsIsGestures(mode: AgentPresence.Mode) {
-        #expect(Self.resolve(Self.presence(mode: mode), news: false) == .gestures)
+        #expect(Self.resolve(presence, intro: false) == .connected(agent: "Cursor", mode: mode))
     }
 
     @Test("via, project and updatedAt don't affect the resolved hint", arguments: [true, false])
-    func irrelevantPresenceFieldsIgnored(news: Bool) {
+    func irrelevantPresenceFieldsIgnored(intro: Bool) {
         let a = Self.presence("Codex", mode: .pull, via: "mcp", project: nil,
                               updatedAt: Date(timeIntervalSince1970: 0))
         let b = Self.presence("Codex", mode: .pull, via: "watch", project: "other-checkout",
                               updatedAt: Self.fixedDate)
-        #expect(Self.resolve(a, news: news) == Self.resolve(b, news: news))
+        #expect(Self.resolve(a, intro: intro) == Self.resolve(b, intro: intro))
     }
 
     // MARK: dot
@@ -124,11 +125,11 @@ import Testing
         #expect(Set(texts).count == texts.count)
     }
 
-    // MARK: connectionNewsHold
+    // MARK: introHold
 
-    @Test("connection news holds for a positive duration")
-    func connectionNewsHoldPositive() {
-        #expect(ReviewHint.connectionNewsHold > 0)
+    @Test("the intro holds for a positive duration")
+    func introHoldPositive() {
+        #expect(ReviewHint.introHold > 0)
     }
 
     // MARK: delivery
@@ -142,15 +143,15 @@ import Testing
         .delivery(stage, agent: "Claude")
     }
 
-    @Test("a tracked delivery wins over offline, connection news and gestures",
+    @Test("a tracked delivery wins over offline, connected and the intro",
           arguments: [
               (AgentPresence?.none, false),
               (AgentPresence?.none, true),
               (presence("Cursor"), true),
               (presence("Cursor"), false)
           ])
-    func deliveryWins(agent: AgentPresence?, news: Bool) {
-        let inputs = ReviewHint.Inputs(agent: agent, isConnectionNews: news, delivery: .received)
+    func deliveryWins(agent: AgentPresence?, intro: Bool) {
+        let inputs = ReviewHint.Inputs(agent: agent, isIntro: intro, delivery: .received)
         let expected = ReviewHint.delivery(.received, agent: ReviewHint.displayName(agent?.agent ?? ""))
         #expect(ReviewHint.resolve(inputs) == expected)
     }
@@ -162,7 +163,7 @@ import Testing
               (presence("  Cursor "), "Cursor")
           ])
     func deliveryCarriesDisplayName(agent: AgentPresence?, expected: String) {
-        let inputs = ReviewHint.Inputs(agent: agent, isConnectionNews: false, delivery: .delivered)
+        let inputs = ReviewHint.Inputs(agent: agent, isIntro: false, delivery: .delivered)
         #expect(ReviewHint.resolve(inputs) == .delivery(.delivered, agent: expected))
     }
 

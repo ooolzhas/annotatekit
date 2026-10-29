@@ -99,9 +99,15 @@ public enum OverlayChrome: Equatable, Sendable {
     }
     /// Destructive button in the clear-all confirmation.
     public static let clearAction = "Delete"
-    /// The clear-all item behind a hold on the review bar's count. No Figma frame: the bar lost its
-    /// trash button (9276:27550), so this is where clearing lives now.
-    public static let clearMenuTitle = "Delete All Notes"
+    /// Clear-all button in the notes sheet's toolbar. No Figma frame: the bar lost its trash button
+    /// (9276:27550), so clearing lives with the list now.
+    public static let clearAllTitle = "Delete All"
+    /// Notes sheet section header for the pins not sent yet, shown when the last Send's pins list
+    /// below them. No Figma frame (derived).
+    public static let unsentTitle = "Not sent yet"
+    /// Notes sheet row detail for a pin on another frozen screen, which can't open from here. No
+    /// Figma frame (derived).
+    public static let otherScreenNote = "Another screen"
 
     /// Review bar title (Figma 9272:17114, sample "4 notes"; the 4 is sample data): "4 notes", "1 note",
     /// and `emptyTitle` when there is nothing to count (0 or a negative input).
@@ -142,8 +148,8 @@ public enum OverlayChrome: Equatable, Sendable {
 
 /// The line above the review bar (Figma 9272:17592: 9272:17121 / 9272:17215 / 9272:17309).
 /// Figma shows the gestures hint and the connected line with the same agent state, so which one shows
-/// is a timing rule: the connection is news for `connectionNewsHold` seconds, then the gestures hint
-/// takes over. Offline has no such timeout, because Save instead of Send must stay explained.
+/// is a timing rule: annotate mode opens on the gestures hint for `introHold` seconds, then the line
+/// settles on the connection, "Claude connected" or "Agent offline", and stays there (owner request).
 /// While a Send is being tracked, the line narrates its delivery instead (Figma 9273:17925 / 9273:18020 /
 /// 9273:18115): the launcher pill is hidden in annotate mode, so this is the only place the progress shows.
 public enum ReviewHint: Equatable, Sendable {
@@ -172,39 +178,34 @@ public enum ReviewHint: Equatable, Sendable {
     public struct Inputs: Equatable, Sendable {
         /// Who listens for Sends (agent.json), nil when nobody does.
         public var agent: AgentPresence?
-        /// Annotate mode just opened, or the connection just changed (for `connectionNewsHold`).
-        public var isConnectionNews: Bool
+        /// Annotate mode opened less than `introHold` seconds ago.
+        public var isIntro: Bool
         /// The tracked Send's stage, nil when no Send is being tracked.
         public var delivery: DeliveryStage?
 
-        public init(agent: AgentPresence?, isConnectionNews: Bool, delivery: DeliveryStage? = nil) {
+        public init(agent: AgentPresence?, isIntro: Bool, delivery: DeliveryStage? = nil) {
             self.agent = agent
-            self.isConnectionNews = isConnectionNews
+            self.isIntro = isIntro
             self.delivery = delivery
         }
     }
 
     /// A tracked Send → `.delivery`, ahead of everything: the user just acted and wants to see what
     /// happened to it. With no agent connected the subject still reads "Agent" (`displayName("")`).
-    /// Otherwise: no agent → `.offline`, whatever the news flag, because with nobody listening the
-    /// Save action needs its explanation the whole time. Agent + news → `.connected`. Agent, no news
-    /// → `.gestures`.
+    /// Otherwise the intro → `.gestures`, whoever listens. After it: agent → `.connected`, none →
+    /// `.offline`, and the line follows the connection from then on.
     public static func resolve(_ inputs: Inputs) -> ReviewHint {
         if let stage = inputs.delivery {
             return .delivery(stage, agent: displayName(inputs.agent?.agent ?? ""))
         }
+        if inputs.isIntro { return .gestures }
         guard let presence = inputs.agent else { return .offline }
-        if inputs.isConnectionNews {
-            return .connected(agent: presence.agent, mode: presence.mode)
-        }
-        return .gestures
+        return .connected(agent: presence.agent, mode: presence.mode)
     }
 
-    /// Seconds the connection line shows after annotate mode opens, or after the agent connection
-    /// changes while annotating, before it yields to the gestures hint. No Figma source (gap
-    /// threshold): long enough to read a short line once, short enough that the gestures hint is
-    /// what a user sees while actually annotating.
-    public static let connectionNewsHold: Double = 3
+    /// Seconds the gestures hint shows after annotate mode opens, before the line settles on the
+    /// connection. No Figma source (gap threshold): long enough to read the short how-to once.
+    public static let introHold: Double = 3
 
     /// The short name for the hint line. Figma 9272:17215 reads "Claude connected" for the agent
     /// that reports itself as "Claude Code", so the product suffix is dropped to keep the line short.

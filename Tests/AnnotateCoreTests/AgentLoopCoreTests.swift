@@ -225,26 +225,22 @@ private struct InboxFixture {
         let legend = lines[coordinates + 1]
         #expect(legend.hasPrefix("Tags:"))
         #expect(legend.contains("[Question]"))
-        // Only the tags present
-        #expect(!legend.contains("[Move]"))
         #expect(lines.filter { $0.hasPrefix("Tags:") }.count == 1)
     }
 
-    @Test func legendListsEveryPresentTagInIntentOrder() throws {
+    @Test func legendNamesEachPresentTagOnce() throws {
         let prompt = Self.render([
-            Self.with(Fixtures.element, intent: .move),
+            Self.with(Fixtures.element, intent: .question),
             Self.with(Fixtures.copyEdit, intent: .fix),
             Self.with(Fixtures.spot, intent: .question)
         ])
         let lines = Self.lines(prompt)
-        #expect(lines.contains { $0.hasPrefix("1. [Move] Button") })
+        #expect(lines.contains { $0.hasPrefix("1. [Question] Button") })
         #expect(lines.contains { $0.hasPrefix("2. Text") })
         #expect(lines.contains { $0.hasPrefix("3. [Question] Spot") })
 
         let legend = try #require(lines.first { $0.hasPrefix("Tags:") })
-        let question = try #require(legend.range(of: "[Question]"))
-        let move = try #require(legend.range(of: "[Move]"))
-        #expect(question.lowerBound < move.lowerBound)
+        #expect(legend.components(separatedBy: "[Question]").count == 2)
     }
 
     @Test("no non-fix intent means no tags and no legend",
@@ -445,14 +441,14 @@ private struct InboxFixture {
     ]
 
     @Test func questionStageResolvesToADeliveryHint() {
-        let hint = ReviewHint.resolve(ReviewHint.Inputs(agent: Self.presence, isConnectionNews: true, delivery: .question(pin: 2)))
+        let hint = ReviewHint.resolve(ReviewHint.Inputs(agent: Self.presence, isIntro: true, delivery: .question(pin: 2)))
         guard case .delivery(.question(pin: 2), let agent) = hint else {
             Issue.record("expected .delivery(.question(pin: 2), …), got \(hint)")
             return
         }
         #expect(agent == ReviewHint.displayName("Claude Code"))
 
-        let noAgent = ReviewHint.resolve(ReviewHint.Inputs(agent: nil, isConnectionNews: false, delivery: .question(pin: 2)))
+        let noAgent = ReviewHint.resolve(ReviewHint.Inputs(agent: nil, isIntro: false, delivery: .question(pin: 2)))
         #expect(noAgent == .delivery(.question(pin: 2), agent: ReviewHint.displayName("")))
     }
 
@@ -501,14 +497,14 @@ private struct InboxFixture {
         #expect(decoded == legacy)
     }
 
-    @Test func annotationRoundTripsWithMoveIntent() throws {
-        var moved = Fixtures.region
-        moved.intent = .move
-        let data = try AnnotationSession.encoder.encode(moved)
-        #expect(String(decoding: data, as: UTF8.self).contains("\"intent\" : \"move\""))
+    @Test func annotationRoundTripsWithQuestionIntent() throws {
+        var asked = Fixtures.region
+        asked.intent = .question
+        let data = try AnnotationSession.encoder.encode(asked)
+        #expect(String(decoding: data, as: UTF8.self).contains("\"intent\" : \"question\""))
         let decoded = try AnnotationSession.decoder.decode(Annotation.self, from: data)
-        #expect(decoded.intent == .move)
-        #expect(decoded == moved)
+        #expect(decoded.intent == .question)
+        #expect(decoded == asked)
     }
 
     @Test func sessionWithIntentsRoundTripsAndStaysSchemaOne() throws {
@@ -522,20 +518,19 @@ private struct InboxFixture {
     }
 
     @Test func rawValuesAreTheSchemaStrings() {
-        #expect(AnnotationIntent.allCases.map(\.rawValue) == ["fix", "question", "move"])
+        #expect(AnnotationIntent.allCases.map(\.rawValue) == ["fix", "question"])
     }
 
-    @Test("an intent this version doesn't know (the removed approve) loads as fix",
-          arguments: ["approve", "somethingNew"])
+    @Test("an intent this version doesn't know (the removed approve and move) loads as fix",
+          arguments: ["approve", "move", "somethingNew"])
     func unknownIntentDecodesAsFix(raw: String) throws {
-        let data = Data("[\"\(raw)\", \"move\"]".utf8)
-        #expect(try JSONDecoder().decode([AnnotationIntent].self, from: data) == [.fix, .move])
+        let data = Data("[\"\(raw)\", \"question\"]".utf8)
+        #expect(try JSONDecoder().decode([AnnotationIntent].self, from: data) == [.fix, .question])
     }
 
     @Test func onlyFixHasNoPromptTag() {
         #expect(AnnotationIntent.allCases.filter { $0.promptTag == nil } == [.fix])
         #expect(AnnotationIntent.question.promptTag == "[Question]")
-        #expect(AnnotationIntent.move.promptTag == "[Move]")
     }
 
     @Test func fixKeepsTheOverlayPlaceholder() {

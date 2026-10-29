@@ -3,7 +3,7 @@
 // message being replied to (236pt wide, two lines at most) and 64pt reference-image thumbnails with
 // white remove badges, the comment field, and the paperclip / intent chip / undo / redo / ↑ row.
 // The intent chip (9276:27109 shows "Fix") picks what the user wants done with the pin (Fix,
-// Question, Move) and the placeholder follows it. Undo and redo step through the strokes drawn since the card opened
+// Question) and the placeholder follows it. Undo and redo step through the strokes drawn since the card opened
 // (StrokeHistory); with nothing left to undo, undo turns into × and discards the pin, and redo dims
 // with nothing to redo. It only lays itself out at the width it is given; OverlayRoot docks it
 // to the keyboard (8pt insets) or, with no keyboard, where the review bar sits (34pt insets). ↑ saves through the controller, which decides via
@@ -176,17 +176,21 @@ struct ComposerCard: View {
                 controller.discardDraft()
             }
         }
-        // Twice the system speed (owner request): the swap reads as a state change, not an animation
+        // Four times the system speed (owner request): the swap reads as a state change, not an animation
         .contentTransition(.symbolEffect(.replace, options: .speed(Self.symbolSwapSpeed)))
     }
 
     /// How much faster than the system default undo and × swap glyphs.
-    private static let symbolSwapSpeed: Double = 2
+    private static let symbolSwapSpeed: Double = 4
 
     /// Figma 9276:27109: `px-[12px] w-[65px] h-[44px]`, 5% fill like `CircleIcon` `.plain`. 65 is the
     /// width "Fix" draws at, so it is the minimum and longer titles grow the capsule.
     private static let chipHorizontalPadding: CGFloat = 12
     private static let chipMinWidth: CGFloat = 65
+    /// No Figma (owner request): the up / down chevron that marks the chip as a menu, 4pt after the
+    /// title and smaller than it so the intent reads first.
+    private static let chipChevronSpacing: CGFloat = 4
+    private static let chipChevronSize: CGFloat = 11
 
     /// Menu of every intent; picking one stores it on the draft through the controller.
     private var intentChip: some View {
@@ -205,9 +209,13 @@ struct ComposerCard: View {
                 }
             }
         } label: {
-            // 9276:27110 — SF Pro Medium 17 / 22, no chevron
-            Text(intent.title)
-                .font(.system(size: 17, weight: .medium))
+            // 9276:27110 — SF Pro Medium 17 / 22; the chevron is the owner's addition
+            HStack(spacing: Self.chipChevronSpacing) {
+                Text(intent.title)
+                    .font(.system(size: 17, weight: .medium))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: Self.chipChevronSize, weight: .semibold))
+            }
                 .foregroundStyle(.primary)
                 .padding(.horizontal, Self.chipHorizontalPadding)
                 .frame(minWidth: Self.chipMinWidth)

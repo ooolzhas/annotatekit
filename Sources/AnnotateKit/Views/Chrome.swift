@@ -3,7 +3,7 @@
 // (press feedback only, no disabled dimming), the glass helper, the white number badge and the sent
 // pin's progress badge (spinner, outcome glyph or number; 9276:28552), white sketch strokes, and the
 // review bar shown when no pin is open (9276:27550: back, the note count and ↑, each its own glass
-// shape; clearing every pin hides behind a hold on the count and asks first). Also owns the hint
+// shape; the count opens the notes sheet). Also owns the hint
 // line drawn above that bar (9272:17120 / 17213 / 17307, 9276:28045), which says how to annotate or
 // whether an agent is connected, and narrates a Send with the seconds since it started
 // (9273:18004 / 18099 / 18194); its copy and dot come from `ReviewHint` in AnnotateCore. Once the last Send has per-pin results, the hint line
@@ -278,14 +278,13 @@ struct SketchStrokes: View {
 // MARK: - Review bar
 
 /// Bottom bar while no pin is open (Figma 9276:27550): a back chevron that keeps the notes, the note
-/// count, and ↑, each its own 52pt glass shape 8pt apart. ↑ is tinted blue while there is something
-/// to send, and VoiceOver calls it Save while no agent listens. Clearing every pin has no button in
-/// Figma: holding the count offers it, and it asks first since there's no undo. Fills the width it
-/// is given; OverlayRoot positions it. State comes from `controller.chrome`, `reviewTitle` and
+/// count, and ↑, each its own 52pt glass shape 8pt apart. The count is a button that opens the notes
+/// sheet (owner request), where notes open, delete and clear. ↑ is tinted blue while there is
+/// something to send, and VoiceOver calls it Save while no agent listens. Fills the width it is
+/// given; OverlayRoot positions it. State comes from `controller.chrome`, `reviewTitle` and
 /// `reviewHint`, never from `annotations`.
 struct ReviewBar: View {
     let controller: AnnotateController
-    @State private var isConfirmingClear = false
 
     /// Figma 9276:27550 `gap-[8px]`.
     static let spacing: CGFloat = 8
@@ -294,36 +293,31 @@ struct ReviewBar: View {
     static let countPadding: CGFloat = 16
 
     var body: some View {
-        let chrome = controller.chrome
-        let canSend = chrome.canSend
-        let count: Int = if case .review(let count) = chrome { count } else { 0 }
+        let canSend = controller.chrome.canSend
 
         HStack(spacing: Self.spacing) {
             // A chevron, not ×, because leaving annotate mode keeps the notes (9276:27551)
             BarIconButton(systemName: "chevron.left", label: "Back") { controller.stop() }
 
             // 9276:27556 — SF Pro Medium 17 / 22, centered in a capsule that takes the rest of the row
-            Text(controller.reviewTitle)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.horizontal, Self.countPadding)
-                .frame(maxWidth: .infinity)
-                .frame(height: AnnotateController.barHeight)
-                .annotateGlass(in: Capsule())
-                .contentShape(Capsule())
-                .contextMenu {
-                    if canSend {
-                        Button(OverlayChrome.clearMenuTitle, systemImage: "trash", role: .destructive) {
-                            isConfirmingClear = true
-                        }
-                    }
-                }
-                .confirmationDialog(OverlayChrome.clearTitle(count), isPresented: $isConfirmingClear,
-                                    titleVisibility: .visible) {
-                    Button(OverlayChrome.clearAction, role: .destructive) { controller.clearAll() }
-                }
+            Button {
+                controller.openNotes()
+            } label: {
+                Text(controller.reviewTitle)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, Self.countPadding)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: AnnotateController.barHeight)
+                    .annotateGlass(in: Capsule(), interactive: true)
+                    // Interactive glass in a button label needs an explicit shape to take taps
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(ChromeButtonStyle())
+            .disabled(!controller.hasNotesToList)
+            .accessibilityHint("Show the notes")
 
             // 9276:27561 — white ↑ on blue-tinted glass; plain glass and a dimmed glyph with nothing to send
             BarIconButton(

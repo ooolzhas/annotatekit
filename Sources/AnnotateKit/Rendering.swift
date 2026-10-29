@@ -41,8 +41,6 @@ enum AnnotateStyle {
     static var marker: Color { .white }
     /// Badge number. Figma 9257:13567 text-black
     static var badgeText: Color { .black }
-    /// Edge glow: rgba(0,136,255,0.5) = Accents/Blue at 50%. Figma 9257:13385
-    static var glow: Color { Color(uiColor: .systemBlue).opacity(0.5) }
     /// Fill of the primary actions (↑, Send). Accents/Blue #0088FF. Figma 9257:13480, 9257:13560
     static var action: Color { Color(uiColor: .systemBlue) }
     /// Dim over the frozen screen. Figma 9257:13385 bg-[rgba(0,0,0,0.5)]

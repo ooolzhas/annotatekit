@@ -29,8 +29,8 @@
 // The launcher is a pill centered horizontally above the home indicator, or above the keyboard
 // while one is up, whether docked or dragged (Figma 9265:14439); a drag moves it vertically only,
 // so it can get out of the way of an app's own bottom bar.
-// The line above the review bar (`reviewHint`) names the agent briefly after annotate mode opens or
-// the connection changes (`isConnectionNews`), then yields to the gestures hint; offline stays.
+// The line above the review bar (`reviewHint`) opens on the gestures hint (`isIntro`), then settles on
+// the connection, connected or offline, and follows it from then on.
 // Live scans (taps, sketch attribution) wait until they match the frozen image: SwiftUI's
 // accessibility tree is built right after the bootstrap, and while the comment keyboard is up the
 // app's labeled elements must still sit where they froze (an app may re-lay out for any keyboard;
@@ -149,9 +149,9 @@ final class AnnotateController {
     private(set) var deliveryStartedAt: Date?
     /// The agent listening for Sends, from `agent.json`; nil when none is (the pill's dot).
     private(set) var agent: AgentPresence?
-    /// True for `ReviewHint.connectionNewsHold` after annotate mode starts and after `agent` changes
-    /// while active, so the hint line says who's connected before yielding to the gestures hint.
-    private(set) var isConnectionNews = false
+    /// True for `ReviewHint.introHold` after annotate mode starts: the hint line shows how to annotate
+    /// before it settles on the connection.
+    private(set) var isIntro = false
     /// Top of the software keyboard (or hardware-keyboard bar) in overlay points while it's up.
     private(set) var keyboardTop: CGFloat?
     /// The last Send (or the session resumed after a relaunch); nil until one goes out.
@@ -165,6 +165,8 @@ final class AnnotateController {
     /// A Send from the review bar keeps annotate mode open, and its pins stay drawn on the frozen
     /// screen with their progress (Figma 9276:28552); closing annotate mode drops them.
     private(set) var showsSentPins = false
+    /// The notes sheet is up (the review bar's count opens it).
+    private(set) var isShowingNotes = false
 
     @ObservationIgnored private var screens: [Int: CapturedScreen] = [:]
     /// Saved pins' reference images in pick order. Kept off `Annotation` so pins stay Codable and
@@ -180,8 +182,8 @@ final class AnnotateController {
     /// The latest Send's write completion; a newer Send cancels it so a stale outcome is dropped.
     @ObservationIgnored private var deliveryWrite: Task<Void, Never>?
     @ObservationIgnored private var presenceTask: Task<Void, Never>?
-    /// Clears `isConnectionNews` after the hold; a newer flash cancels it so the hold restarts.
-    @ObservationIgnored private var connectionNewsTask: Task<Void, Never>?
+    /// Clears `isIntro` after the hold; a new start cancels it so the hold restarts.
+    @ObservationIgnored private var introTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
     /// Delivery stage haptics. Kept and prepared on Send: a fresh generator per stage can lag the
     /// change it marks, since the Taptic Engine spins down between stages.
@@ -244,7 +246,7 @@ final class AnnotateController {
         AnnotatableRegistry.shared.setCollecting(true)
         freezeScreen()
         isActive = true
-        flashConnectionNews()
+        startIntro()
         observeKeyboard()
         window?.activate()
         warmUpAccessibility()
@@ -259,6 +261,7 @@ final class AnnotateController {
         finishDraft()
         cancelReply()
         closeResults()
+        closeNotes()
         showsSentPins = false
         selection = nil
         holdTask?.cancel()
@@ -266,9 +269,9 @@ final class AnnotateController {
         touch = nil
         liveStroke = nil
         isActive = false
-        connectionNewsTask?.cancel()
-        connectionNewsTask = nil
-        isConnectionNews = false
+        introTask?.cancel()
+        introTask = nil
+        isIntro = false
         frozenImage = nil
         accessibilityWarmUp?.cancel()
         pendingAttributions.forEach { $0.cancel() }
@@ -593,7 +596,9 @@ final class AnnotateController {
     // MARK: Keys
 
     func escape() {
-        if replyDraft != nil {
+        if isShowingNotes {
+            closeNotes()
+        } else if replyDraft != nil {
             cancelReply()
         } else if draft != nil {
             cancelDraft()
@@ -650,6 +655,27 @@ final class AnnotateController {
             return LauncherStatus.sentTitle(lastSend.pins.count)
         }
         return OverlayChrome.countTitle(annotations.count)
+    }
+
+    /// Whether the notes sheet has anything to list: pins waiting to be sent, or the last Send's.
+    var hasNotesToList: Bool {
+        !annotations.isEmpty || !pinResults.isEmpty
+    }
+
+    func openNotes() {
+        guard hasNotesToList else { return }
+        finishDraft()
+        isShowingNotes = true
+    }
+
+    func closeNotes() {
+        isShowingNotes = false
+    }
+
+    /// Deletes one saved pin from the notes sheet; the rest renumber.
+    func deleteNote(_ id: UUID) {
+        if draft?.annotation.id == id { clearDraft() }
+        removeAnnotation(id: id)
     }
 
     func openResults() {
@@ -891,7 +917,7 @@ final class AnnotateController {
     /// (9272:17041), "<agent> connected" while the connection is news (9272:17134), or offline
     /// whenever no agent listens (9272:17228).
     var reviewHint: ReviewHint {
-        .resolve(.init(agent: agent, isConnectionNews: isConnectionNews, delivery: delivery))
+        .resolve(.init(agent: agent, isIntro: isIntro, delivery: delivery))
     }
 
     /// The pill in overlay points: centered horizontally, docked 8pt above `chromeBottom` (so it
@@ -1321,25 +1347,22 @@ final class AnnotateController {
                 }.value
                 guard let self, !Task.isCancelled else { return }
                 if self.agent != presence {
-                    // Only who listens and how is news; `updatedAt` / `project` move on every heartbeat
-                    let isNews = self.agent?.agent != presence?.agent || self.agent?.mode != presence?.mode
                     self.agent = presence
-                    if isNews, self.isActive { self.flashConnectionNews() }
                 }
                 try? await Task.sleep(for: .seconds(AgentPresenceFile.interval))
             }
         }
     }
 
-    /// Shows the connection line for `ReviewHint.connectionNewsHold`, restarting the hold if one is running.
-    private func flashConnectionNews() {
-        isConnectionNews = true
-        connectionNewsTask?.cancel()
-        connectionNewsTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(ReviewHint.connectionNewsHold))
+    /// Shows the gestures hint for `ReviewHint.introHold`, then lets the line settle on the connection.
+    private func startIntro() {
+        isIntro = true
+        introTask?.cancel()
+        introTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(ReviewHint.introHold))
             guard let self, !Task.isCancelled else { return }
-            self.isConnectionNews = false
-            self.connectionNewsTask = nil
+            self.isIntro = false
+            self.introTask = nil
         }
     }
 

@@ -146,7 +146,7 @@ import Testing
 
     @Test("a nil intent becomes .fix; a set intent is kept",
           arguments: [
-              (nil, AnnotationIntent.fix), (.question, .question), (.move, .move)
+              (nil, AnnotationIntent.fix), (.fix, .fix), (.question, .question)
           ] as [(AnnotationIntent?, AnnotationIntent)])
     func intentDefault(intent: AnnotationIntent?, expected: AnnotationIntent) {
         let results = PinResult.results(for: [Self.pin(1, intent: intent)], statuses: [])

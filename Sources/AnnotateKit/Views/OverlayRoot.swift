@@ -6,11 +6,12 @@
 // line above it (which also narrates the last Send while annotate mode is open, and opens the
 // results on tap once there are any), all over a blue gradient that runs from the chrome's top
 // down to the screen's bottom.
-// Motion (no Figma motion context): entering and leaving annotate mode cross-fades the frozen screen
-// while the bottom chrome (`BottomChrome`, a separate view so it can) rises into place and sinks
-// away; the bar, comment card, reply card and results card swap with a short slide, fade and scale
-// from the bottom; the launcher pill scales down and fades about its own center. Reduce Motion keeps
-// the fades only.
+// Motion (no Figma motion context): entering and leaving annotate mode fades the frozen screen, its
+// dim, the edge glow and the frost in and out over the same `modeDuration` the bottom chrome
+// (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; the bar, comment card, reply card and results card swap with a short slide, fade and scale
+// from the bottom; the launcher pill scales down and fades about its own center. The edge glow and
+// the frost behind the chrome drift like liquid while annotate mode is on. Reduce Motion keeps the
+// fades only and holds the glow and frost still.
 // The whole tree ignores the safe area so SwiftUI coordinates equal window (= screen) points, which
 // is the space every frame from ElementScanner and the registry uses. Things are placed by top-left
 // offset inside a full-screen top-leading ZStack. The freeze-frame captured on start sits at the
@@ -31,12 +32,20 @@ struct OverlayRoot: View {
     private static let launcherHiddenScale: CGFloat = 0.8
     /// How far below its place the bottom chrome starts as annotate mode opens (and ends as it closes).
     private static let chromeEntranceOffset: CGFloat = 48
+    /// How long entering and leaving annotate mode takes: the chrome's rise and the fade of the frozen
+    /// screen, its dim, glow and frost all share it, so they arrive and leave together.
+    static let modeDuration: Double = 0.3
+    /// The chrome's rise and sink, and the launcher's scale.
+    private static let modeAnimation: Animation = .snappy(duration: modeDuration)
+    /// The dim, glow and frost fade on an ease rather than the chrome's spring: a spring on opacity
+    /// is all but done in its first third and reads as a pop, an ease reads as a gradual fade.
+    private static let backdropFade: Animation = .easeInOut(duration: modeDuration)
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             if controller.isActive {
                 ActiveOverlay(controller: controller, chromeTop: chromeTop)
-                    .transition(.opacity)
+                    .transition(.opacity.animation(Self.backdropFade))
                 // A sibling rather than part of ActiveOverlay so it gets its own entrance: only the
                 // views an `if` inserts run a transition, never their children
                 BottomChrome(controller: controller, chromeTop: $chromeTop)
@@ -55,7 +64,7 @@ struct OverlayRoot: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
-        .animation(.snappy(duration: 0.3), value: controller.isActive)
+        .animation(Self.modeAnimation, value: controller.isActive)
         .animation(.snappy(duration: 0.2), value: controller.toast)
     }
 
@@ -179,10 +188,21 @@ private struct BottomChrome: View {
             withAnimation(Self.chromeAnimation) { chromeTop = newTop }
         }
         .frame(width: bounds.width, height: bounds.height, alignment: .bottom)
+        // Hung here rather than on the review bar so swapping the bar for a card can't tear it down
+        .sheet(isPresented: notesBinding) {
+            NotesSheet(controller: controller)
+        }
         // No Figma motion: follow the keyboard with a short snap rather than jumping
         .animation(Self.chromeAnimation, value: controller.keyboardTop)
         // The bar's count ("2 notes") follows pins saved and removed
         .animation(.snappy(duration: 0.2), value: controller.annotations)
+    }
+
+    private var notesBinding: Binding<Bool> {
+        Binding(
+            get: { controller.isShowingNotes },
+            set: { [controller] isShowing in if !isShowing { controller.closeNotes() } }
+        )
     }
 
     /// Which chrome shows, for the swap animation: the case without its payload (a submit-state or
@@ -246,7 +266,7 @@ private struct ActiveOverlay: View {
                 .allowsHitTesting(false)
 
             // Figma layer order: Overlay (dim + glow), then the gradient, then pins and chrome
-            bottomGradient
+            bottomFrost
 
             captureLayer
 
@@ -308,26 +328,99 @@ private struct ActiveOverlay: View {
             )
     }
 
-    /// Blue wash behind the bottom chrome (Figma 9272:16849 composing / 9272:17105 review): full
-    /// screen width, from the chrome stack's top (card, or hint line) down past the keyboard /
-    /// home indicator to the screen's bottom edge. Nothing is drawn until the chrome is measured.
-    @ViewBuilder
-    private var bottomGradient: some View {
-        if let top = chromeTop {
-            let bounds = controller.bounds
-            LinearGradient(
-                colors: [
-                    AnnotateStyle.action.opacity(0),
-                    AnnotateStyle.action.opacity(Self.gradientOpacity)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+    /// Blue frost behind the bottom chrome (Figma 9272:16849 composing / 9272:17105 review): full
+    /// screen width, from the chrome stack's top (card, or hint line) down past the keyboard / home
+    /// indicator to the screen's bottom edge. Until the chrome is measured it starts where the review
+    /// bar's hint line sits, so it fades in with everything else instead of popping in a frame later.
+    private var bottomFrost: some View {
+        let bounds = controller.bounds
+        let top = chromeTop ?? estimatedChromeTop
+        return BottomFrost()
             .frame(width: bounds.width, height: max(bounds.maxY - top, 0))
             .offset(y: top)
             // Decoration only: drawing on the frozen screen behind it must keep working
             .allowsHitTesting(false)
+    }
+
+    /// The review bar's hint line top: the chrome annotate mode opens with.
+    private var estimatedChromeTop: CGFloat {
+        controller.screenChromeBottom - AnnotateController.barHeight - ToastView.hintGap - ToastView.hintHeight
+    }
+}
+
+/// The frost behind the bottom chrome, made fluid (owner request; Figma draws one even gradient,
+/// `from-[rgba(0,136,255,0)] to-[rgba(0,136,255,0.5)]`): a softer even wash plus a few soft blue blobs
+/// that drift sideways at their own pace, so the color pools and thins along the bottom like liquid.
+/// The whole thing fades to clear toward its top, as Figma's does. Blobs are elliptical gradients,
+/// not blurred shapes, so moving them costs no blur per frame.
+private struct BottomFrost: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// One drifting pool of color: where it rests (fractions of the frost's size), how big it is,
+    /// how far and how fast it sways, and its color.
+    private struct Blob {
+        let x: CGFloat, y: CGFloat
+        let width: CGFloat, height: CGFloat
+        let sway: CGFloat
+        let period: Double
+        let phase: Double
+        let color: Color
+    }
+
+    /// Strength of the even wash at the bottom edge; the blobs bring the peaks to about Figma's 0.5.
+    private static let washOpacity: Double = 0.28
+    /// Where the frost reaches full strength, from its top (the top fades in, like Figma's gradient).
+    private static let fadeEnd: CGFloat = 0.6
+    private static let blobs: [Blob] = [
+        Blob(x: 0.2, y: 0.85, width: 0.95, height: 1.1, sway: 0.18, period: 11, phase: 0,
+             color: Color(uiColor: .systemBlue).opacity(0.42)),
+        Blob(x: 0.65, y: 0.95, width: 0.8, height: 0.9, sway: 0.22, period: 8, phase: 2,
+             color: Color(uiColor: .systemCyan).opacity(0.28)),
+        Blob(x: 0.9, y: 0.75, width: 0.7, height: 1.0, sway: 0.16, period: 14, phase: 4,
+             color: Color(uiColor: .systemIndigo).opacity(0.3))
+    ]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: FluidMotion.frameInterval, paused: reduceMotion)) { context in
+            let time = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+            GeometryReader { proxy in
+                let size = proxy.size
+                ZStack {
+                    LinearGradient(
+                        colors: [AnnotateStyle.action.opacity(0), AnnotateStyle.action.opacity(Self.washOpacity)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    ForEach(Self.blobs.indices, id: \.self) { index in
+                        let blob = Self.blobs[index]
+                        let drift = blob.sway * CGFloat(sin(FluidMotion.angle(time, period: blob.period) + blob.phase))
+                        Rectangle()
+                            .fill(EllipticalGradient(colors: [blob.color, blob.color.opacity(0)]))
+                            .frame(width: size.width * blob.width, height: size.height * blob.height)
+                            .position(x: size.width * (blob.x + drift), y: size.height * blob.y)
+                    }
+                }
+                .mask(
+                    LinearGradient(
+                        stops: [.init(color: .clear, location: 0), .init(color: .white, location: Self.fadeEnd)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
         }
+    }
+}
+
+/// Shared clock math for the fluid glow and frost.
+private enum FluidMotion {
+    /// They drift slowly, so 30 fps is plenty and halves the work of the display's full rate.
+    static let frameInterval: TimeInterval = 1.0 / 30
+
+    /// `time` as an angle in radians, one full turn per `period` seconds. Reduced first, so the
+    /// reference-date seconds don't lose precision in the trig.
+    static func angle(_ time: TimeInterval, period: Double) -> Double {
+        (time.truncatingRemainder(dividingBy: period) / period) * 2 * .pi
     }
 }
 
@@ -414,40 +507,76 @@ private struct SpotMarker: View {
     }
 }
 
-/// Blue inset glow along the screen's rounded edge while annotating (Figma 9257:13385:
-/// `rounded-[62px]`, `shadow-[inset_0_0_62px_0_rgba(0,136,255,0.5)]`). SwiftUI has no inset
-/// shadow, so a wide stroke is blurred and masked back inside the same shape.
+/// Blue glow along the screen's rounded edge while annotating (Figma 9257:13385: `rounded-[62px]`,
+/// `shadow-[inset_0_0_62px_0_rgba(0,136,255,0.5)]`), made fluid (owner request): rather than one even
+/// band, two edge bands of different depth are each lit by a slowly turning ring of uneven blues, in
+/// opposite directions, so the glow swells, thins and runs along the edge like liquid. SwiftUI has no
+/// inset shadow, so each band is a wide stroke blurred and masked back inside the screen shape. The
+/// bands never change; only the light behind them turns. Reduce Motion holds the light still.
 private struct ScreenGlow: View {
-    /// Trough of the pulse, as a fraction of the Figma glow (which is the peak). Low enough to read
-    /// as breathing, high enough that the edge never goes dark while annotating.
-    private static let pulseFloor: Double = 0.4
-    /// One half of the pulse (bright → dim). A slow breath, so it signals the mode without
-    /// pulling the eye away from what's being drawn.
-    private static let pulseHalfPeriod: Double = 1.2
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The deeper band reaches about twice Figma's 62pt into the screen, faintly.
+    private static let deepWidth: CGFloat = 140
+    /// Seconds per turn: the two rings turn at different paces and in opposite directions, so where
+    /// they overlap keeps changing instead of the whole pattern just spinning.
+    private static let nearPeriod: Double = 14
+    private static let deepPeriod: Double = 9
+
+    /// Around the near band (Figma's 62pt glow): Accents/Blue swelling past Figma's 0.5 and thinning
+    /// well below it, with cyan and indigo passages. The ring wraps, so it ends where it starts.
+    private static let nearStops: [Gradient.Stop] = [
+        .init(color: Color(uiColor: .systemBlue).opacity(0.7), location: 0),
+        .init(color: Color(uiColor: .systemCyan).opacity(0.25), location: 0.13),
+        .init(color: Color(uiColor: .systemBlue).opacity(0.55), location: 0.27),
+        .init(color: Color(uiColor: .systemIndigo).opacity(0.18), location: 0.41),
+        .init(color: Color(uiColor: .systemBlue).opacity(0.75), location: 0.56),
+        .init(color: Color(uiColor: .systemCyan).opacity(0.35), location: 0.7),
+        .init(color: Color(uiColor: .systemBlue).opacity(0.2), location: 0.85),
+        .init(color: Color(uiColor: .systemBlue).opacity(0.7), location: 1)
+    ]
+    /// Around the deep band: a few faint pools that reach further in, clear in between.
+    private static let deepStops: [Gradient.Stop] = [
+        .init(color: Color(uiColor: .systemBlue).opacity(0.3), location: 0),
+        .init(color: .clear, location: 0.18),
+        .init(color: Color(uiColor: .systemIndigo).opacity(0.28), location: 0.37),
+        .init(color: .clear, location: 0.55),
+        .init(color: Color(uiColor: .systemCyan).opacity(0.3), location: 0.72),
+        .init(color: .clear, location: 0.88),
+        .init(color: Color(uiColor: .systemBlue).opacity(0.3), location: 1)
+    ]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: FluidMotion.frameInterval, paused: reduceMotion)) { context in
+            let time = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+            ZStack {
+                Self.ring(Self.deepStops, turn: -FluidMotion.angle(time, period: Self.deepPeriod))
+                    .mask(EdgeBand(width: Self.deepWidth))
+                Self.ring(Self.nearStops, turn: FluidMotion.angle(time, period: Self.nearPeriod))
+                    .mask(EdgeBand(width: AnnotateStyle.glowBlur))
+            }
+        }
+    }
+
+    private static func ring(_ stops: [Gradient.Stop], turn: Double) -> some View {
+        AngularGradient(stops: stops, center: .center, angle: .radians(turn))
+    }
+}
+
+/// A soft band just inside the screen's rounded edge, opaque at the edge and fading inward over about
+/// `width`: CSS `inset 0 0 <width>px`, as the area just outside the edge blurred inward (σ ≈ width / 2)
+/// and clipped to the screen. Used as a mask; it never changes, so it renders once into one layer.
+private struct EdgeBand: View {
+    let width: CGFloat
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: AnnotateStyle.screenCornerRadius, style: .continuous)
-        // CSS `inset 0 0 62px`: the area just outside the edge, blurred inward (σ ≈ blur / 2) and
-        // clipped to the screen, so the edge itself sits at half strength and it fades within ~40pt
-        let glow = shape
-            .inset(by: -AnnotateStyle.glowBlur / 2)
-            .stroke(AnnotateStyle.glow, lineWidth: AnnotateStyle.glowBlur)
-            .blur(radius: AnnotateStyle.glowBlur / 2)
+        shape
+            .inset(by: -width / 2)
+            .stroke(Color.white, lineWidth: width)
+            .blur(radius: width / 2)
             .mask(shape)
-
-        // Pulses while annotate mode is on (not in Figma, which has no motion). Only opacity
-        // animates, so the blur is rasterized once. Reduce Motion keeps the static Figma glow.
-        if reduceMotion {
-            glow
-        } else {
-            glow.phaseAnimator([false, true]) { content, isDim in
-                content.opacity(isDim ? Self.pulseFloor : 1)
-            } animation: { _ in
-                .easeInOut(duration: Self.pulseHalfPeriod)
-            }
-        }
+            .drawingGroup()
     }
 }
 #endif

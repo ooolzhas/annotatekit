@@ -2,7 +2,7 @@
 // in screen points, origin top-left, and each screen's `image` is rendered at 1x so its pixels ARE
 // points — an agent can look at the PNG and the numbers line up exactly. Hi-res captures and crops
 // are there for detail. Element info and nearby text are hints for finding the source, not required.
-// Each pin may carry an `AnnotationIntent` (fix, question, move) that tells the agent what
+// Each pin may carry an `AnnotationIntent` (fix, question) that tells the agent what
 // kind of response the user wants; it's optional, and a missing intent means fix.
 // Bump `AnnotationSession.currentSchemaVersion` on any breaking change to these types.
 
@@ -262,10 +262,10 @@ extension Annotation {
 
 /// What the user wants done with a pin, picked on the comment card. Older bundles have none: treat nil as .fix.
 public enum AnnotationIntent: String, Codable, Sendable, CaseIterable {
-    case fix, question, move
+    case fix, question
 
-    /// An intent this version doesn't know (e.g. `approve`, since removed) reads as Fix, so an older
-    /// or newer bundle still loads.
+    /// An intent this version doesn't know (e.g. `approve` or `move`, both since removed) reads as
+    /// Fix, so an older or newer bundle still loads.
     public init(from decoder: any Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = AnnotationIntent(rawValue: raw) ?? .fix
@@ -276,7 +276,6 @@ public enum AnnotationIntent: String, Codable, Sendable, CaseIterable {
         switch self {
         case .fix: "Fix"
         case .question: "Question"
-        case .move: "Move"
         }
     }
 
@@ -285,7 +284,6 @@ public enum AnnotationIntent: String, Codable, Sendable, CaseIterable {
         switch self {
         case .fix: "Change the code"
         case .question: "Explain it, don't edit"
-        case .move: "Move it where I drew"
         }
     }
 
@@ -294,7 +292,6 @@ public enum AnnotationIntent: String, Codable, Sendable, CaseIterable {
         switch self {
         case .fix: "hammer"
         case .question: "questionmark.bubble"
-        case .move: "arrow.up.and.down.and.arrow.left.and.right"
         }
     }
 
@@ -303,7 +300,6 @@ public enum AnnotationIntent: String, Codable, Sendable, CaseIterable {
         switch self {
         case .fix: OverlayChrome.placeholder
         case .question: "Ask about it"
-        case .move: "Where should it go?"
         }
     }
 
@@ -312,7 +308,6 @@ public enum AnnotationIntent: String, Codable, Sendable, CaseIterable {
         switch self {
         case .fix: nil
         case .question: "[Question]"
-        case .move: "[Move]"
         }
     }
 }
