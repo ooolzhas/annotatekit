@@ -172,6 +172,7 @@ img { display: block; }
   width: 5px; height: 5px;
   margin-top: -2.5px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--accent);
 }
 
@@ -237,6 +238,15 @@ h2 + h3 { margin-top: 0; }
 
 .intro { margin-bottom: 28px; }
 
+/* The headline's promise gets a hand-drawn blue double underline, the same ink as the loops. A
+   background (not a pseudo-element) so it follows the phrase onto every line it wraps to. */
+.underlined {
+  padding-bottom: 7px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M2 3.2C60 2.2 118 3.9 178 2.8S262 2.4 298 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 8.1C70 7.2 130 8.8 196 7.6S270 7.4 294 8.4' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E") left bottom / 100% 9px no-repeat;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
 /* Key phrases get the product's hand-drawn blue loop (the demo's ink path, stretched to the words). */
 .circled { position: relative; margin: 0 5px; white-space: nowrap; }
 .circled::after {
@@ -283,10 +293,10 @@ h2 + h3 { margin-top: 0; }
   align-items: flex-start;
   gap: 8px;
 }
-.installer { padding: 4px; border-radius: 999px; }
-.installer .copy { border-radius: 999px; }
+.cmd.installer { padding: 4px; border-radius: 999px; }
+.cmd.installer .copy { border-radius: 999px; background: transparent; box-shadow: none; opacity: 1; }
 /* Sized to the longer command (with its "$ ") so switching never resizes the box. */
-.installer code { width: 36ch; }
+.cmd.installer code { width: 36ch; }
 .pm-switch {
   display: flex;
   flex: none;
@@ -389,6 +399,7 @@ pre {
 pre code { font-size: inherit; }
 /* Prose-like output (the sample prompt) wraps instead of scrolling. */
 pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-block pre { font-size: 12.5px; line-height: 20px; }
 
 .code-block {
   position: relative;
@@ -414,21 +425,50 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 .tk-com { color: var(--tk-com); font-style: italic; }
 
 /* One-line commands */
+/* App icons before the agent names: brand tile, white mark */
+.app { white-space: nowrap; }
+.app-icon {
+  /* Cap-height tall with its bottom on the baseline, so it lines up with the label's letters. An
+     inline-block with no line box inside sits on the baseline by its bottom edge. */
+  position: relative;
+  display: inline-block;
+  width: 1.15cap;
+  height: 1.15cap;
+  margin-right: 0.32em;
+  vertical-align: baseline;
+  border-radius: 30%;
+  corner-shape: squircle;
+  color: #fff;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 0 0 0.5px var(--hairline);
+}
+.app-icon svg { position: absolute; inset: 18%; width: 64%; height: 64%; }
+.app-claude { background: #D97757; }
+.app-cursor, .app-codex { background: #0b0b0c; }
+
+/* Single-line commands share the code blocks' look: 14px corners, 18px sides, the text 16px from
+   top and bottom (12px padding + the 28px copy button's slack), 12.5px mono. */
 .cmd {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
-  margin: 0 0 14px;
-  padding: 3px 3px 3px 12px;
+  margin: 0 0 18px;
+  padding: 12px 12px 12px 18px;
   border: 1px solid var(--code-border);
-  border-radius: 8px;
+  border-radius: 14px;
   background: var(--code-bg);
+}
+.cmd .copy { background: var(--bg); box-shadow: 0 0 0 1px var(--code-border); }
+@media (hover: hover) {
+  .cmd .copy { opacity: 0; transition: opacity 0.15s, color 0.15s, background-color 0.15s; }
+  .cmd:hover .copy, .cmd .copy:focus-visible, .cmd .copy.is-copied { opacity: 1; }
 }
 .cmd code {
   flex: 1;
   min-width: 0;
-  padding: 4px 0;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 20px;
   overflow-x: auto;
   white-space: nowrap;
   background: none;
@@ -438,10 +478,9 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 }
 .cmd code::-webkit-scrollbar { display: none; }
 .cmd.shell code::before { content: "$ "; color: var(--text-faint); }
-.cmd.quote code { font-family: var(--font); font-size: 15px; letter-spacing: -0.08px; }
 
 .cmd-stack { margin-bottom: 14px; }
-.cmd-stack .cmd { margin-bottom: 6px; }
+.cmd-stack .cmd { margin-bottom: 8px; }
 
 /* Copy buttons (hidden until JS fills them) */
 .copy {
