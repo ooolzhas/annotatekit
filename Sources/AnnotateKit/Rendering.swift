@@ -253,7 +253,12 @@ enum BundleRenderer {
         guard numbered else { return }
         let radius = AnnotateStyle.pinRadius
         let offset = AnnotateStyle.spotBadgeOffset
-        let pinFrame = annotation.kind == .point ? CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0) : frame
+        // As the live overlay (`pinAnchorFrame`): beside a spot, on an element's tap point, else the box's corner
+        let pinFrame = switch annotation.kind {
+        case .point: CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0)
+        case .element: CGRect(origin: anchor, size: .zero)
+        case .region, .sketch: frame
+        }
         let center = OverlayPlacement.pinCenter(for: pinFrame, radius: radius, in: bounds)
         let circle = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
         cg.setFillColor(AnnotateStyle.accentFillUI.cgColor)

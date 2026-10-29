@@ -26,6 +26,8 @@ All notable changes to this project are documented here. The format is based on
   an existing `annotate-kit`.)
 - annotatekit.com is served by Vercel from `site/` (the redesigned landing page with the iPhone
   demo), replacing the GitHub Pages workflow.
+- A note on a picked element puts its number where you tapped, not on the element's top-trailing
+  corner, so a large block's pin stays on what you meant. The annotated screenshot matches.
 
 ## [0.2.1] - 2026-10-29
 

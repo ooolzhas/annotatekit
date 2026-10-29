@@ -483,8 +483,8 @@ private extension View {
 }
 
 extension Annotation {
-    /// Where the numbered badge attaches: the drawn box's outer top-trailing corner, just beside a
-    /// spot, or a sketch's own stroke corner.
+    /// Where the numbered badge attaches: on the spot the user tapped to pick an element, just beside
+    /// a spot, a sketch's own stroke corner, or a legacy region's outer top-trailing corner.
     var pinAnchorFrame: CGRect {
         switch kind {
         case .point:
@@ -498,9 +498,13 @@ extension Annotation {
             // the padded frame was clipped, and a thin stroke there left less than the padding to
             // undo, a null rect that sent the badge to the bottom-trailing corner
             return BundleRenderer.strokeBounds(sketchInScreenPoints) ?? frame.cgRect
-        case .element, .region:
+        case .element:
+            // Owner request 2026-10-30: the badge sits where the user tapped, not on the box's corner
+            // (Figma 9257:13570): a block can be large, and its corner far from what was tapped
+            return CGRect(origin: anchor.cgPoint, size: .zero)
+        case .region:
             // Badge center on the box's outer corner (Figma 9257:13564 corner = 9257:13570 center);
-            // the box is the element frame grown by the outset, matching PinMarker
+            // the box is the frame grown by the outset, matching PinMarker
             return frame.cgRect.insetBy(
                 dx: -AnnotateStyle.elementBoxOutset,
                 dy: -AnnotateStyle.elementBoxOutset
