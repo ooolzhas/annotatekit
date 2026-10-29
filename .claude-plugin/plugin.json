@@ -1,6 +1,6 @@
 {
   "name": "annotate",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Cursor-style visual annotation for iOS apps: tap, draw and comment on your running app in the Simulator, hit Send, and Claude gets the screenshots, exact coordinates and your notes, then reports progress back to the device.",
   "author": {
     "name": "Olzhas Beisenbayev",
