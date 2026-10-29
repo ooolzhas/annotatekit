@@ -57,7 +57,7 @@ struct ComposerCard: View {
             buttonRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .annotateGlass(in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .annotateGlass(in: RoundedRectangle(cornerRadius: 32, style: .continuous), interactive: true)
         // Glass alone isn't hit-testable: without this, a tap that misses a button falls through
         // to the frozen screen and starts a new pin. A tap on the card focuses the comment instead.
         .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))

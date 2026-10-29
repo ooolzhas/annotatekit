@@ -24,7 +24,7 @@ struct OverlayRoot: View {
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
 
-            // Outside the active layer so delivery progress survives leaving annotate mode
+            // In-mode messages ("Removed pin 2"); delivery progress lives on the launcher pill
             if let toast = controller.toast {
                 ToastView(message: toast.message, controller: controller)
                     .id(toast.id)
