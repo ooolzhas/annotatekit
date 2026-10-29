@@ -1,11 +1,8 @@
-/* annotatekit.com hero demo, rebuilt from a real AnnotateKit session in the Simulator and its source
-   (Rendering.swift, OverlayRoot.swift, Chrome.swift, ComposerCard.swift), with the app underneath
-   simplified to a wireframe. Every selector is scoped under #demo or prefixed .ak-.
-   Two coordinate spaces:
-   - the stage (560 x 530, or 340 x 726 stacked below 480px; from 1000px it fills the preview pane
-     with the terminal docked, see "Docked"), scaled by demo.js;
-   - the phone screen, laid out in true iOS points (402 x 874, iPhone 17 Pro) and scaled to the
-     228-wide screen inside the phone, so every length under "Screen" is a real point value. */
+/* annotatekit.com hero demo: the phone frame around demo.mp4 (a real AnnotateKit session recorded
+   in the Simulator) and Claude's terminal. Every selector is scoped under #demo or prefixed .ak-.
+   The stage is laid out at a fixed size (560 x 530, or 340 x 726 stacked below 480px; from 1000px it
+   fills the preview pane with the terminal docked, see "Docked") and scaled by demo.js, so lengths
+   below are stage pixels. The screen is 228 x 495.7, the recording's 1206 x 2622 aspect. */
 
 #demo {
   position: relative;
@@ -16,23 +13,9 @@
 }
 
 .ak-demo {
-  /* iOS 26 system colors */
-  --ak-blue: #0088FF;
-  --ak-cyan: #00C0E8;
-  --ak-indigo: #6155F5;
-  --ak-green: #34C759;
-  --ak-mint: #00C8B3;
-  --ak-teal: #00C3D0;
-  --ak-ink: #000;
-  --ak-skel: rgba(60, 60, 67, .12);
-  --ak-skel-dark: rgba(60, 60, 67, .26);
   --ak-snappy: cubic-bezier(.25, 1.18, .45, 1);
-  --ak-spring: cubic-bezier(.34, 1.42, .52, 1);
-  --ak-ease: cubic-bezier(.32, .72, 0, 1);
   --ak-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
   --ak-mono: var(--mono, "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace);
-  /* 228 / 402: screen points to stage pixels */
-  --ak-k: .567164;
   position: absolute;
   inset: 0;
   -webkit-font-smoothing: antialiased;
@@ -41,9 +24,7 @@
   pointer-events: none;
 }
 .ak-demo *, .ak-demo *::before, .ak-demo *::after { box-sizing: border-box; }
-/* The site squircles rounded corners; iOS draws these as true circles and capsules. */
-.ak-marker, .ak-dot, .ak-circle, .ak-finger-in, .ak-ripple, .ak-pill, .ak-count, .ak-chip,
-.ak-button, .ak-island, .ak-home, .ak-term-head i { corner-shape: round; }
+.ak-term-head i { corner-shape: round; }
 
 .ak-stage {
   position: absolute;
@@ -56,14 +37,9 @@
 }
 .ak-narrow .ak-stage { width: 340px; height: 726px; }
 
-/* Freeze keyframe animations while the demo is off-screen or the tab is hidden. */
-.ak-paused * { animation-play-state: paused !important; }
-/* Used for instant resets between loops and for the reduced-motion frame. */
-.ak-instant *, .ak-static * { transition: none !important; }
-.ak-static * { animation: none !important; }
+/* ---------- Phone ---------- */
 
-/* ---------- Phone (stage pixels) ---------- */
-
+/* Black bezel; the recording's own screen mask is black too, so its corners need no clipping here. */
 .ak-phone {
   position: absolute;
   left: 20px;
@@ -71,328 +47,16 @@
   width: 244px;
   height: 511.7px;
   padding: 8px;
-  /* 58pt screen corners + the 8px bezel */
   border-radius: 40.9px;
-  background: #0d0d0f;
+  background: #000;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, .14),
-    inset 0 0 0 1px rgba(255, 255, 255, .06),
     0 24px 48px -18px rgba(0, 0, 0, .55),
     0 8px 18px -8px rgba(0, 0, 0, .35);
 }
 .ak-narrow .ak-phone { left: 48px; top: 8px; }
-.ak-screen {
-  position: relative;
-  width: 228px;
-  height: 495.7px;
-  overflow: hidden;
-  border-radius: 32.9px;
-}
-
-/* ---------- Screen (iOS points) ---------- */
-
-.ak-ui {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 402px;
-  height: 874px;
-  transform-origin: 0 0;
-  transform: scale(var(--ak-k));
-  overflow: hidden;
-  border-radius: 58px;
-  background: #F2F2F7;
-  font-family: var(--ak-ui);
-  color: var(--ak-ink);
-}
-.ak-content { position: absolute; inset: 0; transition: opacity .25s ease; }
-.ak-content.ak-fade { opacity: 0; }
-
-/* Status bar, island and home indicator, measured from the Simulator at @3x */
-.ak-island { position: absolute; left: 138.3px; top: 14px; width: 125.3px; height: 36.7px; border-radius: 18.4px; background: #000; z-index: 9; }
-.ak-time { position: absolute; left: 30px; width: 88px; top: 12.5px; text-align: center; font-size: 17px; line-height: 22px; font-weight: 600; letter-spacing: -.2px; }
-.ak-signal { position: absolute; left: 288.3px; top: 27px; width: 19.7px; height: 12px; display: flex; gap: 1.6px; align-items: flex-end; }
-.ak-signal i { flex: 1; border-radius: 1px; background: var(--ak-ink); }
-.ak-wifi { position: absolute; left: 315.3px; top: 26.3px; width: 16.4px; height: 12.4px; }
-.ak-batt { position: absolute; left: 341.3px; top: 26px; width: 25.4px; height: 13px; }
-.ak-home { position: absolute; left: 131.5px; top: 861px; width: 139px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .9); z-index: 9; }
-
-/* Wireframe app: skeleton blocks at the real layout's positions, except what the notes change */
-.ak-sk { position: absolute; border-radius: 4px; background: var(--ak-skel); }
-.ak-sk.ak-dark { background: var(--ak-skel-dark); }
-.ak-card { position: absolute; left: 20px; width: 362px; border-radius: 18px; background: #fff; }
-.ak-title {
-  position: absolute;
-  left: 20px;
-  top: 96.8px;
-  font-size: 28px;
-  line-height: 34px;
-  font-weight: 700;
-  letter-spacing: .36px;
-  transform-origin: 0 70%;
-  transition: transform .7s var(--ak-snappy);
-}
-/* .title → .largeTitle */
-.ak-changed .ak-title { transform: scale(1.214); }
-.ak-chart { position: absolute; left: 16px; right: 16px; top: 99px; height: 40px; display: flex; gap: 6px; align-items: flex-end; }
-.ak-chart i { flex: 1; border-radius: 4px; background: var(--ak-skel); }
-.ak-chart i:last-child { background: #FF9500; }
-.ak-ico { position: absolute; left: 16px; width: 28px; height: 28px; border-radius: 7px; }
-.ak-ico::after { content: ""; position: absolute; left: 9.5px; top: 9.5px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid #fff; corner-shape: round; }
-.ak-divider { position: absolute; left: 52px; right: 0; top: 52px; height: .33px; background: rgba(60, 60, 67, .29); }
-.ak-button {
-  position: absolute;
-  left: 20px;
-  top: 440.3px;
-  width: 362px;
-  height: 62.3px;
-  border-radius: 31.2px;
-  background: rgba(120, 120, 128, .12);
-  transition: background-color .6s ease;
-}
-.ak-button i { position: absolute; left: 127.5px; top: 25px; width: 107px; height: 13px; border-radius: 6.5px; background: var(--ak-skel-dark); transition: background-color .6s ease; }
-.ak-changed .ak-button { background: var(--ak-blue); }
-.ak-changed .ak-button i { background: rgba(255, 255, 255, .92); }
-
-/* Launcher: 44pt pill, 16pt sides, 8pt dot-to-title, bottom 34pt above the screen's edge */
-.ak-glass {
-  background: rgba(255, 255, 255, .5);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .7), inset 0 1px 1px rgba(255, 255, 255, .9), 0 8px 24px -10px rgba(0, 0, 0, .28);
-  -webkit-backdrop-filter: blur(12px) saturate(1.6);
-  backdrop-filter: blur(12px) saturate(1.6);
-}
-.ak-pill {
-  position: absolute;
-  left: 141.3px;
-  top: 796px;
-  width: 119.7px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 22px;
-  font-size: 17px;
-  font-weight: 500;
-  z-index: 6;
-  transition: opacity .25s ease, transform .3s var(--ak-snappy);
-}
-.ak-pill.ak-press { transform: scale(.94); }
-.ak-pill.ak-hidden { opacity: 0; transform: scale(.9); }
-.ak-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ak-green); flex: none; }
-
-/* Annotate mode: black 0.5 dim, then the edge glow, then the bottom frost (Rendering.swift order) */
-.ak-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, .5); opacity: 0; transition: opacity .3s ease; z-index: 2; }
-.ak-annot .ak-dim { opacity: 1; }
-
-/* ScreenGlow: two soft bands inside the 58pt outline (62pt, as Figma's inset 0 0 62px, and a faint
-   140pt one), each lit by a slowly turning ring of uneven color, turning opposite ways. */
-.ak-glow { position: absolute; inset: 0; border-radius: 58px; overflow: hidden; opacity: 0; transition: opacity .6s ease; z-index: 3; }
-.ak-annot .ak-glow.ak-idle, .ak-annot.ak-working .ak-glow.ak-work { opacity: 1; }
-.ak-annot.ak-working .ak-glow.ak-idle { opacity: 0; }
-.ak-band { position: absolute; inset: 0; -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
-.ak-band.ak-near { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 402 874' preserveAspectRatio='none'%3E%3Cfilter id='b' filterUnits='userSpaceOnUse' x='-400' y='-400' width='1202' height='1674'%3E%3CfeGaussianBlur stdDeviation='31'/%3E%3C/filter%3E%3Crect x='-31' y='-31' width='464' height='936' rx='89' fill='none' stroke='white' stroke-width='62' filter='url(%23b)'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 402 874' preserveAspectRatio='none'%3E%3Cfilter id='b' filterUnits='userSpaceOnUse' x='-400' y='-400' width='1202' height='1674'%3E%3CfeGaussianBlur stdDeviation='31'/%3E%3C/filter%3E%3Crect x='-31' y='-31' width='464' height='936' rx='89' fill='none' stroke='white' stroke-width='62' filter='url(%23b)'/%3E%3C/svg%3E"); }
-.ak-band.ak-deep { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 402 874' preserveAspectRatio='none'%3E%3Cfilter id='b' filterUnits='userSpaceOnUse' x='-400' y='-400' width='1202' height='1674'%3E%3CfeGaussianBlur stdDeviation='70'/%3E%3C/filter%3E%3Crect x='-70' y='-70' width='542' height='1014' rx='128' fill='none' stroke='white' stroke-width='140' filter='url(%23b)'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 402 874' preserveAspectRatio='none'%3E%3Cfilter id='b' filterUnits='userSpaceOnUse' x='-400' y='-400' width='1202' height='1674'%3E%3CfeGaussianBlur stdDeviation='70'/%3E%3C/filter%3E%3Crect x='-70' y='-70' width='542' height='1014' rx='128' fill='none' stroke='white' stroke-width='140' filter='url(%23b)'/%3E%3C/svg%3E"); }
-.ak-band i { position: absolute; left: 50%; top: 50%; width: 964px; height: 964px; margin: -482px 0 0 -482px; }
-.ak-near i { animation: ak-rot 14s linear infinite; }
-.ak-deep i { animation: ak-rot 9s linear infinite reverse; }
-.ak-idle .ak-near i { background: conic-gradient(rgb(0 136 255 / .7) 0%, rgb(0 192 232 / .25) 13%, rgb(0 136 255 / .55) 27%, rgb(97 85 245 / .18) 41%, rgb(0 136 255 / .75) 56%, rgb(0 192 232 / .35) 70%, rgb(0 136 255 / .2) 85%, rgb(0 136 255 / .7) 100%); }
-.ak-idle .ak-deep i { background: conic-gradient(rgb(0 136 255 / .3) 0%, transparent 18%, rgb(97 85 245 / .28) 37%, transparent 55%, rgb(0 192 232 / .3) 72%, transparent 88%, rgb(0 136 255 / .3) 100%); }
-.ak-work .ak-near i { background: conic-gradient(rgb(52 199 89 / .7) 0%, rgb(0 200 179 / .25) 13%, rgb(52 199 89 / .55) 27%, rgb(0 195 208 / .18) 41%, rgb(52 199 89 / .75) 56%, rgb(0 200 179 / .35) 70%, rgb(52 199 89 / .2) 85%, rgb(52 199 89 / .7) 100%); }
-.ak-work .ak-deep i { background: conic-gradient(rgb(52 199 89 / .3) 0%, transparent 18%, rgb(0 195 208 / .28) 37%, transparent 55%, rgb(0 200 179 / .3) 72%, transparent 88%, rgb(52 199 89 / .3) 100%); }
-
-/* BottomFrost: from the chrome's top (hint line, or the composer card) to the screen's bottom, an even
-   wash plus three drifting pools, fading in over its top 60%. */
-.ak-frost {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 752px;
-  bottom: 0;
-  opacity: 0;
-  z-index: 3;
-  -webkit-mask-image: linear-gradient(transparent, #000 60%);
-  mask-image: linear-gradient(transparent, #000 60%);
-  transition: opacity .3s ease, top .25s var(--ak-ease);
-}
-.ak-annot .ak-frost { opacity: 1; }
-.ak-composing .ak-frost { top: 732px; }
-.ak-frost > div { position: absolute; inset: 0; transition: opacity .6s ease; }
-.ak-frost .ak-work { opacity: 0; }
-.ak-working .ak-frost .ak-work { opacity: 1; }
-.ak-working .ak-frost .ak-idle { opacity: 0; }
-.ak-frost .ak-idle { background: linear-gradient(rgb(0 136 255 / 0), rgb(0 136 255 / .4)); }
-.ak-frost .ak-work { background: linear-gradient(rgb(52 199 89 / 0), rgb(52 199 89 / .4)); }
-.ak-frost i { position: absolute; border-radius: 50%; }
-.ak-frost i:nth-child(1) { left: -27.5%; top: 30%; width: 95%; height: 110%; animation: ak-sway1 11s ease-in-out infinite; }
-.ak-frost i:nth-child(2) { left: 25%; top: 50%; width: 80%; height: 90%; animation: ak-sway2 8s ease-in-out infinite; }
-.ak-frost i:nth-child(3) { left: 55%; top: 25%; width: 70%; height: 100%; animation: ak-sway3 14s ease-in-out infinite; }
-.ak-frost .ak-idle i:nth-child(1) { background: radial-gradient(closest-side, rgb(0 136 255 / .42), transparent); }
-.ak-frost .ak-idle i:nth-child(2) { background: radial-gradient(closest-side, rgb(0 192 232 / .28), transparent); }
-.ak-frost .ak-idle i:nth-child(3) { background: radial-gradient(closest-side, rgb(97 85 245 / .3), transparent); }
-.ak-frost .ak-work i:nth-child(1) { background: radial-gradient(closest-side, rgb(52 199 89 / .42), transparent); }
-.ak-frost .ak-work i:nth-child(2) { background: radial-gradient(closest-side, rgb(0 200 179 / .28), transparent); }
-.ak-frost .ak-work i:nth-child(3) { background: radial-gradient(closest-side, rgb(0 195 208 / .3), transparent); }
-@keyframes ak-sway1 { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(72px); } }
-@keyframes ak-sway2 { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-88px); } }
-@keyframes ak-sway3 { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-64px); } }
-
-/* Hint line: 20pt tall, 16pt above the bar, 15pt medium white with a 0 2 4 shadow, 8pt dot, 6pt gap */
-.ak-hint {
-  position: absolute;
-  left: 34px;
-  right: 34px;
-  top: 752px;
-  height: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  color: #fff;
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: 500;
-  white-space: nowrap;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, .25);
-  opacity: 0;
-  z-index: 6;
-  transition: opacity .2s ease;
-}
-.ak-hint.ak-on { opacity: 1; }
-.ak-hint.ak-nodot .ak-dot { display: none; }
-.ak-hint-meta { margin-left: -2px; color: rgba(255, 255, 255, .5); }
-
-/* Review bar: 34pt from the sides, bottom 34pt above the edge, 52pt tall, 8pt gaps */
-.ak-bar {
-  position: absolute;
-  left: 34px;
-  right: 34px;
-  top: 788px;
-  height: 52px;
-  display: flex;
-  gap: 8px;
-  opacity: 0;
-  transform: translateY(24px) scale(.96);
-  transform-origin: 50% 100%;
-  z-index: 6;
-  transition: opacity .25s ease, transform .35s var(--ak-snappy);
-}
-.ak-bar.ak-on { opacity: 1; transform: none; }
-.ak-circle { flex: none; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; color: var(--ak-ink); }
-.ak-circle svg { width: 19px; height: 19px; }
-.ak-count { flex: 1; border-radius: 26px; display: grid; place-items: center; font-size: 17px; font-weight: 500; }
-.ak-send { color: rgba(60, 60, 67, .3); transition: background-color .25s ease, color .25s ease, box-shadow .25s ease; }
-.ak-can-send .ak-send { background: var(--ak-blue); color: #fff; box-shadow: 0 8px 24px -10px rgba(0, 0, 0, .28); }
-
-/* Marks: 4pt white pen, 2pt white box 2pt outside the element with 8pt corners, 24pt badges */
-.ak-ink { position: absolute; left: 0; top: 0; width: 402px; height: 874px; z-index: 4; overflow: visible; transition: opacity .3s ease; }
-.ak-loop { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-.ak-outline {
-  position: absolute;
-  left: 18px;
-  top: 438.3px;
-  width: 366px;
-  height: 66.3px;
-  border: 2px solid #fff;
-  border-radius: 8px;
-  opacity: 0;
-  z-index: 4;
-  transition: opacity .2s ease;
-}
-.ak-outline.ak-on { opacity: 1; }
-.ak-marker {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  margin: -12px 0 0 -12px;
-  border-radius: 50%;
-  background: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 15px;
-  font-weight: 600;
-  color: #000;
-  opacity: 0;
-  transform: scale(.3);
-  z-index: 5;
-  transition: opacity .2s ease, transform .25s var(--ak-snappy);
-}
-.ak-marker.ak-on { opacity: 1; transform: none; }
-.ak-m1 { left: 112px; top: 97px; }
-.ak-m2 { left: 384px; top: 438.3px; }
-.ak-marker > * { grid-area: 1 / 1; transition: opacity .2s ease, transform .3s var(--ak-spring); }
-.ak-spin, .ak-check { opacity: 0; transform: scale(.5); }
-/* The system spinner: eight spokes fading around */
-.ak-spin {
-  width: 14px;
-  height: 14px;
-  background: repeating-conic-gradient(from -11.25deg, rgba(60, 60, 67, .7) 0 8deg, transparent 8deg 45deg);
-  -webkit-mask: radial-gradient(circle, transparent 3px, #000 3.5px);
-  mask: radial-gradient(circle, transparent 3px, #000 3.5px);
-  border-radius: 50%;
-  animation: ak-tick .8s steps(8) infinite;
-}
-.ak-check { width: 13px; height: 13px; color: var(--ak-green); }
-.ak-busy .ak-num, .ak-done .ak-num { opacity: 0; transform: scale(.5); }
-.ak-busy:not(.ak-done) .ak-spin { opacity: 1; transform: none; }
-.ak-done .ak-check { opacity: 1; transform: none; }
-
-/* Composer card: 34pt sides, bottom at the bar's line, 32pt corners, 8pt row inset, 44pt circles */
-.ak-composer {
-  position: absolute;
-  left: 34px;
-  right: 34px;
-  top: 732px;
-  height: 108px;
-  border-radius: 32px;
-  opacity: 0;
-  transform: translateY(24px) scale(.96);
-  transform-origin: 50% 100%;
-  z-index: 7;
-  transition: opacity .25s ease, transform .35s var(--ak-snappy);
-}
-.ak-composer.ak-on { opacity: 1; transform: none; }
-.ak-field { position: absolute; left: 20px; right: 20px; top: 17px; height: 22px; font-size: 17px; line-height: 22px; white-space: nowrap; }
-.ak-placeholder { position: absolute; left: 0; top: 0; color: rgba(60, 60, 67, .45); }
-.ak-typed:not(:empty) + .ak-placeholder { display: none; }
-.ak-caret { display: inline-block; width: 2px; height: 20px; margin-left: 1px; vertical-align: -4px; border-radius: 1px; background: var(--ak-blue); animation: ak-blink 1s steps(1) infinite; }
-.ak-tools { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 44px; display: flex; align-items: center; gap: 6px; }
-.ak-tools .ak-circle { width: 44px; height: 44px; background: rgba(120, 120, 128, .12); }
-.ak-tools .ak-circle svg { width: 17px; height: 17px; }
-.ak-tools .ak-faint { color: rgba(60, 60, 67, .3); }
-.ak-chip { height: 44px; min-width: 65px; padding: 0 12px; border-radius: 22px; display: flex; align-items: center; justify-content: center; gap: 4px; background: rgba(120, 120, 128, .12); font-size: 17px; font-weight: 500; }
-.ak-chip svg { width: 8px; height: 11px; }
-.ak-tools .ak-gap { flex: 1; }
-.ak-tools .ak-ok { color: rgba(60, 60, 67, .3); transition: background-color .2s ease, color .2s ease; }
-.ak-ready .ak-ok { background: var(--ak-blue); color: #fff; }
-
-/* Simulator touch indicator */
-.ak-finger {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 38px;
-  height: 38px;
-  margin: -19px 0 0 -19px;
-  z-index: 8;
-  opacity: 0;
-  transition: transform .5s var(--ak-ease), opacity .25s ease;
-}
-.ak-finger.ak-on { opacity: 1; }
-.ak-finger.ak-drag { transition: opacity .25s ease; }
-.ak-finger-in {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: rgba(142, 142, 147, .42);
-  border: 2.5px solid rgba(255, 255, 255, .92);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, .28);
-  transition: transform .18s var(--ak-snappy);
-}
-.ak-finger.ak-down .ak-finger-in { transform: scale(.78); transition-duration: .1s; }
-.ak-ripple { position: absolute; inset: 0; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .9); opacity: 0; }
-.ak-finger.ak-tap .ak-ripple { animation: ak-ripple .5s ease-out; }
-@keyframes ak-ripple { 0% { opacity: .8; transform: scale(.8); } 100% { opacity: 0; transform: scale(2); } }
+.ak-screen { width: 228px; height: 495.7px; background: #000; }
+.ak-video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
 
 /* ---------- Terminal (stage pixels) ---------- */
 
@@ -426,29 +90,26 @@
   bottom: 0;
   left: 0;
   width: auto;
-  height: 212px;
-  border-top: 1px solid rgba(255, 255, 255, .09);
+  height: 236px;
   border-radius: 0;
   box-shadow: none;
-  font-size: 12px;
-  line-height: 19px;
+  font-size: 14px;
+  line-height: 22px;
 }
-.ak-docked .ak-term-head { height: 32px; padding: 0 14px; background: #141416; }
+.ak-docked .ak-term-head { height: 32px; padding: 0 14px; border-bottom: 0; background: #141416; }
 .ak-docked .ak-term-head i { display: none; }
 .ak-docked .ak-term-title {
   position: static;
   display: flex;
   align-items: center;
   height: 100%;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: .04em;
-  text-transform: uppercase;
   color: rgba(255, 255, 255, .85);
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .7);
 }
+.ak-docked .ak-claude { width: 14px; height: 14px; margin-right: 7px; }
 .ak-docked .ak-term-body { padding: 10px 14px; }
-.ak-docked .ak-line { padding-left: 18px; }
+.ak-docked .ak-line { padding-left: 21px; }
 
 .ak-term-head {
   position: relative;
@@ -474,6 +135,8 @@
   font-weight: 600;
   color: rgba(255, 255, 255, .5);
 }
+/* Claude's mark before the title, in its brand color */
+.ak-claude { width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; color: #D97757; }
 .ak-term-body { padding: 9px 10px; }
 .ak-line {
   position: relative;
@@ -496,6 +159,4 @@
 .ak-star { display: inline-block; animation: ak-rot 2.4s linear infinite; }
 .ak-live { animation: ak-pulse 1.6s ease-in-out infinite; }
 @keyframes ak-rot { to { transform: rotate(360deg); } }
-@keyframes ak-tick { to { transform: rotate(360deg); } }
 @keyframes ak-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@keyframes ak-blink { 50% { opacity: 0; } }

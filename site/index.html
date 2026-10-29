@@ -32,8 +32,7 @@
 
     <div class="nav-scroll">
       <div class="nav-group">
-        <p class="nav-label" id="nav-guide">Guide</p>
-        <ul class="nav-sections" aria-labelledby="nav-guide">
+        <ul class="nav-sections" aria-label="Guide">
           <li><a href="#overview">Overview</a></li>
           <li><a href="#how-it-works">How you use it</a></li>
           <li><a href="#what-agents-get">What your agent gets</a></li>
@@ -41,15 +40,13 @@
         </ul>
       </div>
       <div class="nav-group">
-        <p class="nav-label" id="nav-setup">Setup</p>
-        <ul class="nav-sections" aria-labelledby="nav-setup">
+        <ul class="nav-sections" aria-label="Setup">
           <li><a href="#install">Install</a></li>
           <li><a href="#connect">Connect your agent</a></li>
         </ul>
       </div>
       <div class="nav-group nav-resources">
-        <p class="nav-label" id="nav-resources">Resources</p>
-        <ul aria-labelledby="nav-resources">
+        <ul aria-label="Resources">
           <li><a href="https://github.com/ooolzhas/annotatekit">GitHub</a></li>
           <li><a href="https://github.com/ooolzhas/annotatekit/blob/main/SCHEMA.md">Schema</a></li>
           <li><a href="https://github.com/ooolzhas/annotatekit/blob/main/CHANGELOG.md">Changelog</a></li>
@@ -61,7 +58,15 @@
 
   <main id="main">
     <section id="overview" aria-labelledby="overview-title">
+      <h1 id="overview-title">Visual feedback for <span class="rayed">iOS<svg class="rays" viewBox="0 0 56 50" aria-hidden="true"><path pathLength="1" style="--t:0.30s" d="M12 13Q10.5 9.5 7 6"/><path pathLength="1" style="--t:0.42s" d="M28 9.5Q27.6 5.5 28.4 2"/><path pathLength="1" style="--t:0.54s" d="M44 13Q46 9.6 49.5 6.5"/><path pathLength="1" style="--t:0.66s" d="M12 37Q10 39.8 7.8 42.4"/><path pathLength="1" style="--t:0.78s" d="M28 39.6Q28.4 42.6 27.7 45.4"/><path pathLength="1" style="--t:0.90s" d="M44 37Q45.8 39.9 48.2 42.4"/></svg></span> apps, <span class="underlined">straight to your coding agent</span>.</h1>
+      <p class="intro">
+        Freeze your running app, draw, tap an element or hold on a spot, and say what should change.
+        Hit send: the agent open on your Mac gets the screenshots, exact coordinates and your notes.
+        Nothing to paste, no views to tag, DEBUG builds only.
+      </p>
+
       <div class="install-bar">
+        <span class="install-meta">iOS 17+ · SwiftUI and UIKit</span>
         <div class="cmd shell installer">
           <div class="pm-switch" role="group" aria-label="Package manager">
             <button type="button" data-pm="brew" aria-pressed="true">brew</button>
@@ -71,18 +76,10 @@
           <code data-pm="npm" hidden>npm install -g annotate-ios</code>
           <button class="copy" type="button" aria-label="Copy install command"></button>
         </div>
-        <span class="install-meta">iOS 17+ · SwiftUI and UIKit</span>
       </div>
 
-      <h1 id="overview-title">Visual feedback for iOS apps, <span class="underlined">straight to your coding agent</span>.</h1>
-      <p class="intro">
-        Freeze your running app, draw, tap an element or hold on a spot, and say what should change.
-        Hit send: the agent open on your Mac gets the screenshots, exact coordinates and your notes.
-        Nothing to paste, no views to tag, DEBUG builds only.
-      </p>
-
       <div class="preview-pane">
-        <div id="demo" class="demo" role="img" aria-label="Animated demo: annotating an iPhone app and Claude applying the changes"></div>
+        <div id="demo" class="demo" role="img" aria-label="Recorded demo: annotating an iPhone app in the Simulator and Claude applying the changes"></div>
       </div>
     </section>
 
@@ -93,7 +90,7 @@
         <li><strong>Draw</strong> around anything, <strong>tap</strong> to outline an element, or <strong>hold</strong> half a second to pin an exact spot.</li>
         <li>Type what should change. Switch the chip from <strong>Fix</strong> to <strong>Question</strong> when you only want an explanation.</li>
         <li>Add as many notes as you like, across screens: leave annotate mode, navigate, come back. <span class="circled">One send</span> carries them all.</li>
-        <li>Hit <strong>↑</strong>. Your open Claude session picks it up.</li>
+        <li>Hit <strong>↑</strong>. The agent already open on your Mac picks it up.</li>
         <li>The pill narrates the agent's progress; each note's badge spins until it's handled, then turns into a green check.</li>
       </ol>
       <p class="note">
@@ -109,7 +106,7 @@
         to interpret.
       </p>
       <ul class="bullets">
-        <li><strong>1x screenshots, pixel = point.</strong> A 402×874 pt screen is a 402×874 image: a vision model sees it unscaled, and a pin at (84, 322) is pixel (84, 322).</li>
+        <li><strong>Lightweight screenshots.</strong> Saved at 1x: 89% fewer pixels than a regular @3x screenshot and about 3× fewer image tokens, so the agent reads and acts on them faster.</li>
         <li><strong>Annotated screens and crops.</strong> Each screen with numbered blue markers, outlines and your red drawings, plus a native-resolution crop around every pin.</li>
         <li><strong>Exact coordinates.</strong> Each pin's anchor (your tap, or a drawing's center), the element's frame, and its position as percentages across and down, in iOS points from the top-left.</li>
         <li><strong>Nearby text.</strong> The text around each pin, and every visible label on the screen with its frame. Usually enough to grep straight to the right view.</li>
@@ -177,7 +174,7 @@ annotate ask &lt;id&gt; &lt;pin&gt; <span class="tk-str">"question"</span>      
         then <code>/plugin install annotate@annotatekit</code>.
       </p>
 
-      <h3>By hand</h3>
+      <h3>By hand <svg class="scribble" viewBox="-1063 -735 7562 868" aria-hidden="true"><path pathLength="1" style="--t:0s;--d:.45s" d="M-61 -208C-318 -331 -700 -148 -1000 -250"/><path pathLength="1" style="--t:.45s;--d:.16s" d="M-825 -440L-1003 -250L-779 -64"/><path pathLength="1" style="--t:0.70s" d="M355 -579L189 13"/><path pathLength="1" style="--t:0.85s" d="M632 -489L565 -443L496 -368L459 -280L463 -216L478 -118L538 -53L587 -39L708 -39L769 -59L828 -128L867 -243L884 -311L863 -412L819 -447L737 -504L646 -502"/><path pathLength="1" style="--t:1.00s" d="M1063 -675L998 -91"/><path pathLength="1" style="--t:1.15s" d="M1277 -141L1243 -108L1230 -128L1275 -153L1294 -120L1272 -66L1195 -37"/><path pathLength="1" style="--t:1.30s" d="M2071 -673L1853 23"/><path pathLength="1" style="--t:1.45s" d="M2103 -338L2074 73M2095 -232L2194 -329L2273 -366L2351 -387L2398 -342L2445 -273L2409 50M2440 -277L2519 -379L2600 -405L2677 -399L2723 -401L2755 -305L2739 -4"/><path pathLength="1" style="--t:1.60s" d="M3353 -351L3247 44M3343 -264L3310 -329L3231 -367L3153 -373L3077 -360L3010 -301L2948 -239L2950 -173L2945 -78L2973 5L3020 16L3131 25L3180 13L3271 -41"/><path pathLength="1" style="--t:1.75s" d="M3776 -481L3697 -453L3605 -402L3524 -300L3517 -237L3503 -128L3565 -42L3615 9L3719 20L3784 -4L3904 -67L3964 -149L3987 -222L3978 -337L3920 -414L3860 -455L3769 -461"/><path pathLength="1" style="--t:1.90s" d="M4399 -302L4805 -362L4789 -449L4772 -496L4746 -521L4675 -539L4571 -541L4522 -501L4441 -414L4408 -297L4413 -252L4456 -154L4524 -86L4564 -68L4665 -77L4733 -133L4800 -200"/><path pathLength="1" style="--t:2.05s" d="M5015 -555L5138 -56M5453 -531L5160 -35"/><path pathLength="1" style="--t:2.20s" d="M5539 -310L5905 -256L5938 -316L5935 -387L5924 -420L5850 -455L5756 -458L5693 -461L5599 -398L5542 -327L5526 -264L5532 -162L5574 -105L5603 -65L5716 -23L5780 -57L5877 -98"/><path pathLength="1" style="--t:2.35s" d="M6055 -513L6025 -27M6059 -374L6164 -478L6240 -543L6344 -541L6407 -508L6439 -423L6407 -51"/></svg></h3>
       <p>
         <strong>1. The overlay.</strong> Add the package with Swift Package Manager and link
         <strong>AnnotateKit</strong> to your app target (iOS 17+).
@@ -412,6 +409,28 @@ args = [<span class="tk-str">"mcp"</span>]</code></pre>
       }, { passive: true });
     }
     update();
+  })();
+  </script>
+  <script>
+  // Hand-drawn marks (the scribble, circled phrases) draw themselves once they scroll into view.
+  // Without IntersectionObserver, or with reduced motion, they simply show finished.
+  (function () {
+    var marks = document.querySelectorAll('.scribble, .circled');
+    if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // On load the rays around iOS draw (0.3–1s), then the underline (1.2–2.7s); circles wait until after it
+    var start = Date.now(), CIRCLES_AFTER = 3000;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        io.unobserve(e.target);
+        var wait = e.target.classList.contains('circled') ? Math.max(0, CIRCLES_AFTER - (Date.now() - start)) : 0;
+        setTimeout(function () { e.target.classList.add('is-drawn'); }, wait);
+      });
+    }, { threshold: 0.6 });
+    marks.forEach(function (m) {
+      m.classList.add('draw-pending');
+      io.observe(m);
+    });
   })();
   </script>
   <script src="demo.js" defer></script>

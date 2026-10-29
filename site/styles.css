@@ -165,17 +165,6 @@ img { display: block; }
 }
 .sidebar li a:hover { color: var(--text-strong); background: var(--nav-hover); }
 .sidebar li a[aria-current="location"] { color: var(--text-strong); font-weight: 500; }
-.sidebar li a[aria-current="location"]::before {
-  content: "";
-  position: absolute;
-  left: -2px; top: 50%;
-  width: 5px; height: 5px;
-  margin-top: -2.5px;
-  border-radius: 50%;
-  corner-shape: round;
-  background: var(--accent);
-}
-
 /* ---------- Content column ---------- */
 
 main {
@@ -236,16 +225,60 @@ h3 {
 }
 h2 + h3 { margin-top: 0; }
 
-.intro { margin-bottom: 28px; }
+.intro { margin-bottom: 24px; }
+/* The headline opens the page; the install line follows the intro. */
+section#overview h1 { margin-top: 0; }
 
 /* The headline's promise gets a hand-drawn blue double underline, the same ink as the loops. A
    background (not a pseudo-element) so it follows the phrase onto every line it wraps to. */
+/* Six hand-drawn rays around "iOS" in the headline, three above and three below, drawn one by one
+   on load before the underline. The SVG is centered on the word in plain pixels. */
+.rayed { position: relative; }
+.rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 50px;
+  margin: -25px 0 0 -28px;
+  overflow: visible;
+  pointer-events: none;
+}
+.rays path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+/* Round caps paint a dot even at zero length, so each stroke stays invisible until it starts. */
+@keyframes ray-draw { from { stroke-dashoffset: 1; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes underline-draw {
+  0% { background-size: 100% 4.5px, 100% 4.5px, 100% 9px; }
+  45% { background-size: 100% 4.5px, 0 4.5px, 100% 9px; }
+  55% { background-size: 100% 4.5px, 0 4.5px, 100% 9px; }
+  100% { background-size: 0 4.5px, 0 4.5px, 100% 9px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .underlined { animation: underline-draw 1.5s cubic-bezier(.45, 0, .25, 1) 1.2s both; }
+  .rays path { animation: ray-draw 0.2s ease-out var(--t) both; }
+}
 .underlined {
   padding-bottom: 7px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M2 3.2C60 2.2 118 3.9 178 2.8S262 2.4 298 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 8.1C70 7.2 130 8.8 196 7.6S270 7.4 294 8.4' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E") left bottom / 100% 9px no-repeat;
+  /* Two page-colored covers over the drawn lines (top half, bottom half) shrink toward the right
+     one after the other on load, so line 1 draws, then line 2. At rest the covers are 0 wide. */
+  background:
+    linear-gradient(var(--bg), var(--bg)) right 0 bottom 0 / 0 4.5px no-repeat,
+    linear-gradient(var(--bg), var(--bg)) right 0 bottom 4.5px / 0 4.5px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M2 3.2C60 2.2 118 3.9 178 2.8S262 2.4 298 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 8.1C70 7.2 130 8.8 196 7.6S270 7.4 294 8.4' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E") left bottom / 100% 9px no-repeat;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
+
+@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
+.circled.draw-pending::after { --sweep: 0deg; }
+.circled.is-drawn::after { --sweep: 360deg; transition: --sweep 0.9s cubic-bezier(.45, 0, .25, 1) 0.15s; }
 
 /* Key phrases get the product's hand-drawn blue loop (the demo's ink path, stretched to the words). */
 .circled { position: relative; margin: 0 5px; white-space: nowrap; }
@@ -254,8 +287,12 @@ h2 + h3 { margin-top: 0; }
   position: absolute;
   inset: -8px -15px -7px -14px;
   background: var(--accent);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 52 89 43' preserveAspectRatio='none'%3E%3Cpath d='M78 62C62 55 22 56 10 68C2 78 14 90 40 91C64 92 86 86 85 74C84 64 70 59 56 60' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 52 89 43' preserveAspectRatio='none'%3E%3Cpath d='M78 62C62 55 22 56 10 68C2 78 14 90 40 91C64 92 86 86 85 74C84 64 70 59 56 60' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  /* The loop, revealed by a sweep turning counterclockwise from its starting corner, so it looks
+     drawn when it scrolls into view (--sweep animates; without @property it just appears). */
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 52 89 43' preserveAspectRatio='none'%3E%3Cpath d='M78 62C62 55 22 56 10 68C2 78 14 90 40 91C64 92 86 86 85 74C84 64 70 59 56 60' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat, conic-gradient(from 45deg, transparent calc(360deg - var(--sweep)), #000 0);
+  -webkit-mask-composite: source-in;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 52 89 43' preserveAspectRatio='none'%3E%3Cpath d='M78 62C62 55 22 56 10 68C2 78 14 90 40 91C64 92 86 86 85 74C84 64 70 59 56 60' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat, conic-gradient(from 45deg, transparent calc(360deg - var(--sweep)), #000 0);
+  mask-composite: intersect;
   pointer-events: none;
 }
 
@@ -272,21 +309,24 @@ h2 + h3 { margin-top: 0; }
 @media (min-width: 1000px) {
   :root { --pane-w: clamp(340px, 33.333vw, 600px); }
   main {
-    width: min(calc(var(--col) + 48px), calc(100vw - var(--sidebar-w) - var(--pane-w)));
-    margin-left: max(var(--sidebar-w), calc((100vw + var(--sidebar-w) - var(--pane-w)) / 2 - var(--col) / 2 - 24px));
+    /* Centered between the sidebar and the pane, nudged 66px right (rearranged by hand), with room
+       above the headline; it narrows instead of sliding under the pane when space runs out. */
+    --main-left: max(var(--sidebar-w), calc((100vw + var(--sidebar-w) - var(--pane-w)) / 2 - var(--col) / 2 - 24px + 66px));
+    width: min(calc(var(--col) + 48px), calc(100vw - var(--pane-w) - var(--main-left)));
+    margin-left: var(--main-left);
+    padding-top: 88px;
   }
   .preview-pane {
     position: fixed;
     top: 0; right: 0; bottom: 0;
     width: var(--pane-w);
-    border-left: 1px solid var(--hairline);
     background: var(--code-bg);
   }
   /* demo.js lays out the docked terminal and the phone inside the full pane. */
   .preview-pane #demo { width: 100%; height: 100%; aspect-ratio: auto; }
 }
 
-/* Install line at the top: one command with a brew / npm switch, requirements underneath */
+/* Install line: requirements, then one command with a brew / npm switch */
 .install-bar {
   display: flex;
   flex-direction: column;
@@ -425,18 +465,45 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 .tk-com { color: var(--tk-com); font-style: italic; }
 
 /* One-line commands */
+/* "lol, lmao even" beside "By hand": plain single-stroke letters (Hershey Sans) roughed up at build
+   time (jittered points, wandering baseline, uneven size, tilt and spacing) in the loops' blue ink.
+   When it scrolls into view an arrow draws back toward the heading first, then the letters. Strokes are in the SVG's units: 67 is 1.75px
+   at the 24px height. */
+.scribble {
+  display: inline-block;
+  height: 24px;
+  aspect-ratio: 7562 / 868;
+  margin-left: 8px;
+  vertical-align: -4px;
+  overflow: visible;
+  transform: rotate(-1deg);
+}
+.scribble path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 67;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.scribble.draw-pending path { stroke-dashoffset: 1; opacity: 0; }
+.scribble.is-drawn path { stroke-dashoffset: 0; opacity: 1; transition: stroke-dashoffset var(--d, 0.24s) ease-out var(--t, 0s), opacity 0s linear var(--t, 0s); }
+
 /* App icons before the agent names: brand tile, white mark */
 .app { white-space: nowrap; }
 .app-icon {
-  /* Cap-height tall with its bottom on the baseline, so it lines up with the label's letters. An
+  /* About cap-height tall with its bottom 2px under the baseline, lined up with the label's letters. An
      inline-block with no line box inside sits on the baseline by its bottom edge. */
   position: relative;
   display: inline-block;
-  width: 1.15cap;
-  height: 1.15cap;
-  margin-right: 0.32em;
-  vertical-align: baseline;
-  border-radius: 30%;
+  width: calc(1.15cap + 2px);
+  height: calc(1.15cap + 2px);
+  margin-right: calc(0.32em - 2px);
+  vertical-align: -2px;
+  /* A squircle corner reads tighter than a round one of the same radius; 45% squircle has the
+     visible rounding of a 30% round corner. */
+  border-radius: 45%;
   corner-shape: squircle;
   color: #fff;
   box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 0 0 0.5px var(--hairline);
@@ -623,7 +690,6 @@ main p a, main li a, main dd a {
   .nav-label, .nav-group.nav-resources { display: none; }
   .nav-sections { display: flex; flex: none; }
   .sidebar li a { white-space: nowrap; padding: 4px 8px; }
-  .sidebar li a[aria-current="location"]::before { display: none; }
   .sidebar li a[aria-current="location"] { background: var(--nav-hover); }
 
   main {
