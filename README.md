@@ -165,6 +165,9 @@ Shortcuts to Device* is on. The on-screen buttons always work.
 - **Prompt size.** `AnnotateOptions(promptDetail: .compact)` saves tokens. `.detailed` adds every
   screen's visible text.
 
+The plugin's Stop hook (`annotate hook stop`) keeps Claude from ending its turn while a Send it
+worked on still shows as in progress on the device, so the app never waits on a forgotten "done".
+
 Agents report with the MCP tools above, or with the CLI:
 
 ```sh
