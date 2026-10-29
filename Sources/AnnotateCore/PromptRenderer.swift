@@ -84,10 +84,11 @@ public enum PromptRenderer {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// How to report each pin back and how to ask about one; the CLI and MCP tools write status.json,
-    /// which the app reads to show per-pin results.
+    /// How to report each pin back (started, finished) and how to ask about one; the CLI and MCP tools
+    /// write status.json, which the app reads to show per-pin progress and results.
     static func reportingParagraph(id: String) -> String {
-        "Report each pin as you finish it: `annotate resolve \(id) <n> \"what changed\"` or "
+        "As you start each pin, say so: `annotate ack \(id) <n>` (MCP: annotation_acknowledge). "
+            + "Report each pin as you finish it: `annotate resolve \(id) <n> \"what changed\"` or "
             + "`annotate dismiss \(id) <n> \"why not\"` (MCP: annotation_resolve / annotation_dismiss). "
             + "If a pin is unclear, ask: `annotate ask \(id) <n> \"question\"` (MCP: annotation_ask); "
             + "the user answers on the device."

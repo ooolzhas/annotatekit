@@ -1,5 +1,6 @@
 // The reply card for one sent pin the agent asked about: an orange "<Agent> asks about note N"
-// header, the question, the reply field, and the × / ↑ row. No Figma: derived from ComposerCard's
+// header, the pin's earlier exchange (if the agent asked before), the question, the reply field, and
+// the × / ↑ row. No Figma: derived from ComposerCard's
 // layout (glass radius 32, 20pt text insets, 44pt circle buttons) so both keyboard-docked cards
 // read as one family. It only lays itself out at the width it is given; OverlayRoot docks it to
 // the keyboard and adds the 8pt inset. ↑ sends through the controller, which decides via `chrome`
@@ -25,6 +26,10 @@ struct ReplyCard: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
+            if !earlierLines.isEmpty {
+                earlier
+            }
+
             // No Figma: derived. Same type as the field below so the question and the answer
             // read as one exchange; capped so a long question can't push the card off screen
             Text(reply.question)
@@ -33,7 +38,7 @@ struct ReplyCard: View {
                 .lineLimit(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
-                .padding(.top, 6)
+                .padding(.top, earlierLines.isEmpty ? 6 : 10)
 
             TextField("", text: replyBinding, axis: .vertical)
                 .font(.body.leading(.loose))
@@ -82,6 +87,32 @@ struct ReplyCard: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
+    }
+
+    // MARK: - Earlier exchange
+
+    /// "Claude: …" / "You: …" for the messages before this question, the last `threadLimit` of them.
+    private var earlierLines: [String] {
+        let agent = controller.agent?.agent ?? ""
+        return reply.earlier.suffix(OverlayChrome.threadLimit).map { OverlayChrome.threadLine($0, agent: agent) }
+    }
+
+    /// No Figma: derived. Secondary 15pt like the header, 2 lines each, so the context stays smaller
+    /// than the question it leads to.
+    private var earlier: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(earlierLines.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    // The docked card is short on height; without this the line is squeezed to one
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     // MARK: - Text

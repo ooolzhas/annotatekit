@@ -99,6 +99,10 @@ how to report each pin.
 | `message` | String, optional | one line shown on the device, a headline and its next step split by " · " ("All changes applied · Reinstalling"); the device dims the part after the dot |
 | `updatedAt` | Date | |
 | `pins` | [PinStatus], optional | per-pin results (below) |
+| `acknowledged` | [Int], optional | pins the agent said it started on, the most recent last; a repeat moves to the end. The device names the last one that isn't resolved, dismissed or asked about ("Working on note 2") while the session is `working` with no `message` |
+
+`acknowledged` is a list on the session, not a pin state: apps built with 0.2.x decode pin states strictly and
+would reject a new one, while they ignore a key they don't know.
 
 **`PinStatus`:**
 
@@ -109,9 +113,23 @@ how to report each pin.
 | `note` | String, optional | resolved: what changed; dismissed: why not; question/answered: the question |
 | `reply` | String, optional | answered: the user's reply |
 | `updatedAt` | Date | |
+| `thread` | [PinMessage], optional | the conversation about this pin, oldest first (below) |
 
-Writers: `annotate status|resolve|dismiss|ask`, or the MCP tools `annotation_status`, `annotation_resolve`,
-`annotation_dismiss` and `annotation_ask`. The app polls the file and narrates it on the launcher pill and the
+**`PinMessage`:**
+
+| Field | Type | Notes |
+|---|---|---|
+| `role` | `agent` · `human` | `agent`: a question; `human`: the user's reply |
+| `text` | String | |
+| `at` | Date | when it was asked, or the reply's `at` |
+
+Asking adds the question to the pin's thread, and delivering a reply adds the reply, so a pin asked about twice
+holds both rounds. `note` and `reply` still carry the latest question and answer for readers without threads.
+A pin with no `thread` (written before threads) has at most the one exchange its `note` and `reply` kept.
+Resolving or dismissing an asked-about pin keeps its thread.
+
+Writers: `annotate status|ack|resolve|dismiss|ask`, or the MCP tools `annotation_status`,
+`annotation_acknowledge`, `annotation_resolve`, `annotation_dismiss` and `annotation_ask`. The app polls the file and narrates it on the launcher pill and the
 hint line. The notes sheet lists each pin's state.
 
 ## replies.json: `[PinReply]` (app → agent)
@@ -168,7 +186,9 @@ A session is copied only if its `app.installFile` resolves to this checkout. Bui
 
 ## Compatibility
 
-- **New fields:** additive and optional; readers ignore unknown keys.
+- **New fields:** additive and optional; readers ignore unknown keys. An older `annotate` that rewrites
+  `status.json` drops the keys it doesn't know (`acknowledged`, `thread`), so restart long-running
+  `annotate` processes (watch, mcp, run) after upgrading.
 - **Breaking changes:** these bump `AnnotationSession.currentSchemaVersion`.
 - **Validation:** consumers check session ids (`SessionInbox.isValidSessionID`) and relative paths
   (`isSafeRelativePath`) before touching disk.
