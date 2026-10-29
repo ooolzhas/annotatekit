@@ -13,7 +13,8 @@
 // The comment card docks to the keyboard (`chromeBottom`), never to the marker. A pin can carry up
 // to `maxAttachments` reference images, kept beside the pin and handed to Send. With no pin open the
 // review bar shows: × stops (pins kept), trash clears, Send sends and exits. `chrome` resolves which.
-// Return / ↑ saves a pin with a comment, × discards it, Esc backs out one level, ⌘Z undoes.
+// ↑ saves a pin with a comment (Return types a newline), the intent menu's Delete discards it, Esc backs
+// out one level, ⌘Z / ⇧⌘Z (and the card's buttons) undo and redo strokes.
 // Send → hands a SendJob to BundleRenderer off the main thread (1x/annotated images, crops,
 // attachments, PNG encoding, write, prune), then polls status.json; the launcher pill narrates each
 // stage (`delivery` → `launcherStatus`) instead of toasts, so progress stays on screen in one place
@@ -51,8 +52,10 @@ final class AnnotateController {
         /// `index` is 0 until a new draft is saved.
         var annotation: Annotation
         var isNew: Bool
-        /// Pen strokes in screen points while the pin is open; rebased into `annotation.sketch` on save.
-        var strokes: [Stroke] = []
+        /// Pen strokes in screen points while the pin is open, with undo / redo; rebased into
+        /// `annotation.sketch` on save.
+        var history = StrokeHistory()
+        var strokes: [Stroke] { history.strokes }
         /// Reference images; they stay out of `Annotation` until Send writes them into the bundle.
         var images: [AttachedImage] = []
     }
@@ -135,8 +138,13 @@ final class AnnotateController {
     private(set) var frozenImage: UIImage?
     private(set) var currentScreen = 0
     /// Progress of the most recent Send, read back from the bundle's status.json; nil once the
-    /// launcher has gone back to idle.
-    private(set) var delivery: DeliveryStage?
+    /// launcher has gone back to idle. Every change to a new stage plays its haptic.
+    private(set) var delivery: DeliveryStage? {
+        didSet {
+            guard let delivery, delivery != oldValue else { return }
+            playHaptic(delivery.haptic)
+        }
+    }
     /// When the narrated Send went out; the hint line's elapsed seconds count from it.
     private(set) var deliveryStartedAt: Date?
     /// The agent listening for Sends, from `agent.json`; nil when none is (the pill's dot).
@@ -172,6 +180,10 @@ final class AnnotateController {
     /// Clears `isConnectionNews` after the hold; a newer flash cancels it so the hold restarts.
     @ObservationIgnored private var connectionNewsTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
+    /// Delivery stage haptics. Kept and prepared on Send: a fresh generator per stage can lag the
+    /// change it marks, since the Taptic Engine spins down between stages.
+    @ObservationIgnored private lazy var tickFeedback = UIImpactFeedbackGenerator(style: .light)
+    @ObservationIgnored private lazy var noticeFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored private var launchStart: Task<Void, Never>?
     @ObservationIgnored private var accessibilityWarmUp: Task<Void, Never>?
     @ObservationIgnored private var isTreeWarm = false
@@ -422,7 +434,7 @@ final class AnnotateController {
     private func commitStroke(_ stroke: Stroke) {
         guard stroke.points.count >= 2 else { return }
         if draft != nil {
-            draft?.strokes.append(stroke)
+            draft?.history.add(stroke)
             return
         }
         cancelPendingTap()
@@ -434,7 +446,7 @@ final class AnnotateController {
             frame: AnnotationRect(strokeBounds([stroke]))
         )
         sketch.intent = .fix
-        draft = Draft(annotation: sketch, isNew: true, strokes: [stroke])
+        draft = Draft(annotation: sketch, isNew: true, history: StrokeHistory(opening: [stroke]))
     }
 
     /// Drops a spot pin at the touch-down point. Needs no scan: a spot is pinned to the pixel.
@@ -503,14 +515,14 @@ final class AnnotateController {
         draft?.images.removeAll { $0.id == id }
     }
 
-    /// ↑ / Return: saves only once there's a comment (or the intent needs none, as Approve), so the
+    /// ↑: saves only once there's a comment (or the intent needs none, as Approve), so the
     /// button and key agree with `chrome`.
     func submitDraft() {
         guard case .composing(canSubmit: true) = chrome else { return }
         saveDraft()
     }
 
-    /// ×: a new pin is dropped, a reopened one is deleted.
+    /// Delete (the intent menu's last item): a new pin is dropped, a reopened one is deleted.
     func discardDraft() {
         guard let current = draft else { return }
         if !current.isNew { removeAnnotation(id: current.annotation.id) }
@@ -572,7 +584,7 @@ final class AnnotateController {
         draft = Draft(
             annotation: pin,
             isNew: false,
-            strokes: pin.sketchInScreenPoints,
+            history: StrokeHistory(opening: pin.sketchInScreenPoints),
             images: (attachmentImages[id] ?? []).map { AttachedImage(id: UUID(), image: $0) }
         )
     }
@@ -593,13 +605,20 @@ final class AnnotateController {
         }
     }
 
+    /// With a pin open: the last stroke since it opened (the composer's undo button). Otherwise
+    /// ⌘Z removes the newest pin on this screen.
     func undo() {
-        if let strokes = draft?.strokes, !strokes.isEmpty {
-            draft?.strokes.removeLast()
-        } else if draft == nil, let last = visibleAnnotations.last {
+        if draft != nil {
+            draft?.history.undo()
+        } else if let last = visibleAnnotations.last {
             removeAnnotation(id: last.id)
             showToast("Removed pin \(last.index)")
         }
+    }
+
+    /// Puts back the last stroke undone on the open pin.
+    func redo() {
+        draft?.history.redo()
     }
 
     // MARK: Results
@@ -757,6 +776,8 @@ final class AnnotateController {
         deliveryTask = nil
         deliveryHold?.cancel()
         deliveryHold = nil
+        tickFeedback.prepare()
+        noticeFeedback.prepare()
         // Set before the write so the pill answers the tap immediately (Figma 9265:14691)
         delivery = .sent(count: outgoing.count)
         deliveryStartedAt = Date()
@@ -787,6 +808,18 @@ final class AnnotateController {
             }
             self.trackDelivery(id: job.sessionID, in: job.outputDirectory)
         }
+    }
+
+    private func playHaptic(_ haptic: DeliveryHaptic) {
+        switch haptic {
+        case .tick: tickFeedback.impactOccurred()
+        case .success: noticeFeedback.notificationOccurred(.success)
+        case .warning: noticeFeedback.notificationOccurred(.warning)
+        case .error: noticeFeedback.notificationOccurred(.error)
+        }
+        // Stay ready for the next stage
+        tickFeedback.prepare()
+        noticeFeedback.prepare()
     }
 
     // MARK: Chrome

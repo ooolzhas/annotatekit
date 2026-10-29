@@ -159,6 +159,7 @@ final class OverlayHostingController: UIHostingController<OverlayRoot> {
             UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: #selector(narrowSelection)),
             UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(escape)),
             UIKeyCommand(input: "z", modifierFlags: .command, action: #selector(undo)),
+            UIKeyCommand(input: "z", modifierFlags: [.command, .shift], action: #selector(redo)),
             UIKeyCommand(input: "\r", modifierFlags: .command, action: #selector(send))
         ]
         // Arrow keys and ⌘Z would otherwise go to a focused text field first
@@ -170,6 +171,7 @@ final class OverlayHostingController: UIHostingController<OverlayRoot> {
     @objc private func narrowSelection() { controller.adjustSelection(expand: false) }
     @objc private func escape() { controller.escape() }
     @objc private func undo() { controller.undo() }
+    @objc private func redo() { controller.redo() }
     @objc private func send() { controller.send(keepAnnotating: false) }
 
     // MARK: Status bar — defer to the app so the overlay window doesn't restyle it

@@ -1,10 +1,12 @@
 // The comment card for the open pin (Figma 9272:16847 empty · 9272:16929 typed · 9272:17011 with
 // attachments): an optional strip of 64pt reference-image thumbnails with white remove badges,
-// the comment field, and the paperclip / intent chip / × / ↑ row. The intent chip (no Figma
-// frame) picks what the user wants done with the pin (Fix, Question, Approve, Move) and the
-// placeholder follows it. It only lays itself out at the width it is given; OverlayRoot docks it
-// to the keyboard and adds the 8pt inset. Return and ↑ save through the controller, which decides
-// via `chrome` whether the comment can be submitted (Approve may be saved with no text).
+// the comment field, and the paperclip / intent chip / undo / redo / ↑ row. The intent chip (no
+// Figma frame) picks what the user wants done with the pin (Fix, Question, Approve, Move) and the
+// placeholder follows it; its last item deletes the pin. Undo and redo step through the strokes
+// drawn since the card opened (StrokeHistory) and dim at either end. It only lays itself out at the width it is given; OverlayRoot docks it
+// to the keyboard and adds the 8pt inset. ↑ saves through the controller, which decides via
+// `chrome` whether the comment can be submitted (Approve may be saved with no text); Return types a
+// newline. A new drawing opens the card without the keyboard so the next stroke has the screen.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -35,17 +37,6 @@ struct ComposerCard: View {
                 // Caps growth so the card doesn't climb over the drawing area (gap: Figma shows one line)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
-                .submitLabel(.return)
-                // iOS 26 delivers Return in a vertical field as a submit (no newline, keyboard
-                // dismissed); earlier versions insert "\n", which `commentBinding` handles
-                .onSubmit {
-                    if case .composing(canSubmit: true) = controller.chrome {
-                        controller.submitDraft()
-                    } else {
-                        // Nothing to save yet: keep the keyboard up so the card stays docked
-                        isFocused = true
-                    }
-                }
                 .focused($isFocused)
                 .accessibilityLabel("Comment")
                 // The drawn placeholder is hidden from VoiceOver; announce it as the hint instead
@@ -65,7 +56,7 @@ struct ComposerCard: View {
         // to the frozen screen and starts a new pin. A tap on the card focuses the comment instead.
         .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .onTapGesture { isFocused = true }
-        .onAppear { isFocused = true }
+        .onAppear { isFocused = !opensWithoutKeyboard }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             pickerItems = []
@@ -88,6 +79,12 @@ struct ComposerCard: View {
 
     // MARK: - Text
 
+    /// A drawing in progress: more strokes usually follow, and the keyboard would cover the lower
+    /// half of the screen. A tap on the card brings it up.
+    private var opensWithoutKeyboard: Bool {
+        draft.isNew && draft.annotation.kind == .sketch
+    }
+
     /// The pin's intent; drafts from before intents existed have none, which means Fix.
     private var intent: AnnotationIntent {
         draft.annotation.intent ?? .fix
@@ -107,24 +104,13 @@ struct ComposerCard: View {
         }
     }
 
-    /// Before iOS 26 a vertical-axis TextField inserts a newline on Return instead of firing
-    /// onSubmit. A Return keypress is the old text plus exactly one "\n" at the caret (anywhere, not
-    /// only the end): that submits the old text. Any other newline (pasted multi-line text) becomes
-    /// a space and is kept.
+    /// Newlines are kept (the prompt renders a multi-line comment line by line). Writes are tagged
+    /// with the draft they were typed into, so text arriving late can't land on another pin.
     private var commentBinding: Binding<String> {
         Binding(
             get: { controller.commentText },
             set: { [controller, id = draft.annotation.id] text in
-                let old = controller.commentText
-                let isReturn = text.count == old.count + 1
-                    && text.replacingOccurrences(of: "\n", with: "") == old
-                if isReturn {
-                    controller.setComment(old, forDraft: id)
-                    controller.submitDraft()
-                } else {
-                    let flattened = text.replacingOccurrences(of: "\n", with: " ")
-                    controller.setComment(flattened, forDraft: id)
-                }
+                controller.setComment(text, forDraft: id)
             }
         )
     }
@@ -158,13 +144,21 @@ struct ComposerCard: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 6) {
-                // 9257:13397/13398
-                CircleIconButton(systemName: "xmark") { controller.discardDraft() }
+                // No Figma: undo / redo replace Figma's × (9257:13397/13398, owner request); deleting
+                // the pin moved to the intent menu
+                historyButton("arrow.uturn.backward", isEnabled: draft.history.canUndo) { controller.undo() }
+                historyButton("arrow.uturn.forward", isEnabled: draft.history.canRedo) { controller.redo() }
                 submitButton
             }
         }
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
+    }
+
+    /// Dimmed and inert at either end of the history, like ↑ without a comment.
+    private func historyButton(_ systemName: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        CircleIconButton(systemName: systemName, style: isEnabled ? .plain : .dimmed, action: action)
+            .disabled(!isEnabled)
     }
 
     /// No Figma: derived chip. Same 44pt height and 5% fill as `CircleIcon` `.plain`, stretched to
@@ -187,6 +181,12 @@ struct ComposerCard: View {
                         Image(systemName: option.symbol)
                     }
                 }
+            }
+            Divider()
+            Button(role: .destructive) {
+                controller.discardDraft()
+            } label: {
+                Label(draft.isNew ? "Discard" : "Delete pin", systemImage: "trash")
             }
         } label: {
             HStack(spacing: 4) {

@@ -41,6 +41,14 @@ All notable changes to this project are documented here. The format is based on
 - The annotated screenshot and crops keep their blue and red markers for contrast. Their strokes are
   now 4pt, and a crop covers the pin's drawing as well as its frame.
 
+- Comment card: undo and redo buttons replace ×. They step through the strokes drawn since the card
+  opened and dim at either end; `⇧⌘Z` redoes. Deleting the open pin moved to the intent menu.
+  `Return` now types a newline in the comment and reply fields (↑ saves or sends), and a new drawing
+  opens its card without the keyboard so the next stroke has the whole screen.
+- The hint line's elapsed counter is dimmed to 50%, and every delivery stage change plays a haptic:
+  a light tick while the Send moves along, success when it's done, a warning for a question or when
+  nobody picked it up, an error when it failed.
+
 ### Added
 - **Agent loop** (ideas from Agentation):
   - **`annotation_wait` MCP tool:** blocks until you Send or answer a question, batches for 10 s and

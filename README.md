@@ -127,11 +127,12 @@ Tools:
 | Enter annotate mode (freezes the screen) | Pencil button, `Annotate.start()`, or launch with `ANNOTATE=1` (waits for the first settled screen; `ANNOTATE_DELAY=<seconds>` for a fixed wait) |
 | Pin anything | Tap. It snaps to the element under your finger, or pins the exact spot when nothing distinct is there |
 | Walk spot → element → containers | `↑` / `↓` before saving |
-| Comment and save | Type, then `Return` |
+| Comment and save | Type, then ↑ (`Return` types a newline) |
+| Delete the open pin | Intent chip → *Delete* |
 | Retype a label in place | Text-cursor button on the card |
 | Region with a sketch inside | Drag, then draw with pen / ellipse / rectangle / arrow |
 | Draw anywhere on the screen | Scribble button in the toolbar. The drawing becomes one pin, attributed to the view under it |
-| Undo stroke (or last pin) | `⌘Z` or the undo button |
+| Undo / redo a stroke | The card's undo and redo buttons, or `⌘Z` / `⇧⌘Z`. `⌘Z` with no pin open removes the last pin |
 | Back out | `Esc` |
 | Send | **Send** or `⌘Return`. The chevron menu has *Send and keep annotating* and *Clear all* |
 

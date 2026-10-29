@@ -82,6 +82,8 @@ struct CircleIconButton: View {
         case "trash": "Clear all"
         case "arrow.up": "Save comment"
         case "paperclip": "Attach image"
+        case "arrow.uturn.backward": "Undo stroke"
+        case "arrow.uturn.forward": "Redo stroke"
         default: systemName
         }
     }
@@ -263,6 +265,8 @@ struct ReviewHintLine: View {
     static let changeAnimation: Animation = .snappy(duration: 0.25)
     /// The elapsed counts whole seconds ("1s", "2s", 9273:18007 / 18102), so it ticks once a second.
     static let tickInterval: TimeInterval = 1
+    /// The elapsed sits at half the message's strength (owner request; Figma draws it full white).
+    static let elapsedOpacity: Double = 0.5
 
     var body: some View {
         if let onTap {
@@ -312,6 +316,8 @@ struct ReviewHintLine: View {
                 Text(elapsed)
                     .monospacedDigit()
                     .modifier(HintTextStyle())
+                    // No Figma: the owner dimmed the counter so the message reads first
+                    .opacity(Self.elapsedOpacity)
                     // A long agent message truncates first; the elapsed always shows in full
                     .layoutPriority(1)
             }

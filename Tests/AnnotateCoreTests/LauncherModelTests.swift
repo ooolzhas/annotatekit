@@ -1,5 +1,5 @@
 // LauncherModel: whether the launcher pill is idle or narrating the last Send, which delivery
-// stages are final, and the rules behind the pill's one-line title.
+// stages are final, which haptic each stage plays, and the rules behind the pill's one-line title.
 
 import Foundation
 import Testing
@@ -132,5 +132,33 @@ import Testing
     func holdOrdering() {
         #expect(LauncherStatus.unclaimedHold > 0)
         #expect(LauncherStatus.finalHold > LauncherStatus.unclaimedHold)
+    }
+
+    // MARK: DeliveryStage.haptic
+
+    @Test("progress ticks; done succeeds; needing the user warns; failure errors",
+          arguments: [
+              (DeliveryStage.sent(count: 1), DeliveryHaptic.tick),
+              (.delivered, .tick),
+              (.received, .tick),
+              (.working(message: "x"), .tick),
+              (.done(message: nil), .success),
+              (.question(pin: 2), .warning),
+              (.unclaimed, .warning),
+              (.noAgent, .warning),
+              (.failed(message: nil), .error),
+              (.notSaved, .error)
+          ])
+    func haptic(stage: DeliveryStage, expected: DeliveryHaptic) {
+        #expect(stage.haptic == expected)
+    }
+
+    @Test("every final stage plays a notification, never a bare tick")
+    func finalStagesNotify() {
+        let finals: [DeliveryStage] = [.done(message: nil), .failed(message: "x"), .notSaved, .noAgent]
+        for stage in finals {
+            #expect(stage.isFinal)
+            #expect(stage.haptic != .tick)
+        }
     }
 }

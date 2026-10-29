@@ -42,6 +42,23 @@ public enum DeliveryStage: Equatable, Sendable {
         case .sent, .unclaimed, .delivered, .received, .working, .question: false
         }
     }
+
+    /// What the device plays when the Send reaches this stage: a light tick while it moves along,
+    /// success when the agent is done, a warning when it needs the user (a question, nobody picked it
+    /// up), an error when it failed.
+    public var haptic: DeliveryHaptic {
+        switch self {
+        case .sent, .delivered, .received, .working: .tick
+        case .done: .success
+        case .question, .unclaimed, .noAgent: .warning
+        case .failed, .notSaved: .error
+        }
+    }
+}
+
+/// The feedback a delivery stage change plays; AnnotateKit maps it onto UIKit's generators.
+public enum DeliveryHaptic: Equatable, Sendable {
+    case tick, success, warning, error
 }
 
 public enum LauncherStatus: Equatable, Sendable {

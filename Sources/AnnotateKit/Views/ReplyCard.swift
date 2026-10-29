@@ -2,8 +2,8 @@
 // header, the question, the reply field, and the × / ↑ row. No Figma: derived from ComposerCard's
 // layout (glass radius 32, 20pt text insets, 44pt circle buttons) so both keyboard-docked cards
 // read as one family. It only lays itself out at the width it is given; OverlayRoot docks it to
-// the keyboard and adds the 8pt inset. Return and ↑ send through the controller, which decides via
-// `chrome` whether the reply can be submitted.
+// the keyboard and adds the 8pt inset. ↑ sends through the controller, which decides via `chrome`
+// whether the reply can be submitted; Return types a newline.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -39,17 +39,7 @@ struct ReplyCard: View {
                 // Same growth cap as the comment field, so the card doesn't climb over the screen
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
-                .submitLabel(.send)
-                // iOS 26 delivers Return in a vertical field as a submit; earlier versions insert
-                // "\n", which `replyBinding` handles
-                .onSubmit {
-                    if canSubmit {
-                        controller.submitReply()
-                    } else {
-                        // Nothing to send yet: keep the keyboard up so the card stays docked
-                        isFocused = true
-                    }
-                }
+                // Return types a newline; ↑ sends
                 .focused($isFocused)
                 .accessibilityLabel("Reply")
                 // The drawn placeholder is hidden from VoiceOver; announce it as the hint instead
@@ -111,22 +101,11 @@ struct ReplyCard: View {
         }
     }
 
-    /// Before iOS 26 a vertical-axis TextField inserts a newline on Return instead of firing
-    /// onSubmit. A Return keypress is the old text plus exactly one "\n": that submits the old
-    /// text. Any other newline (pasted multi-line text) becomes a space and is kept.
+    /// Newlines are kept: a reply can run over several lines.
     private var replyBinding: Binding<String> {
         Binding(
             get: { controller.replyDraft?.text ?? "" },
-            set: { [controller] text in
-                let old = controller.replyDraft?.text ?? ""
-                let isReturn = text.count == old.count + 1
-                    && text.replacingOccurrences(of: "\n", with: "") == old
-                if isReturn {
-                    controller.submitReply()
-                } else {
-                    controller.setReplyText(text.replacingOccurrences(of: "\n", with: " "))
-                }
-            }
+            set: { [controller] text in controller.setReplyText(text) }
         )
     }
 
