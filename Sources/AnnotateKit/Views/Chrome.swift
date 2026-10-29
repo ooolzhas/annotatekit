@@ -8,8 +8,8 @@
 // whether an agent is connected, and narrates a Send with the seconds since it started
 // (9273:18004 / 18099 / 18194); its copy and dot come from `ReviewHint` in AnnotateCore. It is a label,
 // never a button (the notes sheet lists the results); its dot turns orange (`ReviewHint.Dot.attention`)
-// when the agent asked about a pin. Also owns the launcher pill (9265:14439 / 9265:14691): a solid capsule
-// docked above the home indicator whose title narrates the last Send ("Annotate", "4 notes
+// when the agent asked about a pin. Also owns the launcher pill (9265:14439 / 9265:14691): a Liquid Glass capsule
+// docked above the home indicator (Liquid Glass, owner request) whose title narrates the last Send ("Annotate", "4 notes
 // sent", …) so delivery progress needs no separate toast or ring, with a connection dot showing
 // whether an agent is listening. The toast below predates the redesign and now only carries
 // in-mode messages.
@@ -451,9 +451,12 @@ struct ReviewHintLine: View {
     static let shadowOpacity: Double = 0.25
     static let shadowRadius: CGFloat = 2
     static let shadowY: CGFloat = 2
-    /// Not in Figma (no motion context): the line crossfades when the hint changes, e.g. when the
-    /// connection news yields to the gestures hint.
-    static let changeAnimation: Animation = .snappy(duration: 0.25)
+    /// Not in Figma (owner request): a new line rises in from below, blurred and faded, while the old
+    /// one leaves upward the same way, e.g. when the gestures hint yields to "Claude connected".
+    static let changeAnimation: Animation = .smooth(duration: 0.45)
+    /// How far the swapping lines travel, and how blurred they start and end.
+    static let swapOffset: CGFloat = 8
+    static let swapBlur: CGFloat = 4
     /// The elapsed counts whole seconds ("1s", "2s", 9273:18007 / 18102), so it ticks once a second.
     static let tickInterval: TimeInterval = 1
     /// Not in Figma: the digit roll on each tick, well inside the second between ticks.
@@ -461,8 +464,9 @@ struct ReviewHintLine: View {
     /// Not in Figma (owner request): the status dot pulses, fading to this and back; a shallow,
     /// slow breath so it reads as alive rather than alarming. Reduce Motion keeps it solid.
     static let dotBlinkFloor: Double = 0.4
-    /// One fade of the pulse (bright → faint or back): a 2.8 s breath.
-    static let dotBlinkHalfPeriod: Double = 1.4
+    /// One fade of the pulse (bright → faint or back): a 2 s breath, between the first 1.2 s blink and
+    /// the 2.8 s one that felt too slow.
+    static let dotBlinkHalfPeriod: Double = 1.0
     /// The detail and the elapsed sit at half the headline's strength (Figma 9276:27749 / 9276:28049
     /// `opacity-50`).
     static let secondaryOpacity: Double = 0.5
@@ -474,18 +478,25 @@ struct ReviewHintLine: View {
     }
 
     private var line: some View {
-        Group {
-            if hint.showsElapsed, let startedAt {
-                // The timeline lives only in this branch, so an idle hint line never ticks. Anchored
-                // to the Send, so ticks land on whole seconds after it and re-renders don't restart it
-                TimelineView(.periodic(from: startedAt, by: Self.tickInterval)) { context in
-                    row(elapsed: ReviewHint.elapsedText(Int(context.date.timeIntervalSince(startedAt))))
+        // A ZStack so the outgoing and incoming lines overlap while they swap
+        ZStack {
+            Group {
+                if hint.showsElapsed, let startedAt {
+                    // The timeline lives only in this branch, so an idle hint line never ticks. Anchored
+                    // to the Send, so ticks land on whole seconds after it and re-renders don't restart it
+                    TimelineView(.periodic(from: startedAt, by: Self.tickInterval)) { context in
+                        row(elapsed: ReviewHint.elapsedText(Int(context.date.timeIntervalSince(startedAt))))
+                    }
+                } else {
+                    row(elapsed: nil)
                 }
-            } else {
-                row(elapsed: nil)
             }
+            // A new headline is a new line and swaps in; the detail ("1/4") and the counter update
+            // in place inside it
+            .id(hint.headline)
+            .transition(reduceMotion ? AnyTransition.opacity : AnyTransition(HintSwap()))
         }
-        .animation(Self.changeAnimation, value: hint)
+        .animation(Self.changeAnimation, value: hint.headline)
         // VoiceOver reads the text and the elapsed as one element, e.g. "Delivered to Claude, 1s"
         .accessibilityElement(children: .combine)
     }
@@ -560,9 +571,21 @@ struct ReviewHintLine: View {
     }
 }
 
+/// The hint line's swap: the incoming line rises from `swapOffset` below, the outgoing one leaves
+/// upward, both blurred and faded at the far end.
+private struct HintSwap: Transition {
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        content
+            .opacity(phase.isIdentity ? 1 : 0)
+            .blur(radius: phase.isIdentity ? 0 : ReviewHintLine.swapBlur)
+            .offset(y: phase == .willAppear ? ReviewHintLine.swapOffset
+                    : phase == .didDisappear ? -ReviewHintLine.swapOffset : 0)
+    }
+}
+
 // MARK: - Launcher
 
-/// The launcher pill (9265:14504): a solid capsule whose title is `controller.launcherStatus.title`,
+/// The launcher pill (9265:14504): a Liquid Glass capsule whose title is `controller.launcherStatus.title`,
 /// so it reads "Annotate" when idle (9265:14439) and narrates the last Send afterwards
 /// (9265:14691 and the gap stages). The view never inspects the status itself; every case's copy
 /// lives on `LauncherStatus` in AnnotateCore, so the wording stays testable on Linux.
@@ -586,14 +609,11 @@ struct LauncherButton: View {
     /// pill visibly grows into "4 notes sent" instead of jumping.
     static let statusAnimation: Animation = .snappy(duration: 0.25)
 
-    /// Figma is black on white in light mode. Dark mode has no frame, so the pair inverts through
-    /// semantic colors: a fixed black pill would vanish into dark app UI.
-    private static let fill = Color(uiColor: .label)
-    private static let text = Color(uiColor: .systemBackground)
     /// Connection dot (no Figma frame): solid green when a Send starts an agent by itself, a ring
-    /// when one is connected but only reads when asked, absent when nothing listens.
+    /// when one is connected but only reads when asked, absent when nothing listens. 8pt from the
+    /// title (owner request, 2pt more than before).
     static let dotSize: CGFloat = 7
-    static let dotSpacing: CGFloat = 6
+    static let dotSpacing: CGFloat = 8
 
     var body: some View {
         let status = controller.launcherStatus
@@ -603,19 +623,21 @@ struct LauncherButton: View {
 
         HStack(spacing: Self.dotSpacing) {
             if let agent {
-                ConnectionDot(mode: agent.mode, ringColor: Self.text)
+                ConnectionDot(mode: agent.mode, ringColor: .primary)
                     .transition(.scale.combined(with: .opacity))
             }
             Text(status.title)
                 .font(.system(size: Self.titleSize, weight: .medium))
-                .foregroundStyle(Self.text)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
             .padding(.horizontal, Self.horizontalPadding)
             // The 44pt Figma height wins over its py-8 (22 + 16 = 38)
             .frame(height: AnnotateController.launcherHeight)
-            .background(Self.fill, in: Capsule())
+            // Liquid Glass (owner request) in place of Figma's solid black capsule: it reads over any
+            // app screen in light and dark, and presses like the overlay's other glass
+            .annotateGlass(in: Capsule(), interactive: true)
             .animation(Self.statusAnimation, value: status)
             .animation(Self.statusAnimation, value: agent?.mode)
             // The controller's hit frame (OverlayWindow hit-tests it) must match the rendered width,
