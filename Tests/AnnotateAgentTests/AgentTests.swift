@@ -166,7 +166,10 @@ enum AgentFixtures {
 
         await server.handle(AgentFixtures.json(["jsonrpc": "2.0", "id": 2, "method": "tools/list"]))
         let tools = try #require((sink.messages.last?["result"] as? [String: Any])?["tools"] as? [[String: Any]])
-        #expect(tools.compactMap { $0["name"] as? String } == ["get_annotation_session", "annotation_status", "list_annotation_sessions"])
+        #expect(tools.compactMap { $0["name"] as? String } == [
+            "get_annotation_session", "annotation_status", "list_annotation_sessions",
+            "annotation_wait", "annotation_resolve", "annotation_dismiss", "annotation_ask"
+        ])
     }
 
     @Test func pushesEachNewSessionOnceAfterInitialization() async throws {

@@ -1,5 +1,5 @@
 // Pure state model for the floating launcher pill
-// (Figma PVX9n74hzo5BWauvymG141, frames 9265:14439 and 9265:14691).
+// (Figma frames 9265:14439 and 9265:14691).
 // `LauncherStatus` decides whether the pill is idle or narrating the last Send, and owns the one-line
 // title it carries; `DeliveryStage` is where that Send has got to. The pill replaces the old delivery
 // ring and toasts, so every delivery message lives here as the pill's title. The controller and the
@@ -19,6 +19,9 @@ public enum DeliveryStage: Equatable, Sendable {
     /// Figma 9273:18115 shows one ("Changes applied, reinstalling"): the agent is working; the message
     /// comes from its `status.json`.
     case working(message: String?)
+    /// No Figma frame; the agent asked about one pin (annotation_ask / annotate ask). Not final: the
+    /// Send is still open while the question waits for a reply.
+    case question(pin: Int)
     /// No Figma frame: the agent finished; the message comes from its `status.json`.
     case done(message: String?)
     /// No Figma frame: the agent gave up; the message comes from its `status.json`.
@@ -36,9 +39,26 @@ public enum DeliveryStage: Equatable, Sendable {
     public var isFinal: Bool {
         switch self {
         case .done, .failed, .notSaved, .noAgent: true
-        case .sent, .unclaimed, .delivered, .received, .working: false
+        case .sent, .unclaimed, .delivered, .received, .working, .question: false
         }
     }
+
+    /// What the device plays when the Send reaches this stage: a light tick while it moves along,
+    /// success when the agent is done, a warning when it needs the user (a question, nobody picked it
+    /// up), an error when it failed.
+    public var haptic: DeliveryHaptic {
+        switch self {
+        case .sent, .delivered, .received, .working: .tick
+        case .done: .success
+        case .question, .unclaimed, .noAgent: .warning
+        case .failed, .notSaved: .error
+        }
+    }
+}
+
+/// The feedback a delivery stage change plays; AnnotateKit maps it onto UIKit's generators.
+public enum DeliveryHaptic: Equatable, Sendable {
+    case tick, success, warning, error
 }
 
 public enum LauncherStatus: Equatable, Sendable {
@@ -107,6 +127,9 @@ public enum LauncherStatus: Equatable, Sendable {
                 "Claude looking at it"
             case .working(let message):
                 Self.cleaned(message) ?? "Claude is working"
+            case .question(let pin):
+                // No Figma frame; the agent asked about one pin (annotation_ask / annotate ask)
+                "Question on note \(pin)"
             case .done(let message):
                 Self.cleaned(message).map { "Done · \($0)" } ?? "Done"
             case .failed(let message):

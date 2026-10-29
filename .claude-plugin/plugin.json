@@ -1,13 +1,13 @@
 {
   "name": "annotate",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Cursor-style visual annotation for iOS apps: tap, draw and comment on your running app in the Simulator, hit Send, and Claude gets the screenshots, exact coordinates and your notes, then reports progress back to the device.",
   "author": {
     "name": "Olzhas Beisenbayev",
     "url": "https://github.com/ooolzhas"
   },
-  "homepage": "https://github.com/ooolzhas/annotate-ios",
-  "repository": "https://github.com/ooolzhas/annotate-ios",
+  "homepage": "https://annotatekit.com",
+  "repository": "https://github.com/ooolzhas/annotatekit",
   "license": "MIT",
   "keywords": ["ios", "swiftui", "simulator", "annotation", "visual-feedback", "design", "screenshot", "mcp", "channels"],
   "mcpServers": {

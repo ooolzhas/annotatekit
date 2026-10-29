@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Launcher for the `annotate` CLI, used by the Claude Code plugin (as its MCP server command and on
-# the Bash tool's PATH via bin/). Resolves a real binary, then execs it with the same arguments:
+# the Bash tool's PATH via bin/) and by the npm package `annotate-ios` (`npx -y annotate-ios mcp`).
+# Resolves a real binary, then execs it with the same arguments:
 #   1. an `annotate` already installed on PATH (Homebrew, Mint) other than this script
 #   2. a cached copy for this version in the plugin's data folder
 #   3. the universal macOS binary from this version's GitHub Release, checksum-verified
@@ -8,10 +9,20 @@
 # All diagnostics go to stderr: stdout belongs to the MCP protocol.
 set -euo pipefail
 
-VERSION="0.1.1"
-REPO="ooolzhas/annotate-ios"
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-SELF="$ROOT/bin/annotate"
+VERSION="0.2.0"
+REPO="ooolzhas/annotatekit"
+# Physical path with every symlink followed: npm links this script into node_modules/.bin, which
+# is on PATH under npx, and comparing unresolved paths would find this script and exec it forever
+resolve() {
+  local path="$1" target
+  while [[ -L "$path" ]]; do
+    target="$(readlink "$path")"
+    [[ "$target" == /* ]] && path="$target" || path="$(dirname "$path")/$target"
+  done
+  echo "$(cd "$(dirname "$path")" && pwd -P)/$(basename "$path")"
+}
+SELF="$(resolve "${BASH_SOURCE[0]}")"
+ROOT="$(dirname "$(dirname "$SELF")")"
 DATA="${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cache}/annotate}"
 CACHED="$DATA/$VERSION/annotate"
 
@@ -24,7 +35,7 @@ fi
 
 # 1. Installed elsewhere on PATH
 while IFS= read -r candidate; do
-  [[ "$(cd "$(dirname "$candidate")" && pwd -P)/$(basename "$candidate")" == "$SELF" ]] && continue
+  [[ "$(resolve "$candidate")" == "$SELF" ]] && continue
   exec "$candidate" "$@"
 done < <(type -ap annotate 2>/dev/null || true)
 
@@ -51,12 +62,12 @@ if [[ "$(uname -s)" == "Darwin" ]] && command -v curl >/dev/null; then
     fi
     log "checksum mismatch for $ARCHIVE; not using it"
   else
-    log "no release binary for v$VERSION; building from source"
+    log "no release binary for v$VERSION"
   fi
 fi
 
-# 4. Source build
-if ! command -v swift >/dev/null; then
+# 4. Source build (a checkout or the plugin; the npm package ships no sources)
+if [[ ! -f "$ROOT/Package.swift" ]] || ! command -v swift >/dev/null; then
   log "can't find a release binary or a Swift toolchain. Install with: brew install ooolzhas/tap/annotate"
   exit 1
 fi

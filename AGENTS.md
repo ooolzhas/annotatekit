@@ -32,7 +32,9 @@ No Mac: `docker run --rm -v "$PWD":/pkg -w /pkg swift:6.2-noble swift test`.
 - `Sources/AnnotateAgent`: `SessionFeed` (discovery and claims), `ChannelServer` (MCP),
   `HeadlessRunner`, `Command`, `AgentRuntime` (heartbeats, hub lease), `DeviceMirror` (copies Sends
   off paired devices through `DeviceBridge`; `DeviceCtlBridge` is the macOS `devicectl` transport)
-  and `AgentIdentity`. `Sources/AnnotateCLI` is just `main`.
+  and `AgentIdentity`. `Sources/AnnotateCLI` is just `main`. Per-pin results and replies:
+  `PinStatus` / `PinReply` (SessionWriter.swift), `PinOutcome` / `PinResult` (PinOutcome.swift). Every
+  file on disk is documented in `SCHEMA.md`; keep it in step with schema changes.
 - `skills/`: Agent Skills, also loaded by the Claude Code plugin. `.claude-plugin/` holds the
   plugin and marketplace manifests. `bin/annotate` is the plugin's launcher script.
 

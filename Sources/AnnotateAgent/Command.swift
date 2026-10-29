@@ -1,10 +1,17 @@
 // Argument parsing and dispatch for the `annotate` executable (kept here, not in the executable
 // target, so it's unit-testable). Commands:
 //   annotate mcp                     channel MCP server for Claude Code (stdio)
-//   annotate watch [--once]          one line per new session on stdout, for a Monitor / background watcher
+//   annotate watch [--once]          one line per new session and per user reply on stdout, for a Monitor /
+//                                    background watcher
 //   annotate run [--fresh] [--permission-mode M] [-- <claude args>]   headless claude -p per session
 //   annotate status <id|latest> <working|done|failed> [message…]
+//   annotate resolve <id|latest> <pin> [summary…]     per-pin result, shown on the device
+//   annotate dismiss <id|latest> <pin> [reason…]
+//   annotate ask <id|latest> <pin> <question…> [--wait <seconds>]   blocks for the user's reply
+//                                    (stdout, exit 0) or times out (exit 3)
 //   annotate list
+// resolve / dismiss / ask are the CLI counterparts of the MCP per-pin tools, so an agent driven by
+// `annotate watch` (no MCP) can report pins and ask questions too.
 // Every command takes --dir <path>; default is .annotate at the project root above the cwd.
 // mcp, watch and run also keep a heartbeat (the app's connection dot) and copy Sends from paired
 // devices (`DeviceMirror`); --no-device turns the device part off.
@@ -17,6 +24,9 @@ public enum Command: Equatable, Sendable {
     case watch(once: Bool)
     case run(fresh: Bool, permissionMode: String, claudeArguments: [String])
     case status(sessionID: String, state: SessionStatus.State, message: String?)
+    case resolve(sessionID: String, pin: Int, summary: String?)
+    case dismiss(sessionID: String, pin: Int, reason: String?)
+    case ask(sessionID: String, pin: Int, question: String, wait: Double)
     case list
     case help
 
@@ -33,11 +43,19 @@ public enum Command: Equatable, Sendable {
         USAGE
           annotate mcp                 MCP server: pushes each Send into your open Claude Code session
                                        (channels) and serves the session tools
-          annotate watch [--once]      print one line per new session (for a Monitor or background watcher)
+          annotate watch [--once]      print one line per new session and per reply from the user
+                                       (for a Monitor or background watcher)
           annotate run [--fresh] [--permission-mode acceptEdits] [-- <extra claude args>]
                                        run `claude -p` for every new session, unattended
           annotate status <id|latest> <working|done|failed> [message]
                                        report progress back to the app
+          annotate resolve <id|latest> <pin> [summary]
+                                       mark one pin done, with what changed
+          annotate dismiss <id|latest> <pin> [reason]
+                                       mark one pin as not done, with why
+          annotate ask <id|latest> <pin> <question> [--wait <seconds>]
+                                       ask the user about one pin and wait for the reply (default 120s);
+                                       prints it and exits 0, or exits 3 when none arrives in time
           annotate list                recent sessions and their status
 
         OPTIONS
@@ -50,6 +68,7 @@ public enum Command: Equatable, Sendable {
         case unknown(String)
         case invalidState(String)
         case missingArguments(String)
+        case invalidPin(String)
 
         public var description: String {
             switch self {
@@ -57,6 +76,7 @@ public enum Command: Equatable, Sendable {
             case .unknown(let token): "unknown argument \(token)"
             case .invalidState(let state): "state must be working, done or failed (got \(state))"
             case .missingArguments(let usage): "usage: \(usage)"
+            case .invalidPin(let pin): "pin must be a positive note number (got \(pin))"
             }
         }
     }
@@ -110,6 +130,16 @@ public enum Command: Equatable, Sendable {
             }
             let message = rest.count > 2 ? rest[2...].joined(separator: " ") : nil
             return Invocation(command: .status(sessionID: rest[0], state: state, message: message), directory: directory)
+        case "resolve", "dismiss":
+            guard rest.count >= 2 else { throw ParseError.missingArguments("annotate \(name) <id|latest> <pin> [\(name == "resolve" ? "summary" : "reason")]") }
+            let pin = try parsePin(rest[1])
+            let note = rest.count > 2 ? rest[2...].joined(separator: " ") : nil
+            let command: Command = name == "resolve"
+                ? .resolve(sessionID: rest[0], pin: pin, summary: note)
+                : .dismiss(sessionID: rest[0], pin: pin, reason: note)
+            return Invocation(command: command, directory: directory)
+        case "ask":
+            return Invocation(command: try parseAsk(rest), directory: directory)
         case "list":
             try expectEmpty(rest)
             return Invocation(command: .list, directory: directory)
@@ -122,6 +152,34 @@ public enum Command: Equatable, Sendable {
 
     private static func expectEmpty(_ rest: [String]) throws {
         if let extra = rest.first { throw ParseError.unknown(extra) }
+    }
+
+    /// How long `annotate ask` waits for the user's reply when --wait is absent (matches annotation_ask's default).
+    static let defaultAskWait: Double = 120
+
+    /// Pins are the 1-based note numbers the user sees on the device, so only positive integers name one.
+    private static func parsePin(_ token: String) throws -> Int {
+        guard let pin = Int(token), pin > 0 else { throw ParseError.invalidPin(token) }
+        return pin
+    }
+
+    /// `ask <id|latest> <pin> <question…> [--wait <seconds>]`; --wait may sit anywhere after `ask`.
+    private static func parseAsk(_ rest: [String]) throws -> Command {
+        var remaining = rest
+        var wait = defaultAskWait
+        if let flag = remaining.firstIndex(of: "--wait") {
+            guard flag + 1 < remaining.count, let seconds = Double(remaining[flag + 1]), seconds >= 0, seconds.isFinite else {
+                throw ParseError.missingValue("--wait")
+            }
+            wait = seconds
+            remaining.removeSubrange(flag...(flag + 1))
+        }
+        guard remaining.count >= 3 else {
+            throw ParseError.missingArguments("annotate ask <id|latest> <pin> <question> [--wait <seconds>]")
+        }
+        let pin = try parsePin(remaining[1])
+        let question = remaining[2...].joined(separator: " ")
+        return .ask(sessionID: remaining[0], pin: pin, question: question, wait: wait)
     }
 
     /// Runs a parsed invocation; returns the process exit code.
@@ -152,6 +210,13 @@ public enum Command: Equatable, Sendable {
             watching: while !Task.isCancelled {
                 for sessionID in feed.claimPending(as: .delivered) {
                     writeLine(watchLine(sessionID: sessionID, directory: feed.sessionDirectory(sessionID)))
+                    if once { break watching }
+                }
+                // Replies to `annotate ask` / annotation_ask questions that no blocking ask picked up.
+                // Consumed before printing so a second watcher (or the MCP server) can't repeat them.
+                for pending in feed.pendingReplies() {
+                    feed.consume(pending.reply, sessionID: pending.sessionID)
+                    writeLine(replyLine(sessionID: pending.sessionID, reply: pending.reply))
                     if once { break watching }
                 }
                 try? await Task.sleep(for: .milliseconds(500))
@@ -191,6 +256,15 @@ public enum Command: Equatable, Sendable {
                 return 1
             }
 
+        case .resolve(let requested, let pin, let summary):
+            return writePin(PinStatus(index: pin, state: .resolved, note: summary), requested: requested, feed: feed, output: output)
+
+        case .dismiss(let requested, let pin, let reason):
+            return writePin(PinStatus(index: pin, state: .dismissed, note: reason), requested: requested, feed: feed, output: output)
+
+        case .ask(let requested, let pin, let question, let wait):
+            return await ask(question, pin: pin, requested: requested, wait: wait, feed: feed, output: output)
+
         case .list:
             let ids = SessionInbox.sessionIDs(in: output).suffix(15).reversed()
             if ids.isEmpty { writeLine("No sessions in \(output.path)") }
@@ -200,6 +274,70 @@ public enum Command: Equatable, Sendable {
             }
             return 0
         }
+    }
+
+    /// Exit code `annotate ask` returns when no reply arrived in time — distinct from 1 (a real failure)
+    /// so a script can tell "ask again later" apart from "something broke".
+    static let askTimeoutExitCode: Int32 = 3
+
+    /// How often `annotate ask` re-reads replies.json; the app's write lands within a poll, and the
+    /// file is tiny, so 500ms is responsive without busy-looping (same cadence as `watch`).
+    static let askPollInterval: Duration = .milliseconds(500)
+
+    /// Upserts one pin's status in the resolved session; returns the exit code.
+    private static func writePin(_ status: PinStatus, requested: String, feed: SessionFeed, output: URL) -> Int32 {
+        guard let sessionID = feed.resolve(requested) else {
+            writeError("annotate: no sessions in \(output.path)")
+            return 1
+        }
+        do {
+            try SessionInbox.updatePin(status, id: sessionID, in: output)
+            return 0
+        } catch {
+            writeError("annotate: couldn't update pin \(status.index) of \(sessionID): \(error.localizedDescription)")
+            return 1
+        }
+    }
+
+    /// Marks the pin `.question`, then polls for the user's reply to it until `wait` elapses. The reply
+    /// goes to stdout (exit 0); a timeout leaves the question open, so the reply still reaches the agent
+    /// later through `annotate watch`.
+    private static func ask(
+        _ question: String,
+        pin: Int,
+        requested: String,
+        wait: Double,
+        feed: SessionFeed,
+        output: URL
+    ) async -> Int32 {
+        guard let sessionID = feed.resolve(requested) else {
+            writeError("annotate: no sessions in \(output.path)")
+            return 1
+        }
+        do {
+            try SessionInbox.updatePin(PinStatus(index: pin, state: .question, note: question), id: sessionID, in: output)
+        } catch {
+            writeError("annotate: couldn't ask about pin \(pin) of \(sessionID): \(error.localizedDescription)")
+            return 1
+        }
+        let deadline = Date().addingTimeInterval(wait)
+        while !Task.isCancelled {
+            if let reply = SessionInbox.unansweredReplies(id: sessionID, in: output).first(where: { $0.index == pin }) {
+                do {
+                    try SessionInbox.markAnswered(reply, id: sessionID, in: output)
+                } catch {
+                    // The reply is still printed: the agent has it. Without the mark a watcher may repeat it.
+                    writeError("annotate: couldn't mark pin \(pin) of \(sessionID) answered: \(error.localizedDescription)")
+                }
+                writeLine(reply.text)
+                return 0
+            }
+            if Date() >= deadline { break }
+            try? await Task.sleep(for: askPollInterval)
+        }
+        writeError("annotate: no answer to pin \(pin) of \(sessionID) after \(Int(wait))s; "
+            + "it will arrive through `annotate watch`")
+        return askTimeoutExitCode
     }
 
     /// Heartbeat for a long-lived command, plus the device mirror where devicectl exists.
@@ -231,6 +369,12 @@ public enum Command: Equatable, Sendable {
     public static func watchLine(sessionID: String, directory: URL) -> String {
         "annotation session \(sessionID) ready: read \(directory.path)/prompt.md and its images, make the changes, "
             + "then run `annotate status \(sessionID) done \"<one-line summary>\"`"
+    }
+
+    /// The line a watcher prints for a user's reply to a pin question; tells the agent where to pick up.
+    public static func replyLine(sessionID: String, reply: PinReply) -> String {
+        "reply on pin \(reply.index) of session \(sessionID): \"\(reply.text)\" — continue that session, "
+            + "then `annotate resolve|dismiss \(sessionID) \(reply.index) …`"
     }
 
     static func writeLine(_ text: String) {

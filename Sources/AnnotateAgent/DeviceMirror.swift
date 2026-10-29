@@ -3,6 +3,9 @@
 // over the developer connection (USB or Wi-Fi, via `DeviceBridge`) into this project's
 // `.annotate/sessions/`. From there every consumer picks it up exactly like a Simulator bundle.
 // Status and presence go the other way, into the container, where the app already polls for them.
+// Replies come back: while the agent has a question open on a mirrored session, the user's answers
+// (`replies.json`, written by the app in its container) are pulled into the Mac's session folder,
+// and the session stays tracked until it is final with no question open, or `trackingLimit` passes.
 // Routing: a bundle belongs here when the `Annotate.install()` file it names sits in this checkout,
 // so builds from two worktrees reach the agent in each. The host app needs no setup for any of it:
 // no network permission and no Info.plist keys, just a development build on a paired device.
@@ -89,6 +92,8 @@ public actor DeviceMirror {
         let target: Target
         let since: Date
         var forwarded: Data?
+        /// Last time the device's `replies.json` was pulled; throttled to `hotInterval`.
+        var repliesPulledAt: Date = .distantPast
     }
 
     let outputDirectory: URL
@@ -259,6 +264,8 @@ public actor DeviceMirror {
 
     // MARK: Back to the device
 
+    /// Sends each mirrored session's status to the device and, while the agent has a question open,
+    /// brings the user's replies back.
     private func forwardStatuses(now: Date) async {
         for (id, entry) in mirrored {
             if now.timeIntervalSince(entry.since) > Self.trackingLimit {
@@ -266,14 +273,46 @@ public actor DeviceMirror {
                 continue
             }
             let status = SessionInbox.sessionDirectory(id, in: outputDirectory).appendingPathComponent(SessionInbox.statusFile)
-            guard let data = try? Data(contentsOf: status), data != entry.forwarded else { continue }
-            let remote = "\(Self.remoteRoot)/\(SessionWriter.sessionsFolder)/\(id)/\(SessionInbox.statusFile)"
-            // On failure the next tick retries: `forwarded` still holds the old contents
-            guard (try? await bridge.copy(status, to: remote, on: entry.target.device, app: entry.target.app)) != nil else { continue }
-            mirrored[id]?.forwarded = data
-            if let decoded = try? AnnotationSession.decoder.decode(SessionStatus.self, from: data), decoded.isFinal {
+            guard let data = try? Data(contentsOf: status) else { continue }
+            if data != entry.forwarded {
+                let remote = "\(Self.remoteRoot)/\(SessionWriter.sessionsFolder)/\(id)/\(SessionInbox.statusFile)"
+                // On failure the next tick retries: `forwarded` still holds the old contents
+                if (try? await bridge.copy(status, to: remote, on: entry.target.device, app: entry.target.app)) != nil {
+                    mirrored[id]?.forwarded = data
+                }
+            }
+            let decoded = try? AnnotationSession.decoder.decode(SessionStatus.self, from: data)
+            let hasQuestion = decoded?.pins?.contains { $0.state == .question } ?? false
+            if hasQuestion, now.timeIntervalSince(entry.repliesPulledAt) >= Self.hotInterval {
+                mirrored[id]?.repliesPulledAt = now
+                await pullReplies(id, from: entry.target)
+            }
+            // An agent may ask after reporting done, so a final session stays tracked until its
+            // questions are answered; only then is there nothing left to carry either way
+            if let decoded, decoded.isFinal, !hasQuestion, mirrored[id]?.forwarded == data {
                 mirrored[id] = nil
             }
+        }
+    }
+
+    /// Copies the device's `replies.json` over the local one when it changed. The app appends to it
+    /// on the device, so the device copy is always the complete one.
+    private func pullReplies(_ id: String, from target: Target) async {
+        let fileManager = FileManager.default
+        let local = SessionInbox.sessionDirectory(id, in: outputDirectory).appendingPathComponent(SessionInbox.repliesFile)
+        let staging = stagingDirectory().appendingPathComponent("\(id)-replies-\(UUID().uuidString.prefix(8)).json")
+        defer { try? fileManager.removeItem(at: staging) }
+        let remote = "\(Self.remoteRoot)/\(SessionWriter.sessionsFolder)/\(id)/\(SessionInbox.repliesFile)"
+        // Fails until the user first replies: the app creates the file with the first answer
+        guard (try? await bridge.copy(from: remote, on: target.device, app: target.app, to: staging)) != nil,
+              let data = try? Data(contentsOf: staging),
+              data != (try? Data(contentsOf: local)) else { return }
+        do {
+            // Atomic, so a consumer reading replies never sees half a file
+            try data.write(to: local, options: .atomic)
+            log("annotate: reply for session \(id) arrived from \(deviceNames[target.device] ?? target.device)")
+        } catch {
+            log("annotate: couldn't save replies for session \(id): \(error)")
         }
     }
 

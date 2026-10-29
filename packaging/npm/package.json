@@ -1,0 +1,37 @@
+{
+  "name": "annotate-ios",
+  "version": "0.2.0",
+  "description": "The annotate CLI for AnnotateKit: delivers visual feedback from your running iOS app to coding agents (MCP server, watcher, headless runner).",
+  "homepage": "https://annotatekit.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ooolzhas/annotatekit.git",
+    "directory": "packaging/npm"
+  },
+  "bugs": "https://github.com/ooolzhas/annotatekit/issues",
+  "license": "MIT",
+  "author": "Olzhas Beisenbayev (https://github.com/ooolzhas)",
+  "bin": {
+    "annotate": "bin/annotate"
+  },
+  "files": [
+    "bin/annotate",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "keywords": [
+    "ios",
+    "swiftui",
+    "annotation",
+    "visual-feedback",
+    "mcp",
+    "mcp-server",
+    "claude",
+    "cursor",
+    "codex",
+    "simulator"
+  ]
+}

@@ -16,7 +16,7 @@ import UIKit
 
 enum AnnotateStyle {
     // Computed rather than stored: no global-state isolation questions for the Canvas renderer.
-    // The live overlay is white-on-dim (Figma PVX9n74hzo5BWauvymG141, group 9257:13754): the
+    // The live overlay is white-on-dim (Figma group 9257:13754): the
     // screen is dimmed, so white markers read on any app. The bundle PNGs are not dimmed, so they
     // keep blue boxes and red strokes for contrast on any app.
     // Three blues: `accent` for strokes and outlines, `accentFill` under white text (pins, chips,
@@ -41,14 +41,13 @@ enum AnnotateStyle {
     static var marker: Color { .white }
     /// Badge number. Figma 9257:13567 text-black
     static var badgeText: Color { .black }
-    /// Edge glow: rgba(0,136,255,0.5) = Accents/Blue at 50%. Figma 9257:13385
-    static var glow: Color { Color(uiColor: .systemBlue).opacity(0.5) }
     /// Fill of the primary actions (↑, Send). Accents/Blue #0088FF. Figma 9257:13480, 9257:13560
     static var action: Color { Color(uiColor: .systemBlue) }
     /// Dim over the frozen screen. Figma 9257:13385 bg-[rgba(0,0,0,0.5)]
     static let dimOpacity: Double = 0.5
-    /// Corner radius the glow follows, matching the phone's screen curve. Figma 9257:13385 rounded-[62px]
-    static let screenCornerRadius: CGFloat = 62
+    /// Corner radius the glow follows. Figma 9257:13385 rounded-[62px]; 4pt tighter (two 2pt
+    /// steps) so the glow sits snug in the screen's corners.
+    static let screenCornerRadius: CGFloat = 58
     /// Glow spread: inset shadow 0 0 62px. Figma 9257:13385
     static let glowBlur: CGFloat = 62
     /// Element box: border-2, rounded-[8px]. Figma 9257:13564
@@ -187,8 +186,8 @@ enum BundleRenderer {
     }
 
     /// Bounding box of every point in `strokes` (screen points); nil when there are none, so a pin
-    /// without a sketch crops exactly as before.
-    private static func strokeBounds(_ strokes: [Stroke]) -> CGRect? {
+    /// without a sketch crops exactly as before. The overlay anchors sketch badges on it too.
+    static func strokeBounds(_ strokes: [Stroke]) -> CGRect? {
         let points = strokes.flatMap(\.points)
         guard let first = points.first else { return nil }
         var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y

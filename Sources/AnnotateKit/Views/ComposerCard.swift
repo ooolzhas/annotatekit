@@ -1,8 +1,17 @@
-// The comment card for the open pin (Figma 9272:16847 empty · 9272:16929 typed · 9272:17011 with
-// attachments): an optional strip of 64pt reference-image thumbnails with white remove badges,
-// the comment field, and the paperclip / × / ↑ row. It only lays itself out at the width it is
-// given; OverlayRoot docks it to the keyboard and adds the 8pt inset. Return and ↑ save through
-// the controller, which decides via `chrome` whether the comment can be submitted.
+// The comment card for the open pin (Figma 9276:27099 empty · 9276:27185 typed · 9276:27272 with
+// attachments · 9276:27369 quoting): an optional strip with the element's own text quoted like a
+// message being replied to (236pt wide, two lines at most) and 64pt reference-image thumbnails with
+// white remove badges, the comment field, and the paperclip / intent chip / undo / redo / ↑ row.
+// The intent chip (9276:27109 shows "Fix") opens our own dropdown above it to pick what the user wants
+// done with the pin (Fix, Question), and the placeholder follows it. The dropdown is SwiftUI inside the
+// overlay rather than a system menu: the system one is drawn by UIKit outside this view tree, where the
+// frozen screen's touch-down drag gesture could take a real finger's tap on an item (seen on
+// iOS 27 devices; it never reproduced on simulators). Undo and redo step through the strokes drawn since the card opened
+// (StrokeHistory); with nothing left to undo, undo turns into × and discards the pin, and redo dims
+// with nothing to redo. It only lays itself out at the width it is given; OverlayRoot docks it
+// to the keyboard (8pt insets) or, with no keyboard, where the review bar sits (34pt insets). ↑ saves through the controller, which decides via
+// `chrome` whether the comment can be submitted (it needs text); Return types a
+// newline. A new drawing opens the card without the keyboard so the next stroke has the screen.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -15,6 +24,10 @@ struct ComposerCard: View {
 
     @FocusState private var isFocused: Bool
     @State private var pickerItems: [PhotosPickerItem] = []
+    /// The intent dropdown is open above the chip.
+    @State private var isPickingIntent = false
+    /// ↑ was tapped with the keyboard up: the card is hidden, waiting for the keyboard to slide away.
+    @State private var isLeaving = false
 
     /// Picked images are downscaled to this longest side before they are held in memory; the
     /// bundle stores them as JPEGs and a reference image never needs more.
@@ -22,7 +35,7 @@ struct ComposerCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !draft.images.isEmpty {
+            if quote != nil || !draft.images.isEmpty {
                 attachmentStrip
             }
 
@@ -33,21 +46,10 @@ struct ComposerCard: View {
                 // Caps growth so the card doesn't climb over the drawing area (gap: Figma shows one line)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
-                .submitLabel(.return)
-                // iOS 26 delivers Return in a vertical field as a submit (no newline, keyboard
-                // dismissed); earlier versions insert "\n", which `commentBinding` handles
-                .onSubmit {
-                    if case .composing(canSubmit: true) = controller.chrome {
-                        controller.submitDraft()
-                    } else {
-                        // Nothing to save yet: keep the keyboard up so the card stays docked
-                        isFocused = true
-                    }
-                }
                 .focused($isFocused)
                 .accessibilityLabel("Comment")
                 // The drawn placeholder is hidden from VoiceOver; announce it as the hint instead
-                .accessibilityHint(OverlayChrome.placeholder)
+                .accessibilityHint(intent.placeholder)
                 .overlay(alignment: .topLeading) { placeholder }
                 .padding(.horizontal, 20)
                 // Figma centers the 17pt glyphs in a 24pt line; SwiftUI puts the extra leading
@@ -59,11 +61,28 @@ struct ComposerCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .annotateGlass(in: RoundedRectangle(cornerRadius: 32, style: .continuous), interactive: true)
-        // Glass alone isn't hit-testable: without this, a tap that misses a button falls through
-        // to the frozen screen and starts a new pin. A tap on the card focuses the comment instead.
-        .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .onTapGesture { isFocused = true }
-        .onAppear { isFocused = true }
+        // Glass alone isn't hit-testable: without a hit shape, a tap that misses a button falls through
+        // to the frozen screen and starts a new pin. The shape sits on a background rather than the
+        // card itself, so the intent dropdown, which rises above the card's top edge, still takes taps.
+        // A tap on the card outside a control closes the dropdown; the comment field focuses itself.
+        .background {
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(Color.clear)
+                .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                .onTapGesture { closeIntentPicker() }
+        }
+        // Outside the glass: glass only takes touches inside its own shape, and the dropdown rises
+        // past the card's top edge. Its bottom-leading corner sits over the chip's top-leading one,
+        // lifted `pickerGap`; an offset moves the hit area along with the drawing
+        .overlay(alignment: .bottomLeading) {
+            if isPickingIntent {
+                intentDropdown(current: intent)
+                    .offset(x: Self.pickerLeading, y: -Self.pickerLift)
+                    .transition(.scale(scale: Self.pickerHiddenScale, anchor: .bottomLeading).combined(with: .opacity))
+            }
+        }
+        .modifier(SendAfterKeyboard(isLeaving: $isLeaving) { controller.submitDraft() })
+        .onAppear { isFocused = !opensWithoutKeyboard }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             pickerItems = []
@@ -86,12 +105,24 @@ struct ComposerCard: View {
 
     // MARK: - Text
 
-    /// 9257:13392 — "Describe the change" at 50% opacity. Drawn over the field because iOS 26
-    /// ignores `prompt:` styling and renders the system placeholder color instead.
+    /// A drawing in progress: more strokes usually follow, and the keyboard would cover the lower
+    /// half of the screen. A tap on the card brings it up.
+    private var opensWithoutKeyboard: Bool {
+        draft.isNew && draft.annotation.kind == .sketch
+    }
+
+    /// The pin's intent; drafts from before intents existed have none, which means Fix.
+    private var intent: AnnotationIntent {
+        draft.annotation.intent ?? .fix
+    }
+
+    /// 9257:13392 — "Describe the change" at 50% opacity (Fix); other intents swap the copy via
+    /// `AnnotationIntent.placeholder`. Drawn over the field because iOS 26 ignores `prompt:`
+    /// styling and renders the system placeholder color instead.
     @ViewBuilder
     private var placeholder: some View {
         if controller.commentText.isEmpty {
-            Text(OverlayChrome.placeholder)
+            Text(intent.placeholder)
                 .font(.body.leading(.loose))
                 .foregroundStyle(.primary.opacity(0.5))
                 .allowsHitTesting(false)
@@ -99,24 +130,13 @@ struct ComposerCard: View {
         }
     }
 
-    /// Before iOS 26 a vertical-axis TextField inserts a newline on Return instead of firing
-    /// onSubmit. A Return keypress is the old text plus exactly one "\n" at the caret (anywhere, not
-    /// only the end): that submits the old text. Any other newline (pasted multi-line text) becomes
-    /// a space and is kept.
+    /// Newlines are kept (the prompt renders a multi-line comment line by line). Writes are tagged
+    /// with the draft they were typed into, so text arriving late can't land on another pin.
     private var commentBinding: Binding<String> {
         Binding(
             get: { controller.commentText },
             set: { [controller, id = draft.annotation.id] text in
-                let old = controller.commentText
-                let isReturn = text.count == old.count + 1
-                    && text.replacingOccurrences(of: "\n", with: "") == old
-                if isReturn {
-                    controller.setComment(old, forDraft: id)
-                    controller.submitDraft()
-                } else {
-                    let flattened = text.replacingOccurrences(of: "\n", with: " ")
-                    controller.setComment(flattened, forDraft: id)
-                }
+                controller.setComment(text, forDraft: id)
             }
         )
     }
@@ -128,31 +148,165 @@ struct ComposerCard: View {
     }
 
     /// 9257:13393 — items-end, justify-between, pb 8, px 8; right group gap 6 (9257:13396).
+    /// No Figma: the left group (paperclip + intent chip) reuses the right group's 6pt gap.
     private var buttonRow: some View {
         // PhotosPicker's label closure is Sendable: read main-actor state before it
         let remaining = remaining
         let paperclipStyle: CircleIcon.Style = remaining == 0 ? .dimmed : .plain
         return HStack(alignment: .bottom, spacing: 0) {
-            // 9257:13394/13395
-            PhotosPicker(selection: $pickerItems, maxSelectionCount: max(remaining, 1), matching: .images) {
-                // At the attachment cap the picker is disabled; dim it like ↑ so it reads disabled
-                CircleIcon(systemName: "paperclip", style: paperclipStyle)
+            HStack(spacing: Self.rowGroupSpacing) {
+                // 9257:13394/13395
+                PhotosPicker(selection: $pickerItems, maxSelectionCount: max(remaining, 1), matching: .images) {
+                    // At the attachment cap the picker is disabled; dim it like ↑ so it reads disabled
+                    CircleIcon(systemName: "paperclip", style: paperclipStyle)
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .disabled(remaining == 0)
+                .accessibilityLabel("Attach image")
+
+                intentChip
             }
-            .buttonStyle(ChromeButtonStyle())
-            .disabled(remaining == 0)
-            .accessibilityLabel("Attach image")
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 6) {
-                // 9257:13397/13398
-                CircleIconButton(systemName: "xmark") { controller.discardDraft() }
+            HStack(spacing: Self.rowGroupSpacing) {
+                // No Figma: undo / redo sit where Figma's × was (9257:13397/13398, design choice), and
+                // undo turns back into that × once there's nothing left to undo
+                undoOrDiscardButton
+                CircleIconButton(
+                    systemName: "arrow.uturn.forward",
+                    style: draft.history.canRedo ? .plain : .dimmed
+                ) { controller.redo() }
+                .disabled(!draft.history.canRedo)
                 submitButton
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Self.rowInset)
+        .padding(.bottom, Self.rowInset)
     }
+
+    /// Undo while there are strokes to take back; at the state the card opened with (a new drawing's
+    /// first stroke, a tap or hold pin, a reopened pin as saved) it's × and discards the pin instead.
+    private var undoOrDiscardButton: some View {
+        let canUndo = draft.history.canUndo
+        return CircleIconButton(
+            systemName: canUndo ? "arrow.uturn.backward" : "xmark",
+            label: canUndo ? nil : (draft.isNew ? "Discard pin" : "Delete pin")
+        ) {
+            if canUndo {
+                controller.undo()
+            } else {
+                controller.discardDraft()
+            }
+        }
+        // Four times the system speed (design choice): the swap reads as a state change, not an animation
+        .contentTransition(.symbolEffect(.replace, options: .speed(Self.symbolSwapSpeed)))
+    }
+
+    /// How much faster than the system default undo and × swap glyphs.
+    private static let symbolSwapSpeed: Double = 4
+
+    /// Figma 9276:27109: `px-[12px] w-[65px] h-[44px]`, 5% fill like `CircleIcon` `.plain`. 65 is the
+    /// width "Fix" draws at, so it is the minimum and longer titles grow the capsule.
+    private static let chipHorizontalPadding: CGFloat = 12
+    private static let chipMinWidth: CGFloat = 65
+    /// No Figma frame (design choice): the up / down chevron that marks the chip as a menu, 4pt after the
+    /// title and smaller than it so the intent reads first.
+    private static let chipChevronSpacing: CGFloat = 4
+    private static let chipChevronSize: CGFloat = 11
+
+    /// The chip toggles the dropdown above it; picking an intent stores it on the draft through the
+    /// controller and closes the dropdown.
+    private var intentChip: some View {
+        let intent = intent
+        return Button {
+            withAnimation(Self.pickerAnimation) { isPickingIntent.toggle() }
+        } label: {
+            // 9276:27110 — SF Pro Medium 17 / 22; the chevron is an addition
+            HStack(spacing: Self.chipChevronSpacing) {
+                Text(intent.title)
+                    .font(.system(size: 17, weight: .medium))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: Self.chipChevronSize, weight: .semibold))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, Self.chipHorizontalPadding)
+            .frame(minWidth: Self.chipMinWidth)
+            .frame(height: CircleIcon.size)
+            .background(Capsule().fill(Color.primary.opacity(CircleIcon.fillOpacity)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(ChromeButtonStyle())
+        .accessibilityLabel("Intent, \(intent.title)")
+        .accessibilityHint("Choose what to do with this note")
+    }
+
+    /// No Figma: every intent as a row (symbol, title, what it asks the agent for), the current one
+    /// checked, on glass like the card.
+    private func intentDropdown(current: AnnotationIntent) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Self.pickerRadius, style: .continuous)
+        return VStack(spacing: 0) {
+            ForEach(AnnotationIntent.allCases, id: \.self) { option in
+                Button {
+                    controller.setIntent(option)
+                    closeIntentPicker()
+                } label: {
+                    HStack(spacing: Self.pickerRowSpacing) {
+                        Image(systemName: option.symbol)
+                            .font(.system(size: 17))
+                            .frame(width: Self.pickerSymbolWidth)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.title)
+                                .font(.body)
+                            Text(option.detail)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        if option == current {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, Self.pickerRowHorizontalPadding)
+                    .padding(.vertical, Self.pickerRowVerticalPadding)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .accessibilityAddTraits(option == current ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, Self.pickerVerticalPadding)
+        .frame(width: Self.pickerWidth)
+        .annotateGlass(in: shape)
+        .contentShape(shape)
+    }
+
+    private func closeIntentPicker() {
+        guard isPickingIntent else { return }
+        withAnimation(Self.pickerAnimation) { isPickingIntent = false }
+    }
+
+    /// Intent dropdown geometry (no Figma, derived): wide enough for "Explain it, don't edit" on one
+    /// line, 8pt above the chip, rows like a system menu's.
+    private static let pickerWidth: CGFloat = 248
+    private static let pickerGap: CGFloat = 8
+    private static let pickerRadius: CGFloat = 24
+    private static let pickerVerticalPadding: CGFloat = 6
+    private static let pickerRowHorizontalPadding: CGFloat = 16
+    private static let pickerRowVerticalPadding: CGFloat = 10
+    private static let pickerRowSpacing: CGFloat = 12
+    private static let pickerSymbolWidth: CGFloat = 24
+    private static let pickerHiddenScale: CGFloat = 0.9
+    /// The chip's leading edge from the card's: the row's 8pt inset, the paperclip and the 6pt gap.
+    private static let pickerLeading: CGFloat = rowInset + CircleIcon.size + rowGroupSpacing
+    /// From the card's bottom to `pickerGap` above the chip: the row's 8pt inset and the chip.
+    private static let pickerLift: CGFloat = rowInset + CircleIcon.size + pickerGap
+    /// 9257:13393 — the button row's `pb-8 px-8`, and the 6pt gap inside each group.
+    private static let rowInset: CGFloat = 8
+    private static let rowGroupSpacing: CGFloat = 6
+    private static let pickerAnimation: Animation = .snappy(duration: 0.2)
 
     /// 9257:13399 (empty, dimmed glyph) · 9257:13480 (typed, blue). The state comes from
     /// `chrome`, never from the text. Only `.dimmed` dims; `.disabled` just blocks the tap
@@ -165,7 +319,13 @@ struct ComposerCard: View {
             canSubmit = false
         }
         return CircleIconButton(systemName: "arrow.up", style: canSubmit ? .prominent : .dimmed) {
-            controller.submitDraft()
+            guard controller.isKeyboardUp else {
+                controller.submitDraft()
+                return
+            }
+            // Hide now, let the keyboard slide away, then save (SendAfterKeyboard)
+            isLeaving = true
+            isFocused = false
         }
         .disabled(!canSubmit)
     }
@@ -187,10 +347,32 @@ struct ComposerCard: View {
     /// How far the badge pokes past the thumbnail's top and right edges (20 / 2 − 4 = 6).
     private static var badgeOverhang: CGFloat { badgeSize / 2 - badgeInset }
 
+    /// Figma 9276:27374: `w-[236px] h-[64px] px-[16px]`, at least as tall as a thumbnail.
+    private static let quoteWidth: CGFloat = 236
+    private static let quoteHorizontalPadding: CGFloat = 16
+    /// Figma has 12pt above the first line (two 20pt lines centered in the 64pt box, a single line
+    /// at the same top, 9276:27466); 2pt more above and below (design choice), so two lines make
+    /// the box 70pt and a single line hangs 14pt from its top.
+    private static let quoteVerticalPadding: CGFloat = 14
+    /// 2pt more between the quoted lines than Loose Leading's 20pt (design choice; no leading
+    /// setting reaches 22).
+    private static let quoteLineSpacing: CGFloat = 2
+    /// Figma `opacity-75` on the quoted lines (9276:27375).
+    private static let quoteOpacity: Double = 0.75
+
+    /// The selected element's own text, quoted ahead of any images; nil when there's none.
+    private var quote: String? {
+        draft.annotation.quotedText
+    }
+
     /// 9272:17019 — `flex gap-[8px] items-end pt-[16px] px-[16px]`.
     private var attachmentStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            // Figma `items-end`: a two-line quote is taller than a thumbnail, and they share a bottom
+            HStack(alignment: .bottom, spacing: 8) {
+                if let quote {
+                    quoteBox(quote)
+                }
                 // The remove badge's 32pt hit box reaches 12pt past its thumbnail's right edge,
                 // over the 8pt gap and 4pt into the next thumbnail. Later HStack siblings draw
                 // on top by default and would take that strip, so stack earlier thumbnails above
@@ -207,9 +389,31 @@ struct ComposerCard: View {
             // 10 + the 6pt room above = Figma's 16pt from the card top to the thumbnails
             .padding(.top, 16 - Self.badgeOverhang)
         }
-        // Four 64pt thumbnails plus gaps fit the card, so the strip never needs to scroll; don't
-        // let it rubber-band thumbnails into the card's rounded corners
+        // Four 64pt thumbnails plus gaps fit the card, so without a quote the strip never needs to
+        // scroll; don't let it rubber-band thumbnails into the card's rounded corners
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+    }
+
+    /// The element's text in a thumbnail-shaped box (a thumbnail's radius and fill, at least its
+    /// height), like the message a reply quotes. Figma 9276:27374: Loose Leading/Footnote (13 / 20)
+    /// at 75%, two lines, then it truncates; 2pt more between the lines and around them.
+    private func quoteBox(_ text: String) -> some View {
+        Text(text)
+            .font(.footnote.leading(.loose))
+            .lineSpacing(Self.quoteLineSpacing)
+            .foregroundStyle(.primary.opacity(Self.quoteOpacity))
+            .lineLimit(2)
+            .truncationMode(.tail)
+            .padding(.horizontal, Self.quoteHorizontalPadding)
+            .padding(.vertical, Self.quoteVerticalPadding)
+            .frame(width: Self.quoteWidth, alignment: .topLeading)
+            .frame(minHeight: Self.thumbnailSize, alignment: .topLeading)
+            .background(
+                Color.primary.opacity(CircleIcon.fillOpacity),
+                in: RoundedRectangle(cornerRadius: Self.thumbnailRadius, style: .continuous)
+            )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Quoting \(text)")
     }
 
     private func thumbnail(_ image: AnnotateController.AttachedImage) -> some View {

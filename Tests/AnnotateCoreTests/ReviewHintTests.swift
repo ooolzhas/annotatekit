@@ -20,8 +20,8 @@ import Testing
         AgentPresence(agent: agent, mode: mode, via: via, project: project, updatedAt: updatedAt)
     }
 
-    private static func resolve(_ agent: AgentPresence?, news: Bool) -> ReviewHint {
-        ReviewHint.resolve(ReviewHint.Inputs(agent: agent, isConnectionNews: news))
+    private static func resolve(_ agent: AgentPresence?, intro: Bool) -> ReviewHint {
+        ReviewHint.resolve(ReviewHint.Inputs(agent: agent, isIntro: intro))
     }
 
     private static let allKinds: [ReviewHint] = [
@@ -33,30 +33,31 @@ import Testing
 
     // MARK: resolve
 
-    @Test("no agent resolves to offline whatever the news flag", arguments: [true, false])
-    func noAgentIsOffline(news: Bool) {
-        #expect(Self.resolve(nil, news: news) == .offline)
+    @Test("annotate mode opens on the gestures hint whoever listens",
+          arguments: [nil, presence(mode: .push), presence(mode: .pull)])
+    func introIsGestures(agent: AgentPresence?) {
+        #expect(Self.resolve(agent, intro: true) == .gestures)
     }
 
-    @Test("agent with news resolves to connected, carrying the agent's name and mode",
+    @Test("after the intro no agent resolves to offline")
+    func noAgentIsOffline() {
+        #expect(Self.resolve(nil, intro: false) == .offline)
+    }
+
+    @Test("after the intro an agent resolves to connected, carrying the agent's name and mode",
           arguments: [AgentPresence.Mode.push, .pull])
-    func agentWithNewsIsConnected(mode: AgentPresence.Mode) {
+    func agentIsConnected(mode: AgentPresence.Mode) {
         let presence = Self.presence("Cursor", mode: mode)
-        #expect(Self.resolve(presence, news: true) == .connected(agent: "Cursor", mode: mode))
-    }
-
-    @Test("agent without news yields to the gestures hint", arguments: [AgentPresence.Mode.push, .pull])
-    func agentWithoutNewsIsGestures(mode: AgentPresence.Mode) {
-        #expect(Self.resolve(Self.presence(mode: mode), news: false) == .gestures)
+        #expect(Self.resolve(presence, intro: false) == .connected(agent: "Cursor", mode: mode))
     }
 
     @Test("via, project and updatedAt don't affect the resolved hint", arguments: [true, false])
-    func irrelevantPresenceFieldsIgnored(news: Bool) {
+    func irrelevantPresenceFieldsIgnored(intro: Bool) {
         let a = Self.presence("Codex", mode: .pull, via: "mcp", project: nil,
                               updatedAt: Date(timeIntervalSince1970: 0))
         let b = Self.presence("Codex", mode: .pull, via: "watch", project: "other-checkout",
                               updatedAt: Self.fixedDate)
-        #expect(Self.resolve(a, news: news) == Self.resolve(b, news: news))
+        #expect(Self.resolve(a, intro: intro) == Self.resolve(b, intro: intro))
     }
 
     // MARK: dot
@@ -124,11 +125,11 @@ import Testing
         #expect(Set(texts).count == texts.count)
     }
 
-    // MARK: connectionNewsHold
+    // MARK: introHold
 
-    @Test("connection news holds for a positive duration")
-    func connectionNewsHoldPositive() {
-        #expect(ReviewHint.connectionNewsHold > 0)
+    @Test("the intro holds for a positive duration")
+    func introHoldPositive() {
+        #expect(ReviewHint.introHold > 0)
     }
 
     // MARK: delivery
@@ -142,15 +143,15 @@ import Testing
         .delivery(stage, agent: "Claude")
     }
 
-    @Test("a tracked delivery wins over offline, connection news and gestures",
+    @Test("a tracked delivery wins over offline, connected and the intro",
           arguments: [
               (AgentPresence?.none, false),
               (AgentPresence?.none, true),
               (presence("Cursor"), true),
               (presence("Cursor"), false)
           ])
-    func deliveryWins(agent: AgentPresence?, news: Bool) {
-        let inputs = ReviewHint.Inputs(agent: agent, isConnectionNews: news, delivery: .received)
+    func deliveryWins(agent: AgentPresence?, intro: Bool) {
+        let inputs = ReviewHint.Inputs(agent: agent, isIntro: intro, delivery: .received)
         let expected = ReviewHint.delivery(.received, agent: ReviewHint.displayName(agent?.agent ?? ""))
         #expect(ReviewHint.resolve(inputs) == expected)
     }
@@ -162,7 +163,7 @@ import Testing
               (presence("  Cursor "), "Cursor")
           ])
     func deliveryCarriesDisplayName(agent: AgentPresence?, expected: String) {
-        let inputs = ReviewHint.Inputs(agent: agent, isConnectionNews: false, delivery: .delivered)
+        let inputs = ReviewHint.Inputs(agent: agent, isIntro: false, delivery: .delivered)
         #expect(ReviewHint.resolve(inputs) == .delivery(.delivered, agent: expected))
     }
 
@@ -182,6 +183,70 @@ import Testing
         #expect(Self.delivery(stage).dot == expected)
     }
 
+    @Test("offline splits into a headline and a dimmed detail (Figma 9276:28048 / 9276:28049)")
+    func offlineParts() {
+        #expect(ReviewHint.offline.headline == "No agent connected")
+        #expect(ReviewHint.offline.detail == "Notes will be saved")
+        #expect(ReviewHint.offline.text == "No agent connected · Notes will be saved")
+    }
+
+    @Test("sending counts the notes written so far, never past the total",
+          arguments: [(0, 4, "0/4"), (1, 4, "1/4"), (4, 4, "4/4"), (6, 4, "4/4")])
+    func sendingProgress(written: Int, notes: Int, expected: String) {
+        let hint = ReviewHint.delivery(.sent(count: notes), agent: "Claude", notes: notes, written: written)
+        #expect(hint.headline == "Sending notes")
+        #expect(hint.detail == expected)
+    }
+
+    @Test("a Send with no count says only that it's sending")
+    func sendingWithoutCount() {
+        #expect(ReviewHint.delivery(.sent(count: 1), agent: "Claude").detail == nil)
+    }
+
+    @Test("done counts the Send's notes", arguments: [(1, "1 note"), (4, "4 notes")])
+    func doneCountsNotes(notes: Int, expected: String) {
+        let hint = ReviewHint.delivery(.done(message: "Shipped"), agent: "Claude", notes: notes)
+        #expect(hint.headline == "Claude is done")
+        #expect(hint.detail == expected)
+    }
+
+    @Test("a failed Send reads Error, with the agent's reason when it gave one")
+    func failedReadsError() {
+        #expect(ReviewHint.delivery(.failed(message: "Build broke"), agent: "Claude").text == "Error · Build broke")
+        #expect(ReviewHint.delivery(.failed(message: nil), agent: "Claude").text == "Error")
+    }
+
+    @Test("text is the headline, then the detail after a middle dot",
+          arguments: allKinds + allStages.map { delivery($0) } + [
+              delivery(.done(message: "Shipped")), delivery(.failed(message: "Build broke")),
+              delivery(.working(message: "a · b"))
+          ])
+    func textJoinsParts(hint: ReviewHint) {
+        let expected = hint.detail.map { "\(hint.headline) · \($0)" } ?? hint.headline
+        #expect(hint.text == expected)
+        #expect(!hint.headline.isEmpty)
+        #expect(hint.detail?.isEmpty != true)
+    }
+
+    @Test("an agent's working message splits at its first middle dot")
+    func workingMessageSplits() {
+        let hint = Self.delivery(.working(message: "All changes applied · Reinstalling"))
+        #expect(hint.headline == "All changes applied")
+        #expect(hint.detail == "Reinstalling")
+    }
+
+    @Test("a working message stays whole when a side of the dot would be empty",
+          arguments: ["Built · ", " · reinstalling", "Built and reinstalling"])
+    func workingMessageStaysWhole(message: String) {
+        let hint = Self.delivery(.working(message: message))
+        #expect(hint.detail == nil)
+    }
+
+    @Test("no working message falls back to the agent working")
+    func workingFallback() {
+        #expect(Self.delivery(.working(message: nil)).headline == "Claude is working…")
+    }
+
     @Test("elapsed time shows exactly while the delivery is still in flight", arguments: allStages)
     func showsElapsedTracksNonFinal(stage: DeliveryStage) {
         #expect(Self.delivery(stage).showsElapsed == !stage.isFinal)
@@ -192,14 +257,15 @@ import Testing
         #expect(!hint.showsElapsed)
     }
 
-    @Test("elapsed text: seconds below a minute, floored whole minutes from 60, negative reads 0s",
+    @Test("elapsed text: seconds below a minute, then minutes and seconds, negative reads 0s",
           arguments: [
               (-5, "0s"),
               (0, "0s"),
               (59, "59s"),
-              (60, "1m"),
-              (119, "1m"),
-              (3600, "60m")
+              (60, "1m 0s"),
+              (65, "1m 5s"),
+              (119, "1m 59s"),
+              (3600, "60m 0s")
           ])
     func elapsedText(seconds: Int, expected: String) {
         #expect(ReviewHint.elapsedText(seconds) == expected)
@@ -219,11 +285,10 @@ import Testing
         #expect(Self.delivery(.failed(message: blank)).text == Self.delivery(.failed(message: nil)).text)
     }
 
-    @Test("a non-blank agent message appears trimmed in the text")
+    @Test("a non-blank agent message appears trimmed in the text (done shows the note count instead)")
     func messageAppearsTrimmed() {
         let stages: [DeliveryStage] = [
-            .working(message: "  Reinstalling\n"), .done(message: "  Reinstalling\n"),
-            .failed(message: "  Reinstalling\n")
+            .working(message: "  Reinstalling\n"), .failed(message: "  Reinstalling\n")
         ]
         for stage in stages {
             let text = Self.delivery(stage).text

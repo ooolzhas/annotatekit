@@ -309,9 +309,42 @@ enum Fixtures {
             session.id = id
             _ = try write(session, to: output)
         }
-        #expect(SessionInbox.prune(keeping: 2, in: output) == ["20261028-100000-aaaa"])
+        // Three days after: all three are outside the history window
+        let later = Self.utc("20261031-120000")
+        #expect(SessionInbox.prune(keeping: 2, in: output, now: later) == ["20261028-100000-aaaa"])
         #expect(SessionInbox.sessionIDs(in: output) == Array(ids.dropFirst()))
-        #expect(SessionInbox.prune(keeping: 5, in: output).isEmpty)
+        #expect(SessionInbox.prune(keeping: 5, in: output, now: later).isEmpty)
+    }
+
+    @Test func pruneNeverRemovesASessionInsideTheHistoryWindow() throws {
+        let output = try tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        // 50 h, 47 h and 1 h before `now`
+        let ids = ["20261027-100000-aaaa", "20261027-130000-bbbb", "20261029-110000-cccc"]
+        for id in ids {
+            var session = Fixtures.session(annotations: [Fixtures.element])
+            session.id = id
+            _ = try write(session, to: output)
+        }
+        let now = Self.utc("20261029-120000")
+        #expect(SessionInbox.prune(keeping: 1, in: output, now: now) == ["20261027-100000-aaaa"])
+        #expect(SessionInbox.sessionIDs(in: output) == Array(ids.dropFirst()))
+    }
+
+    @Test func historyCutoffIsFortyEightHoursBeforeNow() {
+        let cutoff = SessionInbox.historyCutoffID(now: Self.utc("20261029-120000"))
+        #expect(cutoff == "20261027-120000-")
+        // A Send at the cutoff second is inside; one a second earlier isn't
+        #expect("20261027-120000-abcd" >= cutoff)
+        #expect("20261027-115959-abcd" < cutoff)
+    }
+
+    private static func utc(_ stamp: String) -> Date {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.date(from: stamp)!
     }
 
     @Test func incompleteBundlesAreNotListed() throws {

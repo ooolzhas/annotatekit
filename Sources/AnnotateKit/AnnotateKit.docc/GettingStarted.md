@@ -5,11 +5,11 @@ Add the overlay, connect your agent, and send your first annotation.
 ## Add the package
 
 In Xcode choose **File → Add Package Dependencies…**, enter
-`https://github.com/ooolzhas/annotate-ios`, and add the **AnnotateKit** library to your app target.
+`https://github.com/ooolzhas/annotatekit`, and add the **AnnotateKit** library to your app target.
 In a `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/ooolzhas/annotate-ios", from: "0.1.1")
+.package(url: "https://github.com/ooolzhas/annotatekit", from: "0.2.0")
 ```
 
 ## Install the overlay
@@ -29,7 +29,7 @@ folder.
 
 ## Connect an agent
 
-Install the CLI (`brew install ooolzhas/tap/annotate` or `mint install ooolzhas/annotate-ios`), then
+Install the CLI (`brew install ooolzhas/tap/annotate` or `mint install ooolzhas/annotatekit`), then
 pick a delivery mode:
 
 - **Claude Code, pushed into your open session:** add `annotate mcp` as an MCP server and start
@@ -41,13 +41,13 @@ pick a delivery mode:
 
 ## Annotate
 
-Tap the pencil (or call ``Annotate/start()``). The screen freezes.
+Tap the **Annotate** pill (or call ``Annotate/start()``). The screen freezes.
 
-- **Tap** pins the element under your finger, or the exact spot if nothing distinct is there.
-  Use `↑`/`↓` to move between spot, element and containers.
-- **Drag** makes a region with sketch tools.
-- **Draw mode** (the scribble button) lets you sketch anywhere on the screen.
-- **Return** saves a pin, **Esc** backs out, and **Send** delivers everything.
+- **Draw** anywhere: the drawing becomes a note, attributed to the view under it.
+- **Tap** selects the element under your finger. Use `↑`/`↓` to move between it and its
+  containers.
+- **Hold** still for half a second to pin an exact spot.
+- **↑** on the comment card saves a note, **Esc** backs out, and **Send** delivers everything.
 
 ## Optional: exact source lines
 

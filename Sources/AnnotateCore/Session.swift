@@ -2,6 +2,8 @@
 // in screen points, origin top-left, and each screen's `image` is rendered at 1x so its pixels ARE
 // points — an agent can look at the PNG and the numbers line up exactly. Hi-res captures and crops
 // are there for detail. Element info and nearby text are hints for finding the source, not required.
+// Each pin may carry an `AnnotationIntent` (fix, question) that tells the agent what
+// kind of response the user wants; it's optional, and a missing intent means fix.
 // Bump `AnnotationSession.currentSchemaVersion` on any breaking change to these types.
 
 #if canImport(CoreGraphics)
@@ -198,6 +200,9 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
     public var crop: String?
     /// Attached reference images, relative to the session directory ("attachments/1-1.jpg"); nil when none.
     public var attachments: [String]?
+    /// What the user wants done with this pin. Optional so bundles from older builds still decode;
+    /// nil means `.fix`.
+    public var intent: AnnotationIntent?
 
     public init(
         id: UUID = UUID(),
@@ -213,7 +218,8 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
         sketch: Sketch? = nil,
         nearbyText: [String] = [],
         crop: String? = nil,
-        attachments: [String]? = nil
+        attachments: [String]? = nil,
+        intent: AnnotationIntent? = nil
     ) {
         self.id = id
         self.index = index
@@ -229,6 +235,7 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
         self.nearbyText = nearbyText
         self.crop = crop
         self.attachments = attachments
+        self.intent = intent
     }
 
     /// True when there is nothing for an agent to act on.
@@ -241,6 +248,14 @@ public struct Annotation: Codable, Sendable, Equatable, Identifiable {
 }
 
 extension Annotation {
+    /// The pin moved by (`dx`, `dy`) screen points; the sketch is frame-local, so it follows the frame.
+    public func translated(dx: Double, dy: Double) -> Annotation {
+        var moved = self
+        moved.anchor = AnnotationPoint(x: anchor.x + dx, y: anchor.y + dy)
+        moved.frame = AnnotationRect(x: frame.x + dx, y: frame.y + dy, width: frame.width, height: frame.height)
+        return moved
+    }
+
     /// `sketch` strokes moved from frame-local to screen points (empty without a sketch).
     public var sketchInScreenPoints: [Stroke] {
         guard let sketch else { return [] }
@@ -250,6 +265,71 @@ extension Annotation {
                 points: stroke.points.map { AnnotationPoint(x: $0.x + frame.x, y: $0.y + frame.y) }
             )
         }
+    }
+}
+
+/// What the user wants done with a pin, picked on the comment card. Older bundles have none: treat nil as .fix.
+public enum AnnotationIntent: String, Codable, Sendable, CaseIterable {
+    case fix, question
+
+    /// An intent this version doesn't know (e.g. `approve` or `move`, both since removed) reads as
+    /// Fix, so an older or newer bundle still loads.
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AnnotationIntent(rawValue: raw) ?? .fix
+    }
+
+    /// Chip and menu title.
+    public var title: String {
+        switch self {
+        case .fix: "Fix"
+        case .question: "Question"
+        }
+    }
+
+    /// Menu subtitle.
+    public var detail: String {
+        switch self {
+        case .fix: "Change the code"
+        case .question: "Explain it, don't edit"
+        }
+    }
+
+    /// SF Symbol for the menu.
+    public var symbol: String {
+        switch self {
+        case .fix: "hammer"
+        case .question: "questionmark.bubble"
+        }
+    }
+
+    /// Comment placeholder. Fix reuses the overlay's default so the card reads the same as before intents.
+    public var placeholder: String {
+        switch self {
+        case .fix: OverlayChrome.placeholder
+        case .question: "Ask about it"
+        }
+    }
+
+    /// Tag in prompt.md. Fix has none, so prompts for plain fixes read as they did before intents.
+    public var promptTag: String? {
+        switch self {
+        case .fix: nil
+        case .question: "[Question]"
+        }
+    }
+}
+
+extension Annotation {
+    /// The element's own text, quoted on the comment card like a message being replied to: its
+    /// label, else its value, trimmed. Nil for spots, sketches, regions and elements with no text.
+    public var quotedText: String? {
+        guard kind == .element, let element else { return nil }
+        for candidate in [element.label, element.value] {
+            let text = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !text.isEmpty { return text }
+        }
+        return nil
     }
 }
 

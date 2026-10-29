@@ -3,8 +3,8 @@
 # On each release, copy the url and sha256 from the Release workflow's job summary.
 class Annotate < Formula
   desc "Deliver AnnotateKit iOS annotation sessions to coding agents (MCP server, watcher, runner)"
-  homepage "https://github.com/ooolzhas/annotate-ios"
-  url "https://github.com/ooolzhas/annotate-ios/releases/download/v0.1.1/annotate-0.1.1-macos-universal.tar.gz"
+  homepage "https://annotatekit.com"
+  url "https://github.com/ooolzhas/annotatekit/releases/download/v0.2.0/annotate-0.2.0-macos-universal.tar.gz"
   sha256 "REPLACE_WITH_SHA256_FROM_RELEASE"
   license "MIT"
 

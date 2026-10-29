@@ -42,6 +42,32 @@ public struct AgentPresence: Codable, Sendable, Equatable {
     }
 }
 
+/// What the launcher's dot says about the connection, always shown: an agent listens, the app is
+/// catching up on a late heartbeat, or nothing listens.
+public enum AgentLink: Equatable, Sendable {
+    /// A fresh heartbeat: an agent listens (push or pull alike).
+    case active
+    /// Not sure yet: no read has landed since the app opened, or the heartbeat is late but not yet
+    /// stale, as when the copy to a device lags. Saves the dot from flipping to offline and back.
+    case resyncing
+    /// No live heartbeat: nothing listens, and a Send is saved for later.
+    case offline
+
+    /// Seconds after which a heartbeat counts as late: two missed `AgentPresenceFile.interval`s plus
+    /// a second of slack. From here to `AgentPresenceFile.staleAfter` the dot reads resyncing.
+    public static let lateAfter: TimeInterval = AgentPresenceFile.interval * 2 + 1
+
+    /// - Parameters:
+    ///   - hasRead: a presence read has landed since the app opened.
+    ///   - presence: the merged presence, nil once `agent.json` is stale or gone.
+    ///   - heartbeatAge: seconds since `agent.json` was written; nil when there is none.
+    public static func resolve(hasRead: Bool, presence: AgentPresence?, heartbeatAge: TimeInterval?) -> AgentLink {
+        guard hasRead else { return .resyncing }
+        guard presence != nil else { return .offline }
+        return (heartbeatAge ?? 0) > lateAfter ? .resyncing : .active
+    }
+}
+
 /// Contents of `app.json`: which build is running on the device.
 public struct AppBeacon: Codable, Sendable, Equatable {
     public var bundleID: String?
@@ -121,6 +147,16 @@ public enum AgentPresenceFile {
         guard isFresh(url, now: now, fileManager: fileManager),
               let data = try? Data(contentsOf: url) else { return nil }
         return try? AnnotationSession.decoder.decode(AgentPresence.self, from: data)
+    }
+
+    /// Seconds since the merged presence was written, by its modification date on the reader's clock
+    /// (never negative); nil when there is no file.
+    public static func heartbeatAge(in outputDirectory: URL, now: Date = Date(), fileManager: FileManager = .default) -> TimeInterval? {
+        let url = outputDirectory.appendingPathComponent(fileName)
+        guard let modified = (try? fileManager.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date else {
+            return nil
+        }
+        return max(now.timeIntervalSince(modified), 0)
     }
 
     /// Judged by modification date, not `updatedAt`: on a device the file is copied from the Mac,
