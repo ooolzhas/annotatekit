@@ -1,7 +1,7 @@
 /* annotatekit.com: page shell. The hero animation (#demo internals, .ak-*) lives in demo.css. */
 
 :root {
-  --font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: Geist, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace;
 
   --accent: #0A84FF;
@@ -19,6 +19,11 @@
   --nav-hover: rgba(0, 0, 0, 0.04);
   --tag-bg: rgba(10, 132, 255, 0.1);
   --tag-text: #0060c0;
+  /* Code tokens, Xcode default themes */
+  --tk-key: #ad3da4;
+  --tk-attr: #815f03;
+  --tk-str: #d12f1b;
+  --tk-com: #707f8c;
 
   --sidebar-w: 208px;
   --col: 560px;
@@ -40,6 +45,10 @@
     --nav-hover: rgba(255, 255, 255, 0.06);
     --tag-bg: rgba(10, 132, 255, 0.18);
     --tag-text: #64b0ff;
+    --tk-key: #ff7ab2;
+    --tk-attr: #cc9768;
+    --tk-str: #fc6a5d;
+    --tk-com: #7f8c98;
   }
 }
 
@@ -51,13 +60,16 @@
 
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
+/* Every rounded corner is a squircle (no-op where corner-shape is unsupported). */
+*, *::before, *::after { corner-shape: squircle; }
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 16px;
+  line-height: 24px;
   letter-spacing: -0.08px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -116,9 +128,11 @@ img { display: block; }
   letter-spacing: -0.2px;
   text-decoration: none;
 }
-.wordmark img {
+.wordmark-mark {
   width: 24px; height: 24px;
-  border-radius: 6px;
+  border-radius: 30%;
+  corner-shape: round;
+  background: var(--text-faint);
   flex: none;
 }
 
@@ -151,21 +165,11 @@ img { display: block; }
 }
 .sidebar li a:hover { color: var(--text-strong); background: var(--nav-hover); }
 .sidebar li a[aria-current="location"] { color: var(--text-strong); font-weight: 500; }
-.sidebar li a[aria-current="location"]::before {
-  content: "";
-  position: absolute;
-  left: -2px; top: 50%;
-  width: 5px; height: 5px;
-  margin-top: -2.5px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
 /* ---------- Content column ---------- */
 
 main {
   width: 100%;
-  max-width: calc(var(--col) + 48px);
+  max-width: min(calc(var(--col) + 48px), calc(100vw - var(--sidebar-w)));
   margin-left: max(var(--sidebar-w), calc(50vw - var(--col) / 2 - 24px));
   padding: 40px 24px 0;
 }
@@ -177,14 +181,17 @@ section {
 section#overview { padding-top: 0; }
 
 p { margin: 0 0 14px; }
+/* Prose wraps "pretty" (no one-word last lines); headings balance their lines */
+main p, main li, main dd { text-wrap: pretty; }
+main h1, main h2, main h3 { text-wrap: balance; }
 
 strong { color: var(--text-strong); font-weight: 600; }
 
 h1 {
   margin: 36px 0 12px;
   color: var(--text-strong);
-  font-size: 15px;
-  line-height: 22px;
+  font-size: 17px;
+  line-height: 24px;
   font-weight: 600;
   letter-spacing: -0.15px;
 }
@@ -195,49 +202,173 @@ h2 {
   gap: 12px;
   margin: 0 0 16px;
   color: var(--text-strong);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 15px;
+  line-height: 22px;
   font-weight: 600;
   letter-spacing: -0.08px;
 }
+/* Hand-drawn rule: an uneven path stretched to the heading's width; non-scaling-stroke keeps the
+   line the same thickness at any length. */
 h2::after {
   content: "";
   flex: 1;
-  height: 1px;
-  background: var(--hairline);
+  height: 8px;
+  background: var(--text-faint);
+  opacity: 0.55;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
 }
 
 h3 {
   margin: 28px 0 8px;
   color: var(--text-strong);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 15px;
+  line-height: 22px;
   font-weight: 600;
 }
 h2 + h3 { margin-top: 0; }
 
-.intro { margin-bottom: 28px; }
+.intro { margin-bottom: 24px; }
+/* The headline opens the page; the install line follows the intro. */
+section#overview h1 { margin-top: 0; }
 
-.note, .caption {
+/* The headline's promise gets a hand-drawn blue double underline, the same ink as the loops. A
+   background (not a pseudo-element) so it follows the phrase onto every line it wraps to. */
+/* Six hand-drawn rays around "iOS" in the headline, three above and three below, drawn one by one
+   on load before the underline. The SVG is centered on the word in plain pixels. */
+.rayed { position: relative; }
+.rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 50px;
+  margin: -25px 0 0 -28px;
+  overflow: visible;
+  pointer-events: none;
+}
+.rays path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+/* Round caps paint a dot even at zero length, so each stroke stays invisible until it starts. */
+@keyframes ray-draw { from { stroke-dashoffset: 1; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes underline-draw {
+  0% { background-size: 100% 4.5px, 100% 4.5px, 100% 9px; }
+  45% { background-size: 100% 4.5px, 0 4.5px, 100% 9px; }
+  55% { background-size: 100% 4.5px, 0 4.5px, 100% 9px; }
+  100% { background-size: 0 4.5px, 0 4.5px, 100% 9px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .underlined { animation: underline-draw 1.5s cubic-bezier(.45, 0, .25, 1) 1.2s both; }
+  .rays path { animation: ray-draw 0.2s ease-out var(--t) both; }
+}
+.underlined {
+  padding-bottom: 7px;
+  /* Two page-colored covers over the drawn lines (top half, bottom half) shrink toward the right
+     one after the other on load, so line 1 draws, then line 2. At rest the covers are 0 wide. */
+  background:
+    linear-gradient(var(--bg), var(--bg)) right 0 bottom 0 / 0 4.5px no-repeat,
+    linear-gradient(var(--bg), var(--bg)) right 0 bottom 4.5px / 0 4.5px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M2 3.2C60 2.2 118 3.9 178 2.8S262 2.4 298 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 8.1C70 7.2 130 8.8 196 7.6S270 7.4 294 8.4' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E") left bottom / 100% 9px no-repeat;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
+.circled.draw-pending::after { --sweep: 0deg; }
+.circled.is-drawn::after { --sweep: 360deg; transition: --sweep 0.9s cubic-bezier(.45, 0, .25, 1) 0.15s; }
+
+/* Key phrases get the product's hand-drawn blue loop (the demo's ink path, stretched to the words). */
+.circled { position: relative; margin: 0 5px; white-space: nowrap; }
+.circled::after {
+  content: "";
+  position: absolute;
+  inset: -8px -15px -7px -14px;
+  background: var(--accent);
+  /* The loop, revealed by a sweep turning counterclockwise from its starting corner, so it looks
+     drawn when it scrolls into view (--sweep animates; without @property it just appears). */
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 52 89 43' preserveAspectRatio='none'%3E%3Cpath d='M78 62C62 55 22 56 10 68C2 78 14 90 40 91C64 92 86 86 85 74C84 64 70 59 56 60' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat, conic-gradient(from 45deg, transparent calc(360deg - var(--sweep)), #000 0);
+  -webkit-mask-composite: source-in;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 52 89 43' preserveAspectRatio='none'%3E%3Cpath d='M78 62C62 55 22 56 10 68C2 78 14 90 40 91C64 92 86 86 85 74C84 64 70 59 56 60' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat, conic-gradient(from 45deg, transparent calc(360deg - var(--sweep)), #000 0);
+  mask-composite: intersect;
+  pointer-events: none;
+}
+
+/* Notes and captions share one small caption style (13px, muted), as does the requirements line */
+.note, .caption, .install-meta {
   color: var(--text-muted);
   font-size: 13px;
-  line-height: 20px;
+  line-height: 19px;
 }
 .caption { margin: 20px 0 8px; }
 
-/* Install line at the top */
+/* The pane's resize handle exists only where the pane is a side panel (from 1000px). */
+.pane-handle { display: none; }
+.is-resizing, .is-resizing * { cursor: col-resize !important; -webkit-user-select: none; user-select: none; }
+
+/* Demo as a fixed preview pane on the right, like a simulator pane in an IDE. Only the middle
+   column scrolls; the column centers in the space between the sidebar and the pane. Below
+   1000px the pane folds back into the overview. */
+@media (min-width: 1000px) {
+  /* --pane-w-user is set by dragging the pane's edge (inline script in index.html) */
+  :root { --pane-w: var(--pane-w-user, clamp(340px, 33.333vw, 600px)); }
+  main {
+    /* Centered between the sidebar and the pane, nudged 66px right (rearranged by hand), with room
+       above the headline; it narrows instead of sliding under the pane when space runs out. */
+    --main-left: max(var(--sidebar-w), calc((100vw + var(--sidebar-w) - var(--pane-w)) / 2 - var(--col) / 2 - 24px + 66px));
+    width: min(calc(var(--col) + 48px), calc(100vw - var(--pane-w) - var(--main-left)));
+    margin-left: var(--main-left);
+    padding-top: 88px;
+  }
+  .preview-pane {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: var(--pane-w);
+    background: var(--code-bg);
+  }
+  .pane-handle {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    width: 8px;
+    z-index: 2;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .pane-handle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .pane-handle:hover::after, .pane-handle:focus-visible::after, .is-resizing .pane-handle::after { opacity: 1; }
+  .pane-handle:focus-visible { outline: none; }
+  /* demo.js lays out the docked terminal and the phone inside the full pane. */
+  .preview-pane #demo { width: 100%; height: 100%; aspect-ratio: auto; }
+}
+
+/* Install line: the two install commands as one-liners, requirements underneath */
 .install-bar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
-.install-meta {
-  color: var(--text-muted);
-  font-size: 13px;
-  white-space: nowrap;
-}
-.install-bar .cmd { flex: 0 1 auto; min-width: 0; margin: 0; }
+.install-bar .cmd-stack { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.install-meta { white-space: nowrap; }
+.install-bar .cmd { margin: 0; }
 
 /* #demo: width only; demo.css owns the height and internals. */
 #demo { width: 100%; }
@@ -253,20 +384,20 @@ h2 + h3 { margin-top: 0; }
 .steps li {
   counter-increment: step;
   position: relative;
-  padding-left: 30px;
+  padding-left: 32px;
   margin-bottom: 8px;
 }
 .steps li::before {
   content: counter(step);
   position: absolute;
   left: 0; top: 2px;
-  width: 18px; height: 18px;
+  width: 20px; height: 20px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--accent);
-  box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 2.5px rgba(10, 132, 255, 0.25);
   color: var(--on-accent);
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
   text-align: center;
   letter-spacing: 0;
@@ -284,7 +415,7 @@ h2 + h3 { margin-top: 0; }
 
 code, pre {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 14.5px;
   letter-spacing: 0;
 }
 
@@ -299,44 +430,110 @@ code, pre {
 
 pre {
   margin: 0;
-  padding: 12px 14px;
+  padding: 16px 18px;
   overflow-x: auto;
-  line-height: 20px;
+  line-height: 23px;
   color: var(--text);
   tab-size: 4;
 }
 pre code { font-size: inherit; }
+/* Prose-like output (the sample prompt) wraps instead of scrolling. */
+pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-block pre { font-size: 12.5px; line-height: 20px; }
 
 .code-block {
   position: relative;
-  margin: 0 0 16px;
-  border: 1px solid var(--code-border);
-  border-radius: 10px;
+  margin: 0 0 18px;
+  border-radius: 14px;
   background: var(--code-bg);
 }
 .code-block .copy {
   position: absolute;
-  top: 6px; right: 6px;
+  top: 10px; right: 10px;
   background: var(--bg);
   box-shadow: 0 0 0 1px var(--code-border);
 }
+/* With a mouse, the copy button appears on hover or keyboard focus. */
+@media (hover: hover) {
+  .code-block .copy { opacity: 0; transition: opacity 0.15s, color 0.15s, background-color 0.15s; }
+  .code-block:hover .copy, .code-block .copy:focus-visible, .code-block .copy.is-copied { opacity: 1; }
+}
+.tk-key { color: var(--tk-key); font-weight: 600; }
+.tk-attr { color: var(--tk-attr); }
+.tk-str { color: var(--tk-str); }
+.tk-com { color: var(--tk-com); font-style: italic; }
 
 /* One-line commands */
+/* "lol, lmao even" beside "By hand": single-stroke glyphs drawn after a handwriting reference
+   (neat print, slight right lean, single-story a, looped e) in the loops' blue ink. When it scrolls
+   into view an arrow draws back toward the heading first, then the letters. Strokes are in the
+   SVG's units: 13.4 is 1.3px at the 28px height. */
+.scribble {
+  display: inline-block;
+  height: 28px;
+  aspect-ratio: 1433 / 289;
+  margin-left: 8px;
+  vertical-align: -4px;
+  overflow: visible;
+  transform: rotate(-1deg);
+}
+.scribble path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 13.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.scribble.draw-pending path { stroke-dashoffset: 1; opacity: 0; }
+.scribble.is-drawn path { stroke-dashoffset: 0; opacity: 1; transition: stroke-dashoffset var(--d, 0.24s) ease-out var(--t, 0s), opacity 0s linear var(--t, 0s); }
+
+/* App icons before the agent names: brand tile, white mark */
+.app { white-space: nowrap; }
+.app-icon {
+  /* About cap-height tall with its bottom 2px under the baseline, lined up with the label's letters. An
+     inline-block with no line box inside sits on the baseline by its bottom edge. */
+  position: relative;
+  display: inline-block;
+  width: calc(1.15cap + 2px);
+  height: calc(1.15cap + 2px);
+  margin-right: calc(0.32em - 2px);
+  vertical-align: -2px;
+  /* A squircle corner reads tighter than a round one of the same radius; 45% squircle has the
+     visible rounding of a 30% round corner. */
+  border-radius: 45%;
+  corner-shape: squircle;
+  color: #fff;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 0 0 0.5px var(--hairline);
+}
+.app-icon svg { position: absolute; inset: 18%; width: 64%; height: 64%; }
+.app-claude { background: #D97757; }
+.app-cursor, .app-codex { background: #0b0b0c; }
+
+/* Single-line commands share the code blocks' look: 14px corners, 18px sides, the text 16px from
+   top and bottom (12px padding + the 28px copy button's slack), 12.5px mono. */
 .cmd {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
-  margin: 0 0 14px;
-  padding: 3px 3px 3px 12px;
-  border: 1px solid var(--code-border);
-  border-radius: 8px;
+  margin: 0 0 18px;
+  padding: 12px 12px 12px 18px;
+  border-radius: 14px;
   background: var(--code-bg);
+}
+.cmd .copy { background: var(--bg); box-shadow: 0 0 0 1px var(--code-border); }
+@media (hover: hover) {
+  .cmd .copy { opacity: 0; transition: opacity 0.15s, color 0.15s, background-color 0.15s; }
+  .cmd:hover .copy, .cmd .copy:focus-visible, .cmd .copy.is-copied { opacity: 1; }
 }
 .cmd code {
   flex: 1;
   min-width: 0;
-  padding: 4px 0;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 20px;
   overflow-x: auto;
   white-space: nowrap;
   background: none;
@@ -346,10 +543,9 @@ pre code { font-size: inherit; }
 }
 .cmd code::-webkit-scrollbar { display: none; }
 .cmd.shell code::before { content: "$ "; color: var(--text-faint); }
-.cmd.quote code { font-family: var(--font); font-size: 13px; letter-spacing: -0.08px; }
 
 .cmd-stack { margin-bottom: 14px; }
-.cmd-stack .cmd { margin-bottom: 6px; }
+.cmd-stack .cmd { margin-bottom: 8px; }
 
 /* Copy buttons (hidden until JS fills them) */
 .copy {
@@ -380,15 +576,11 @@ html:not(.js) .copy { display: none; }
 /* ---------- Delivery modes ---------- */
 
 .modes { margin: 0 0 16px; }
-.modes > div {
-  padding: 12px 0;
-  border-top: 1px solid var(--hairline);
-}
-.modes > div:last-child { border-bottom: 1px solid var(--hairline); }
+.modes > div { padding: 12px 0; }
 .modes dt {
   color: var(--text-strong);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 15.5px;
 }
 .modes dd { margin: 2px 0 0; }
 
@@ -399,23 +591,24 @@ html:not(.js) .copy { display: none; }
   border-radius: 999px;
   background: var(--tag-bg);
   color: var(--tag-text);
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 500;
   vertical-align: 1px;
 }
 
+/* Same box as the code blocks: 14px corners, their fill, 18px sides, no border */
 details {
   margin-top: 8px;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--code-bg);
+  padding: 0 18px;
 }
-details[open] { padding-bottom: 4px; }
+details[open] { padding-bottom: 16px; }
 summary {
-  padding: 10px 0;
+  padding: 16px 0;
   color: var(--text-strong);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   list-style-position: inside;
@@ -430,8 +623,8 @@ details > p:first-of-type { margin-top: 2px; }
   padding: 20px 0 48px;
   border-top: 1px solid var(--hairline);
   color: var(--text-muted);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 15px;
+  line-height: 22px;
 }
 .footer-links {
   display: flex;
@@ -472,7 +665,7 @@ main p a, main li a, main dd a {
   }
 
   .wordmark { margin: 0 4px 0 0; flex: none; gap: 7px; font-size: 13.5px; }
-  .wordmark img { width: 22px; height: 22px; border-radius: 5px; }
+  .wordmark-mark { width: 22px; height: 22px; }
 
   .nav-scroll {
     display: flex;
@@ -492,7 +685,6 @@ main p a, main li a, main dd a {
   .nav-label, .nav-group.nav-resources { display: none; }
   .nav-sections { display: flex; flex: none; }
   .sidebar li a { white-space: nowrap; padding: 4px 8px; }
-  .sidebar li a[aria-current="location"]::before { display: none; }
   .sidebar li a[aria-current="location"] { background: var(--nav-hover); }
 
   main {
@@ -505,6 +697,5 @@ main p a, main li a, main dd a {
 }
 
 @media (max-width: 520px) {
-  .install-bar { flex-direction: column; align-items: stretch; gap: 8px; }
-  .install-meta { order: 2; }
+  .install-bar { align-items: stretch; }
 }

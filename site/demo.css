@@ -1,22 +1,19 @@
-/* annotatekit.com hero demo. Every selector is scoped under #demo or prefixed .ak-.
-   The stage is laid out at a fixed size (560 x 530, or 340 x 726 below 480px viewport width)
-   and scaled to the column by demo.js, so all lengths below are stage pixels. */
+/* annotatekit.com hero demo: the phone frame around demo.mp4 (a real AnnotateKit session recorded
+   in the Simulator) and Claude's terminal. Every selector is scoped under #demo or prefixed .ak-.
+   The stage is laid out at a fixed size (560 x 530, or 340 x 746 stacked below 480px; from 1000px it
+   fills the preview pane with the terminal docked, see "Docked") and scaled by demo.js, so lengths
+   below are stage pixels. The screen is 228 x 495.7, the recording's 1206 x 2622 aspect. */
 
 #demo {
   position: relative;
   aspect-ratio: 560 / 530;
 }
 @media (max-width: 479px) {
-  #demo { aspect-ratio: 340 / 726; }
+  #demo { aspect-ratio: 340 / 746; }
 }
 
 .ak-demo {
-  --ak-blue: #0A84FF;
-  --ak-red: #FF3B30;
-  --ak-green: #34C759;
-  --ak-spring: cubic-bezier(.34, 1.42, .52, 1);
   --ak-snappy: cubic-bezier(.25, 1.18, .45, 1);
-  --ak-ease: cubic-bezier(.32, .72, 0, 1);
   --ak-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
   --ak-mono: var(--mono, "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace);
   position: absolute;
@@ -27,6 +24,9 @@
   pointer-events: none;
 }
 .ak-demo *, .ak-demo *::before, .ak-demo *::after { box-sizing: border-box; }
+/* Plain round corners: the site squircles rounded corners, which would bend the frame off the
+   screen's own curve. */
+.ak-term-head i, .ak-phone, .ak-screen { corner-shape: round; }
 
 .ak-stage {
   position: absolute;
@@ -37,503 +37,72 @@
   transform-origin: 0 0;
   transform: scale(var(--ak-scale, 1));
 }
-.ak-narrow .ak-stage { width: 340px; height: 726px; }
+.ak-narrow .ak-stage { width: 340px; height: 746px; }
 
-/* Freeze keyframe animations while the demo is off-screen or the tab is hidden. */
-.ak-paused * { animation-play-state: paused !important; }
-/* Used for instant resets between loops and for the reduced-motion frame. */
-.ak-instant *, .ak-static * { transition: none !important; }
-.ak-static * { animation: none !important; }
+/* ---------- Mesh background ---------- */
+
+/* A grayscale mesh behind the phone and terminal: a gray gradient base with four soft pools of
+   lighter and darker grays drifting over it, in a light and a dark set. They pause with the video
+   (offscreen or hidden tab) and hold still for reduced motion. */
+.ak-mesh {
+  --m-base: linear-gradient(160deg, #ececf0 0%, #dedee3 45%, #e6e6ea 100%);
+  --m1: #ffffff; --m2: #c7c7cc; --m3: #f5f5f7; --m4: #d1d1d6;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--m-base);
+}
+@media (prefers-color-scheme: dark) {
+  .ak-mesh {
+    --m-base: linear-gradient(160deg, #3a3a3d 0%, #2b2b2e 45%, #353538 100%);
+    --m1: #6e6e73; --m2: #8e8e93; --m3: #48484a; --m4: #636366;
+  }
+}
+.ak-mesh i {
+  position: absolute;
+  width: 80%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  corner-shape: round;
+  filter: blur(60px);
+  will-change: transform;
+}
+.ak-mesh i:nth-child(1) { left: -20%; top: -12%; background: var(--m1); opacity: .75; animation: ak-drift1 19s ease-in-out infinite alternate; }
+.ak-mesh i:nth-child(2) { right: -28%; top: 18%; background: var(--m2); opacity: .55; animation: ak-drift2 23s ease-in-out infinite alternate; }
+.ak-mesh i:nth-child(3) { left: 0; bottom: -28%; background: var(--m3); opacity: .7; animation: ak-drift3 29s ease-in-out infinite alternate; }
+.ak-mesh i:nth-child(4) { right: -12%; bottom: 8%; width: 60%; background: var(--m4); opacity: .6; animation: ak-drift4 17s ease-in-out infinite alternate; }
+@keyframes ak-drift1 { to { transform: translate(28%, 22%) scale(1.15); } }
+@keyframes ak-drift2 { to { transform: translate(-30%, 18%) scale(.9); } }
+@keyframes ak-drift3 { to { transform: translate(22%, -26%) scale(1.2); } }
+@keyframes ak-drift4 { to { transform: translate(-24%, -30%) scale(1.1); } }
+.ak-paused .ak-mesh i { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .ak-mesh i { animation: none; } }
+/* Only behind the side panel; phones and narrower windows show the demo on the page itself. */
+@media (max-width: 999px) { .ak-mesh { display: none; } }
 
 /* ---------- Phone ---------- */
 
+/* Black bezel, concentric with the screen: the Simulator's display corner measures 62pt (188.5px
+   at @3x, the 62px of AnnotateKit's Figma), 35.2px at this 228px width, plus the 8px bezel. */
 .ak-phone {
   position: absolute;
   left: 20px;
   top: 10px;
   width: 244px;
-  height: 510px;
+  height: 511.7px;
   padding: 8px;
-  border-radius: 44px;
-  background: #0d0d0f;
+  border-radius: 43.2px;
+  background: #000;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, .14),
-    inset 0 0 0 1px rgba(255, 255, 255, .06),
     0 24px 48px -18px rgba(0, 0, 0, .55),
     0 8px 18px -8px rgba(0, 0, 0, .35);
 }
 .ak-narrow .ak-phone { left: 48px; top: 8px; }
+.ak-screen { width: 228px; height: 495.7px; overflow: hidden; border-radius: 35.2px; background: #000; }
+.ak-video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
 
-.ak-screen {
-  position: relative;
-  width: 228px;
-  height: 494px;
-  border-radius: 36px;
-  overflow: hidden;
-  background: #F2F2F7;
-  font-family: var(--ak-ui);
-  color: #1C1C1E;
-  isolation: isolate;
-}
-.ak-content {
-  position: absolute;
-  inset: 0;
-}
-.ak-ghost { pointer-events: none; transition: opacity .7s ease !important; }
-.ak-term-body.ak-ghost { position: absolute; left: 0; right: 0; top: 26px; background: #18181b; }
-
-.ak-island {
-  position: absolute;
-  left: 76px;
-  top: 9px;
-  width: 76px;
-  height: 22px;
-  border-radius: 11px;
-  background: #000;
-  z-index: 20;
-}
-.ak-homebar {
-  position: absolute;
-  left: 74px;
-  bottom: 7px;
-  width: 80px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(0, 0, 0, .82);
-  z-index: 20;
-}
-
-/* ---------- The app being annotated ---------- */
-
-.ak-status {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 40px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: -.01em;
-}
-.ak-time { position: absolute; left: 25px; top: 14px; }
-.ak-sicons { position: absolute; right: 20px; top: 15px; display: flex; gap: 4px; align-items: center; }
-.ak-sig { display: flex; gap: 1.5px; align-items: flex-end; height: 8px; }
-.ak-sig i { display: block; width: 2.5px; border-radius: 1px; background: #1C1C1E; }
-.ak-sig i:nth-child(1) { height: 3px; }
-.ak-sig i:nth-child(2) { height: 4.5px; }
-.ak-sig i:nth-child(3) { height: 6px; }
-.ak-sig i:nth-child(4) { height: 8px; }
-.ak-batt { position: relative; width: 18px; height: 9px; border-radius: 3px; border: 1px solid rgba(28, 28, 30, .45); padding: 1px; }
-.ak-batt::before { content: ""; display: block; width: 75%; height: 100%; border-radius: 1.5px; background: #1C1C1E; }
-.ak-batt::after { content: ""; position: absolute; right: -3px; top: 2.5px; width: 1.5px; height: 3px; border-radius: 0 1px 1px 0; background: rgba(28, 28, 30, .45); }
-
-.ak-caption {
-  position: absolute;
-  left: 16px;
-  top: 49px;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  color: #8E8E93;
-}
-.ak-title {
-  position: absolute;
-  left: 16px;
-  top: 64px;
-  font-size: 19px;
-  line-height: 22px;
-  font-weight: 700;
-  letter-spacing: -.02em;
-  transform-origin: 0 50%;
-  transition: transform .7s var(--ak-spring);
-}
-.ak-changed .ak-title { transform: scale(1.42); }
-
-.ak-card {
-  position: absolute;
-  left: 12px;
-  width: 204px;
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
-}
-.ak-stats { top: 104px; height: 112px; padding: 11px 12px; }
-.ak-label { font-size: 9.5px; font-weight: 600; color: #8E8E93; }
-.ak-nums { display: flex; gap: 22px; margin-top: 4px; }
-.ak-num-big { font-size: 16px; font-weight: 700; letter-spacing: -.02em; line-height: 20px; }
-.ak-num-unit { font-size: 9px; color: #8E8E93; font-weight: 500; }
-.ak-bars { position: absolute; left: 12px; right: 12px; bottom: 11px; height: 34px; display: flex; gap: 8px; align-items: flex-end; }
-.ak-bars i { flex: 1; display: block; height: 100%; border-radius: 3px; background: #E5E5EA; transform-origin: 50% 100%; }
-.ak-bars i:last-child { background: #FF9F0A; }
-
-.ak-list { top: 228px; height: 88px; }
-.ak-row { position: relative; height: 44px; display: flex; align-items: center; gap: 9px; padding: 0 12px; font-size: 11.5px; font-weight: 500; }
-.ak-row + .ak-row::before { content: ""; position: absolute; left: 45px; right: 0; top: 0; height: .5px; background: rgba(60, 60, 67, .18); }
-.ak-ico { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; }
-.ak-ico::after { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 2px solid #fff; }
-.ak-ico-o { background: #FF9F0A; }
-.ak-ico-p { background: #AF52DE; }
-.ak-row-detail { margin-left: auto; color: #8E8E93; font-weight: 400; font-size: 10.5px; }
-.ak-chev { width: 5px; height: 5px; border-right: 1.5px solid #C7C7CC; border-top: 1.5px solid #C7C7CC; transform: rotate(45deg); margin-left: 2px; }
-
-.ak-button {
-  position: absolute;
-  left: 16px;
-  top: 336px;
-  width: 196px;
-  height: 40px;
-  border-radius: 12px;
-  overflow: hidden;
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.ak-button > span {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-}
-.ak-btn-before { background: #E3E3E8; color: #1C1C1E; }
-.ak-btn-after { background: var(--ak-blue); color: #fff; opacity: 0; transition: opacity .5s ease .12s; }
-.ak-changed .ak-btn-after { opacity: 1; }
-
-/* ---------- Annotate overlay ---------- */
-
-.ak-dim {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, .34);
-  opacity: 0;
-  transition: opacity .3s ease-in-out;
-}
-.ak-glow {
-  position: absolute;
-  inset: 0;
-  border-radius: 36px;
-  opacity: 0;
-  transition: opacity .3s ease-in-out;
-}
-.ak-glow > i {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  animation: ak-pulse 2.4s ease-in-out infinite;
-}
-.ak-glow-blue > i {
-  box-shadow:
-    inset 0 0 0 1.5px rgba(10, 132, 255, .9),
-    inset 0 0 14px 3px rgba(10, 132, 255, .62),
-    inset 0 0 38px 8px rgba(100, 210, 255, .3);
-}
-.ak-glow-green > i {
-  box-shadow:
-    inset 0 0 0 1.5px rgba(52, 199, 89, .9),
-    inset 0 0 14px 3px rgba(52, 199, 89, .58),
-    inset 0 0 38px 8px rgba(102, 212, 207, .3);
-}
-.ak-glow-green { transition-duration: .8s; }
-@keyframes ak-pulse {
-  0%, 100% { opacity: .6; }
-  50% { opacity: 1; }
-}
-
-.ak-annot .ak-dim { opacity: 1; }
-.ak-annot .ak-glow-blue { opacity: 1; }
-.ak-annot.ak-working .ak-glow-blue { opacity: 0; transition-duration: .8s; }
-.ak-annot.ak-working .ak-glow-green { opacity: 1; }
-
-.ak-ink {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 228px;
-  height: 494px;
-  overflow: visible;
-  transition: opacity .3s ease;
-}
-.ak-loop {
-  fill: none;
-  stroke: var(--ak-red);
-  stroke-width: 2.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .25));
-}
-
-.ak-outline {
-  position: absolute;
-  left: 11px;
-  top: 331px;
-  width: 206px;
-  height: 50px;
-  border-radius: 16px;
-  border: 2px solid var(--ak-blue);
-  background: rgba(10, 132, 255, .1);
-  opacity: 0;
-  transform: scale(1.06);
-  transition: opacity .2s ease, transform .35s var(--ak-snappy);
-}
-.ak-outline.ak-on { opacity: 1; transform: none; }
-
-.ak-marker {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  margin: -10px 0 0 -10px;
-  opacity: 0;
-  transform: scale(.3);
-  transition: opacity .18s ease, transform .4s var(--ak-spring);
-}
-.ak-m1 { left: 86px; top: 58px; }
-.ak-m2 { left: 206px; top: 332px; }
-.ak-marker.ak-on { opacity: 1; transform: none; }
-.ak-marker > b {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
-}
-.ak-fill-blue { background: var(--ak-blue); }
-.ak-fill-green { background: var(--ak-green); opacity: 0; transition: opacity .25s ease; }
-.ak-done .ak-fill-green { opacity: 1; }
-.ak-marker > span, .ak-marker > svg {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-size: 10.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  transition: opacity .18s ease, transform .35s var(--ak-spring);
-}
-.ak-marker > svg { width: 20px; height: 20px; opacity: 0; transform: scale(.4); }
-.ak-marker.ak-done > span { opacity: 0; transform: scale(.4); }
-.ak-marker.ak-done > svg { opacity: 1; transform: none; }
-.ak-spin {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, .25);
-  border-top-color: #fff;
-  opacity: 0;
-  transition: opacity .2s ease;
-  animation: ak-rot .8s linear infinite;
-}
-.ak-busy .ak-spin { opacity: 1; }
-.ak-done .ak-spin { opacity: 0; }
-@keyframes ak-rot { to { transform: rotate(360deg); } }
-
-.ak-hint {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 424px;
-  text-align: center;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .45);
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity .25s ease, transform .4s var(--ak-snappy);
-}
-.ak-hint.ak-on { opacity: 1; transform: none; }
-
-.ak-glass {
-  background: rgba(255, 255, 255, .86);
-  -webkit-backdrop-filter: blur(10px) saturate(1.6);
-  backdrop-filter: blur(10px) saturate(1.6);
-  box-shadow: 0 0 0 .5px rgba(255, 255, 255, .6) inset, 0 4px 14px rgba(0, 0, 0, .18);
-}
-
-.ak-bar {
-  position: absolute;
-  left: 12px;
-  top: 450px;
-  width: 204px;
-  height: 30px;
-  display: flex;
-  gap: 6px;
-  opacity: 0;
-  transform: translateY(40px);
-  transition: opacity .25s ease, transform .45s var(--ak-snappy);
-}
-.ak-bar.ak-on { opacity: 1; transform: none; }
-.ak-circle {
-  flex: none;
-  position: relative;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-}
-.ak-circle svg { width: 12px; height: 12px; }
-.ak-count {
-  flex: 1;
-  height: 30px;
-  border-radius: 15px;
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 500;
-  color: #1C1C1E;
-}
-.ak-send-bar > b {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: var(--ak-blue);
-  opacity: 0;
-  transition: opacity .25s ease;
-}
-.ak-send-bar svg { position: relative; color: rgba(28, 28, 30, .35); transition: color .25s ease; }
-.ak-can-send .ak-send-bar > b { opacity: 1; }
-.ak-can-send .ak-send-bar svg { color: #fff; }
-
-.ak-composer {
-  position: absolute;
-  left: 8px;
-  top: 386px;
-  width: 212px;
-  height: 92px;
-  border-radius: 24px;
-  opacity: 0;
-  transform: translateY(110px);
-  transition: opacity .2s ease, transform .5s var(--ak-snappy);
-  z-index: 2;
-}
-.ak-composer.ak-on { opacity: 1; transform: none; }
-.ak-field {
-  position: absolute;
-  left: 16px;
-  right: 14px;
-  top: 14px;
-  font-size: 12px;
-  line-height: 16px;
-  color: #1C1C1E;
-  white-space: nowrap;
-}
-.ak-placeholder { position: absolute; left: 0; top: 0; color: rgba(28, 28, 30, .45); }
-.ak-typed:not(:empty) + .ak-placeholder { opacity: 0; }
-.ak-caret {
-  display: inline-block;
-  width: 1.5px;
-  height: 14px;
-  margin-left: 1px;
-  vertical-align: -2px;
-  background: var(--ak-blue);
-  animation: ak-blink 1s steps(1) infinite;
-}
-@keyframes ak-blink { 50% { opacity: 0; } }
-.ak-chip {
-  position: absolute;
-  left: 10px;
-  bottom: 11px;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, .06);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 500;
-}
-.ak-chip svg { width: 7px; height: 7px; }
-.ak-send-card {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--ak-blue);
-  display: grid;
-  place-items: center;
-  color: #fff;
-}
-.ak-send-card svg { width: 11px; height: 11px; }
-
-/* The launcher pill: positioned by demo.js through transform. */
-.ak-pill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 3;
-  transition: transform .55s var(--ak-snappy), opacity .25s ease;
-}
-.ak-pill-body {
-  height: 24px;
-  padding: 0 11px 0 9px;
-  border-radius: 12px;
-  background: #0b0b0c;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-  box-shadow: 0 0 0 .5px rgba(255, 255, 255, .14) inset, 0 4px 12px rgba(0, 0, 0, .28);
-  transition: transform .35s var(--ak-spring);
-}
-.ak-pill.ak-hidden { opacity: 0; }
-.ak-pill.ak-hidden .ak-pill-body { transform: scale(.8); }
-.ak-pill.ak-press .ak-pill-body { transform: scale(.92); transition-duration: .12s; }
-.ak-pill-text { transition: opacity .14s ease; }
-.ak-pill.ak-swap .ak-pill-text { opacity: 0; }
-.ak-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ak-green);
-  box-shadow: 0 0 6px rgba(52, 199, 89, .7);
-}
-.ak-pill-check { width: 10px; height: 10px; margin-left: -2px; display: none; color: var(--ak-green); }
-.ak-pill.ak-applied .ak-pill-check { display: block; }
-.ak-pill.ak-applied .ak-dot { display: none; }
-
-/* Touch indicator: outer moves (transform), inner presses (transform), ring ripples. */
-.ak-finger {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 24px;
-  height: 24px;
-  margin: -12px 0 0 -12px;
-  z-index: 5;
-  opacity: 0;
-  transition: transform .5s var(--ak-ease), opacity .25s ease;
-}
-.ak-finger.ak-on { opacity: 1; }
-.ak-finger.ak-drag { transition: opacity .25s ease; }
-.ak-finger-in {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: rgba(142, 142, 147, .42);
-  border: 1.5px solid rgba(255, 255, 255, .92);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
-  transition: transform .18s var(--ak-snappy);
-}
-.ak-finger.ak-down .ak-finger-in { transform: scale(.78); transition-duration: .1s; }
-.ak-ripple {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, .9);
-  opacity: 0;
-}
-.ak-finger.ak-tap .ak-ripple { animation: ak-ripple .5s ease-out; }
-@keyframes ak-ripple {
-  0% { opacity: .8; transform: scale(.8); }
-  100% { opacity: 0; transform: scale(2); }
-}
-
-/* ---------- Terminal ---------- */
+/* ---------- Terminal (stage pixels) ---------- */
 
 .ak-term {
   position: absolute;
@@ -553,7 +122,40 @@
     0 22px 44px -14px rgba(0, 0, 0, .55),
     0 6px 14px -6px rgba(0, 0, 0, .35);
 }
-.ak-narrow .ak-term { left: 14px; top: 530px; width: 312px; }
+/* On phones the stage is close to 1:1, so the terminal gets readable type and room for all 8 lines */
+.ak-narrow .ak-term { left: 14px; top: 532px; width: 312px; height: 206px; font-size: 11.5px; line-height: 18px; }
+
+/* Docked (preview pane from 1000px): demo.js moves the terminal out of the scaled stage, so these
+   are real pixels. A phone-only stage is centered above it. */
+.ak-docked .ak-stage { left: var(--ak-x, 0); top: var(--ak-y, 0); width: 260px; height: 528px; }
+.ak-docked .ak-phone { left: 8px; top: 8px; }
+.ak-docked .ak-term {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: 236px;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 14px;
+  line-height: 22px;
+}
+.ak-docked .ak-term-head { height: 32px; padding: 0 14px; border-bottom: 0; background: #141416; }
+.ak-docked .ak-term-head i { display: none; }
+.ak-docked .ak-term-title {
+  position: static;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, .85);
+}
+.ak-docked .ak-claude { width: 14px; height: 14px; margin-right: 7px; }
+.ak-docked .ak-term-body { padding: 10px 14px; }
+.ak-docked .ak-line { padding-left: 21px; }
+
 .ak-term-head {
   position: relative;
   height: 26px;
@@ -578,6 +180,8 @@
   font-weight: 600;
   color: rgba(255, 255, 255, .5);
 }
+/* Claude's mark before the title, in its brand color */
+.ak-claude { width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; color: #D97757; }
 .ak-term-body { padding: 9px 10px; }
 .ak-line {
   position: relative;
@@ -599,3 +203,5 @@
 .ak-str { color: #b5d68b; }
 .ak-star { display: inline-block; animation: ak-rot 2.4s linear infinite; }
 .ak-live { animation: ak-pulse 1.6s ease-in-out infinite; }
+@keyframes ak-rot { to { transform: rotate(360deg); } }
+@keyframes ak-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
