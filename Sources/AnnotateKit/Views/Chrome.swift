@@ -1,9 +1,13 @@
 // Shared overlay chrome for the redesigned annotate mode (Figma PVX9n74hzo5BWauvymG141, group
 // 9257:13754): the 44pt round icon button every surface uses, the shared chrome button style
 // (press feedback only, no disabled dimming), the glass helper, the white number badge, white
-// sketch strokes, and the review bar shown when no pin is open (9257:13549), whose trash asks for
-// confirmation first. Also owns the launcher pill (9265:14439 / 9265:14691): a solid capsule
-// docked above the home indicator whose title narrates the last Send ("Annotate", "4 comments
+// sketch strokes, and the review bar shown when no pin is open (9257:13549, reworked in 9272:17111:
+// a back chevron that keeps the notes, and an action that reads "Save" while no agent listens),
+// whose trash asks for confirmation first. Also owns the hint line drawn above that bar
+// (9272:17120 / 17213 / 17307), which says how to annotate or whether an agent is connected, and
+// narrates a Send with the seconds since it started (9273:18004 / 18099 / 18194); its copy and dot
+// come from `ReviewHint` in AnnotateCore. Also owns the launcher pill (9265:14439 / 9265:14691): a solid capsule
+// docked above the home indicator whose title narrates the last Send ("Annotate", "4 notes
 // sent", …) so delivery progress needs no separate toast or ring, with a connection dot showing
 // whether an agent is listening. The toast below predates the redesign and now only carries
 // in-mode messages.
@@ -72,6 +76,7 @@ struct CircleIconButton: View {
     private static func accessibilityLabel(for systemName: String) -> String {
         switch systemName {
         case "xmark": "Close"
+        case "chevron.left": "Back"
         case "trash": "Clear all"
         case "arrow.up": "Save comment"
         case "paperclip": "Attach image"
@@ -162,8 +167,9 @@ struct SketchStrokes: View {
 
 // MARK: - Review bar
 
-/// Bottom bar while no pin is open (9257:13549): ×, count, trash, Send. Fills the width it is
-/// given; OverlayRoot positions it. State comes from `controller.chrome`, never from `annotations`.
+/// Bottom bar while no pin is open (9272:17111): back, count, trash, Send (or Save while offline).
+/// Fills the width it is given; OverlayRoot positions it. State comes from `controller.chrome` and
+/// `controller.reviewHint`, never from `annotations`.
 struct ReviewBar: View {
     let controller: AnnotateController
     @State private var isConfirmingClear = false
@@ -174,7 +180,8 @@ struct ReviewBar: View {
         let count: Int = if case .review(let count) = chrome { count } else { 0 }
 
         HStack(spacing: 16) {
-            CircleIconButton(systemName: "xmark") { controller.stop() }
+            // A chevron, not ×, because leaving annotate mode keeps the notes (9272:17112)
+            CircleIconButton(systemName: "chevron.left") { controller.stop() }
             Text(OverlayChrome.countTitle(count))
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.primary)
@@ -194,7 +201,8 @@ struct ReviewBar: View {
                 Button {
                     controller.send(keepAnnotating: false)
                 } label: {
-                    Text(OverlayChrome.sendTitle)
+                    // "Save" while offline (9272:17306): the bundle is still written, just not delivered
+                    Text(controller.reviewHint.actionTitle)
                         .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
@@ -214,6 +222,95 @@ struct ReviewBar: View {
         // Glass alone isn't hit-testable; taps between the buttons must not reach the frozen screen
         .contentShape(Capsule())
         .onTapGesture {}
+    }
+}
+
+/// The hint line above the review bar (9272:17120 / 17213 / 17307): an optional status dot and one
+/// line of white text. While a Send is in flight (9273:18004 / 18099 / 18194) it also shows the
+/// time since the Send, ticking once a second. Copy, dot and whether the elapsed shows come from
+/// `ReviewHint`, so the view never decides which hint shows; OverlayRoot places it 16pt above the bar.
+struct ReviewHintLine: View {
+    let hint: ReviewHint
+    /// When the current Send started (`controller.deliveryStartedAt`); nil hides the elapsed.
+    let startedAt: Date?
+
+    /// Figma `gap-[6px]` between dot, text and elapsed (9273:18004).
+    static let spacing: CGFloat = 6
+    /// Figma dot 8×8 (9272:17214 / 9272:17308).
+    static let dotSize: CGFloat = 8
+    /// Figma Colors/Green #34C759, which is systemGreen in light mode.
+    static let connectedColor = Color(uiColor: .systemGreen)
+    /// Figma Primitive/Red #F8001A, exact: it is a primitive, not a semantic system red.
+    static let offlineColor = Color(red: 248 / 255, green: 0, blue: 26 / 255)
+    /// Figma `text-shadow 0 2 4 rgba(0,0,0,0.25)`; SwiftUI's radius is about half the CSS blur.
+    /// It keeps white text legible over a light frozen screen.
+    static let shadowOpacity: Double = 0.25
+    static let shadowRadius: CGFloat = 2
+    static let shadowY: CGFloat = 2
+    /// Not in Figma (no motion context): the line crossfades when the hint changes, e.g. when the
+    /// connection news yields to the gestures hint.
+    static let changeAnimation: Animation = .snappy(duration: 0.25)
+    /// The elapsed counts whole seconds ("1s", "2s", 9273:18007 / 18102), so it ticks once a second.
+    static let tickInterval: TimeInterval = 1
+
+    var body: some View {
+        Group {
+            if hint.showsElapsed, let startedAt {
+                // The timeline lives only in this branch, so an idle hint line never ticks. Anchored
+                // to the Send, so ticks land on whole seconds after it and re-renders don't restart it
+                TimelineView(.periodic(from: startedAt, by: Self.tickInterval)) { context in
+                    row(elapsed: ReviewHint.elapsedText(Int(context.date.timeIntervalSince(startedAt))))
+                }
+            } else {
+                row(elapsed: nil)
+            }
+        }
+        .animation(Self.changeAnimation, value: hint)
+        // VoiceOver reads the text and the elapsed as one element, e.g. "Delivered to Claude, 1s"
+        .accessibilityElement(children: .combine)
+        // A label over the frozen screen; touches go to the annotate canvas beneath it
+        .allowsHitTesting(false)
+    }
+
+    private func row(elapsed: String?) -> some View {
+        HStack(spacing: Self.spacing) {
+            if let dot = hint.dot {
+                Circle()
+                    .fill(Self.color(for: dot))
+                    .frame(width: Self.dotSize, height: Self.dotSize)
+            }
+            Text(hint.text)
+                .modifier(HintTextStyle())
+            if let elapsed {
+                // Figma `"lnum" 1, "tnum" 1`: tabular lining figures, so the width holds as it counts
+                Text(elapsed)
+                    .monospacedDigit()
+                    .modifier(HintTextStyle())
+                    // A long agent message truncates first; the elapsed always shows in full
+                    .layoutPriority(1)
+            }
+        }
+    }
+
+    /// Shared by the text and the elapsed (9273:18006 / 18007): SF Pro Medium 15 / 20, white, one
+    /// line, Figma text-shadow. A fixed 15pt like the review bar's fixed 17pt, so the two never scale
+    /// apart and the line stays 20pt tall (the 15pt default leading, no line spacing modifier).
+    private struct HintTextStyle: ViewModifier {
+        func body(content: Content) -> some View {
+            content
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .shadow(color: .black.opacity(ReviewHintLine.shadowOpacity), radius: ReviewHintLine.shadowRadius,
+                        x: 0, y: ReviewHintLine.shadowY)
+        }
+    }
+
+    private static func color(for dot: ReviewHint.Dot) -> Color {
+        switch dot {
+        case .connected: connectedColor
+        case .offline: offlineColor
+        }
     }
 }
 
@@ -240,7 +337,7 @@ struct LauncherButton: View {
     /// Drag threshold kept from the old launcher, so a tap with a little jitter still taps.
     static let dragThreshold: CGFloat = 8
     /// Not in Figma (no motion context for either frame): title and width changes animate so the
-    /// pill visibly grows into "4 comments sent" instead of jumping.
+    /// pill visibly grows into "4 notes sent" instead of jumping.
     static let statusAnimation: Animation = .snappy(duration: 0.25)
 
     /// Figma is black on white in light mode. Dark mode has no frame, so the pair inverts through
@@ -306,9 +403,21 @@ struct ToastView: View {
     let message: String
     let controller: AnnotateController
 
+    /// The gap OverlayRoot leaves between the hint line and the review bar (`hintGap`, Figma 16pt).
+    static let hintGap: CGFloat = 16
+    /// The hint line's height: one line of fixed 15pt text (no Dynamic Type), whose default leading
+    /// is 20pt (Figma 15 / 20).
+    static let hintHeight: CGFloat = 20
+    /// Not in Figma: the toast's bottom edge sits this far above the hint line's top.
+    static let gapAboveHint: CGFloat = 12
+
     var body: some View {
         let safe = controller.safeInsets
         let width = controller.bounds.width - safe.left - safe.right - 48
+        // The review bar's bottom is AT `chromeBottom` and the hint line sits `hintGap` above it, so
+        // the toast's bottom edge goes `gapAboveHint` above the hint line's top
+        let toastBottom = controller.chromeBottom - AnnotateController.barHeight
+            - Self.hintGap - Self.hintHeight - Self.gapAboveHint
 
         HStack {
             Spacer(minLength: 0)
@@ -322,8 +431,10 @@ struct ToastView: View {
             Spacer(minLength: 0)
         }
         .frame(width: max(width, 0))
-        // Sits just above the review bar, which OverlayRoot docks 8pt above `chromeBottom`.
-        .offset(x: safe.left + 24, y: controller.chromeBottom - 8 - AnnotateController.barHeight - 52)
+        // Positioned by its bottom edge: a frame from the overlay's top down to `toastBottom`,
+        // bottom-aligned, so the toast's own height (one line or two) never needs guessing
+        .frame(height: max(toastBottom, 0), alignment: .bottom)
+        .offset(x: safe.left + 24)
         .allowsHitTesting(false)
     }
 }

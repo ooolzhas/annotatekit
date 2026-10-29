@@ -12,11 +12,12 @@ public enum DeliveryStage: Equatable, Sendable {
     case sent(count: Int)
     /// No Figma frame: nobody picked the bundle up after `unclaimedAfter`. Derived from the old unclaimed toast.
     case unclaimed
-    /// No Figma frame: handed to Claude Code, not opened yet. Reuses the old delivery toast.
+    /// Figma 9273:17925 (hint line "Delivered to Claude"): handed to the agent, not opened yet.
     case delivered
-    /// No Figma frame: the agent opened the bundle. Reuses the old delivery toast.
+    /// Figma 9273:18020 (hint line "Claude looking at it"): the agent opened the bundle.
     case received
-    /// No Figma frame: the agent is working; the message comes from its `status.json`.
+    /// Figma 9273:18115 shows one ("Changes applied, reinstalling"): the agent is working; the message
+    /// comes from its `status.json`.
     case working(message: String?)
     /// No Figma frame: the agent finished; the message comes from its `status.json`.
     case done(message: String?)
@@ -76,12 +77,13 @@ public enum LauncherStatus: Equatable, Sendable {
     /// No Figma source: the same 4 s as the old unclaimed toast; it's a nudge, not a result, so it leaves sooner.
     public static let unclaimedHold: Double = 4
 
-    /// Sent title (Figma 9265:14757, sample "4 comments sent"): "4 comments sent", "1 comment sent".
-    /// Figma shows only the plural; the singular has no frame and is derived. A count ≤ 0 reads as 1
-    /// because a Send always carries at least one pin.
+    /// Sent title: "4 notes sent", "1 note sent". The old launcher frame (Figma 9265:14691, text 9265:14757)
+    /// showed the sample "4 comments sent"; the wording now follows the newer overlay design (9272:17592),
+    /// which says "notes" everywhere ("4 notes", 9272:17114). Figma shows only the plural; the singular has
+    /// no frame and is derived. A count ≤ 0 reads as 1 because a Send always carries at least one pin.
     public static func sentTitle(_ count: Int) -> String {
         let count = max(count, 1)
-        return count == 1 ? "1 comment sent" : "\(count) comments sent"
+        return count == 1 ? "1 note sent" : "\(count) notes sent"
     }
 
     public var title: String {
@@ -93,14 +95,16 @@ public enum LauncherStatus: Equatable, Sendable {
             switch stage {
             case .sent(let count):
                 Self.sentTitle(count)
-            // No Figma frame for the rest: copy reused or shortened from the old delivery toasts so it
-            // fits the one-line pill. unclaimed, notSaved and failed-with-message are new wording.
+            // delivered and received follow the Figma hint line (9273:18006, 9273:18101) instead of the old
+            // toasts; the launcher has no agent input, so they keep a fixed "Claude". No Figma frame for the
+            // rest: copy reused or shortened from the old delivery toasts so it fits the one-line pill.
+            // unclaimed, notSaved and failed-with-message are new wording.
             case .unclaimed:
                 "Not picked up yet"
             case .delivered:
-                "Delivered to Claude Code"
+                "Delivered to Claude"
             case .received:
-                "Claude picked it up"
+                "Claude looking at it"
             case .working(let message):
                 Self.cleaned(message) ?? "Claude is working"
             case .done(let message):

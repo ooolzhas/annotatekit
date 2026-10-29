@@ -26,6 +26,18 @@ All notable changes to this project are documented here. The format is based on
   and returns to "Annotate" (or "Annotate · N" while unsent pins are waiting). It drags vertically
   and inverts in dark mode.
 - The review bar and comment card use interactive Liquid Glass, so they respond to presses.
+- Overlay refinements (Figma SUNSET 9272:17592, 9273:17925):
+  - **Review bar:** it sits 34pt in from the screen edges, on the home indicator. It opens with a
+    back chevron instead of ×, and counts "notes" instead of "comments" (also "Delete N notes?" and
+    "N notes sent").
+  - **Hint line above the bar:**
+    - "Draw, tap or hold to annotate" by default.
+    - "● Claude connected" for a few seconds after you open annotate mode.
+    - "● Agent offline · Notes will be saved" when nothing is listening. Send then reads Save.
+    - While a Send is in flight it narrates it with a timer, e.g. "● Claude looking at it 2s" or
+      the agent's own "Changes applied, reinstalling 9s".
+  - **Background:** a blue gradient rises behind the bottom chrome.
+  - **Comment card:** text sits at 20/16pt. Attached images are 64pt with a white remove badge.
 - The annotated screenshot and crops keep their blue and red markers for contrast. Their strokes are
   now 4pt, and a crop covers the pin's drawing as well as its frame.
 

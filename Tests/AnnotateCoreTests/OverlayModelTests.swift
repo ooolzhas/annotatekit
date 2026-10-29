@@ -53,8 +53,8 @@ import Testing
 
     // MARK: OverlayChrome.clearTitle
 
-    @Test("trash confirmation names how many comments go",
-          arguments: [(1, "Delete 1 comment?"), (4, "Delete 4 comments?")])
+    @Test("trash confirmation names how many notes go",
+          arguments: [(1, "Delete 1 note?"), (4, "Delete 4 notes?")])
     func clearTitleCounts(count: Int, expected: String) {
         #expect(OverlayChrome.clearTitle(count) == expected)
     }
@@ -62,14 +62,14 @@ import Testing
     // MARK: OverlayChrome.countTitle (pluralization is the contract)
 
     @Test("count title pluralizes: 1 is singular, more is plural",
-          arguments: [(1, "1 comment"), (2, "2 comments"), (4, "4 comments")])
+          arguments: [(1, "1 note"), (2, "2 notes"), (4, "4 notes")])
     func countTitlePluralizes(count: Int, expected: String) {
         #expect(OverlayChrome.countTitle(count) == expected)
     }
 
-    @Test("nothing to count falls back to the empty hint", arguments: [0, -1])
+    @Test("nothing to count falls back to the empty title", arguments: [0, -1])
     func countTitleEmpty(count: Int) {
-        #expect(OverlayChrome.countTitle(count) == OverlayChrome.emptyHint)
+        #expect(OverlayChrome.countTitle(count) == OverlayChrome.emptyTitle)
     }
 
     // MARK: PointerIntent.classify

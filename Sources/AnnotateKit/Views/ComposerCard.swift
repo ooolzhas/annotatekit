@@ -1,7 +1,8 @@
-// The comment card for the open pin (Figma 9257:13387): an optional strip of attached reference
-// images, the comment field, and the paperclip / × / ↑ row. It only lays itself out at the width
-// it is given; OverlayRoot docks it to the keyboard and adds the 8pt inset. Return and ↑ save
-// through the controller, which decides via `chrome` whether the comment can be submitted.
+// The comment card for the open pin (Figma 9272:16847 empty · 9272:16929 typed · 9272:17011 with
+// attachments): an optional strip of 64pt reference-image thumbnails with white remove badges,
+// the comment field, and the paperclip / × / ↑ row. It only lays itself out at the width it is
+// given; OverlayRoot docks it to the keyboard and adds the 8pt inset. Return and ↑ save through
+// the controller, which decides via `chrome` whether the comment can be submitted.
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
@@ -25,7 +26,7 @@ struct ComposerCard: View {
                 attachmentStrip
             }
 
-            // 9257:13391 — px 24, py 20, Loose Leading/Body/Regular (17/24)
+            // 9272:16855 / 9272:17029 — px 20, py 16, Loose Leading/Body/Regular (17/24)
             TextField("", text: commentBinding, axis: .vertical)
                 .font(.body.leading(.loose))
                 .foregroundStyle(.primary)
@@ -48,11 +49,11 @@ struct ComposerCard: View {
                 // The drawn placeholder is hidden from VoiceOver; announce it as the hint instead
                 .accessibilityHint(OverlayChrome.placeholder)
                 .overlay(alignment: .topLeading) { placeholder }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 20)
                 // Figma centers the 17pt glyphs in a 24pt line; SwiftUI puts the extra leading
-                // below, so shift 2pt down (22 + 18 keeps the 20 + 20 card height)
-                .padding(.top, 22)
-                .padding(.bottom, 18)
+                // below, so shift 2pt down (18 + 14 keeps the 16 + 16 card height)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
 
             buttonRow
         }
@@ -169,53 +170,80 @@ struct ComposerCard: View {
         .disabled(!canSubmit)
     }
 
-    // MARK: - Attachments (gap design: no Figma frame)
+    // MARK: - Attachments (9272:17019)
 
+    /// 9272:17020 — thumbnail side.
+    private static let thumbnailSize: CGFloat = 64
+    /// 9272:17020 — `rounded-[16px]` thumbnail clip.
+    private static let thumbnailRadius: CGFloat = 16
+    /// 9272:17023 — remove badge diameter.
+    private static let badgeSize: CGFloat = 20
+    /// 9272:17023 — the badge center sits this far inside the thumbnail's top-right corner
+    /// (badge at left 66 / top 10 in the strip, thumbnail at 16…80), so it overhangs 6pt.
+    private static let badgeInset: CGFloat = 4
+    /// The remove badge is too small to hit reliably; the tap target is this square around it.
+    private static let badgeHitSize: CGFloat = 32
+
+    /// How far the badge pokes past the thumbnail's top and right edges (20 / 2 − 4 = 6).
+    private static var badgeOverhang: CGFloat { badgeSize / 2 - badgeInset }
+
+    /// 9272:17019 — `flex gap-[8px] items-end pt-[16px] px-[16px]`.
     private var attachmentStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(draft.images) { image in
+                // The remove badge's 32pt hit box reaches 12pt past its thumbnail's right edge,
+                // over the 8pt gap and 4pt into the next thumbnail. Later HStack siblings draw
+                // on top by default and would take that strip, so stack earlier thumbnails above
+                // later ones to keep each badge's whole hit box tappable
+                ForEach(Array(draft.images.enumerated()), id: \.element.id) { index, image in
                     thumbnail(image)
+                        .zIndex(Double(draft.images.count - index))
                 }
             }
-            // Room above the thumbnails for the remove button's -6pt offset so it isn't clipped
-            .padding(.top, 6)
+            // Room above the thumbnails for the badge's 6pt overhang, inside the ScrollView so
+            // the badge isn't clipped by it
+            .padding(.top, Self.badgeOverhang)
             .padding(.horizontal, 16)
-            // 10 + the 6 above = the 16pt top gap (gap design)
-            .padding(.top, 10)
+            // 10 + the 6pt room above = Figma's 16pt from the card top to the thumbnails
+            .padding(.top, 16 - Self.badgeOverhang)
         }
+        // Four 64pt thumbnails plus gaps fit the card, so the strip never needs to scroll; don't
+        // let it rubber-band thumbnails into the card's rounded corners
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     }
 
     private func thumbnail(_ image: AnnotateController.AttachedImage) -> some View {
         Image(uiImage: image.image)
             .resizable()
             .scaledToFill()
-            .frame(width: 56, height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(width: Self.thumbnailSize, height: Self.thumbnailSize)
+            .clipShape(RoundedRectangle(cornerRadius: Self.thumbnailRadius, style: .continuous))
             .overlay(alignment: .topTrailing) {
                 Button {
                     controller.removeAttachment(image.id)
                 } label: {
-                    // The 22pt visual sits at the thumbnail's top-trailing corner + (6, -6),
-                    // overhanging it; the 32×32 hit area is centered on that offset visual
+                    // 9272:17023 — white 20pt badge, black SF Pro Semibold 11 xmark. Its center
+                    // sits 4pt inside the thumbnail's top-right corner, overhanging it 6pt up and
+                    // right; the 32×32 hit area is centered on the badge
                     Circle()
-                        .fill(Color.black.opacity(0.6))
-                        .frame(width: 22, height: 22)
+                        .fill(Color.white)
+                        .frame(width: Self.badgeSize, height: Self.badgeSize)
                         .overlay {
                             Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.white)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.black)
                         }
-                        .frame(width: 32, height: 32)
+                        .frame(width: Self.badgeHitSize, height: Self.badgeHitSize)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove image")
-                // Lay out at the 22pt visual's size (the 32pt hit box is 5pt larger per side), so
-                // the circle itself aligns .topTrailing to the thumbnail, then offset it to
-                // corner + (6, -6). The hit area overflows layout but stays hit-testable.
-                .padding(-5)
-                .offset(x: 6, y: -6)
+                // Lay out at the 20pt badge's size (the 32pt hit box is 6pt larger per side), so
+                // the circle itself aligns .topTrailing to the thumbnail (center at corner
+                // + (−10, +10)), then offset by 6 to reach corner + (−4, +4). The hit area
+                // overflows layout but stays hit-testable.
+                .padding(-(Self.badgeHitSize - Self.badgeSize) / 2)
+                .offset(x: Self.badgeOverhang, y: -Self.badgeOverhang)
             }
     }
 
