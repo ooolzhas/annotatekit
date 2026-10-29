@@ -150,11 +150,14 @@ extension View {
     /// `interactive` makes the glass react to touch (the system's press shimmer and flex), for
     /// surfaces people press on: the review bar's buttons and the comment card. `tint` colors the
     /// glass (the review bar's ↑, Figma 9276:27565 Tint); before iOS 26 it is a solid fill.
+    /// On iOS 26 the glass materializes as its view is inserted and dematerializes as it leaves
+    /// (owner request): the material condenses in or melts away rather than the shape sliding.
     @ViewBuilder
     func annotateGlass<S: Shape>(in shape: S, interactive: Bool = false, tint: Color? = nil) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             self.glassEffect(annotateGlassStyle(interactive: interactive, tint: tint), in: shape)
+                .glassEffectTransition(.materialize)
         } else {
             self.annotateGlassFallback(in: shape, tint: tint)
         }

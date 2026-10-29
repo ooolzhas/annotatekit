@@ -9,8 +9,8 @@
 // Motion (no Figma motion context): entering and leaving annotate mode fades the frozen screen, its
 // dim, the edge glow and the frost in and out over the same `modeDuration` the bottom chrome
 // (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; the bar,
-// comment card and reply card swap with a short slide, fade and scale
-// from the bottom; the launcher pill scales down and fades about its own center. The edge glow and
+// comment card and reply card swap with a fade while their glass materializes (iOS 26; before it a
+// short slide, fade and scale from the bottom); the launcher pill scales down and fades about its own center. The edge glow and
 // the frost behind the chrome drift like liquid while annotate mode is on. Reduce Motion keeps the
 // fades only and holds the glow and frost still.
 // The whole tree ignores the safe area so SwiftUI coordinates equal window (= screen) points, which
@@ -209,8 +209,11 @@ private struct BottomChrome: View {
         case replying, composing(UUID?), review
     }
 
+    /// On iOS 26 the glass itself materializes and dematerializes (`annotateGlass`), so the view only
+    /// fades and the material carries the motion; before it, a short slide and scale from the bottom.
     private var swapTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
+        if #available(iOS 26.0, *) { return .opacity }
         return .offset(y: Self.swapOffset)
             .combined(with: .scale(scale: Self.swapScale, anchor: .bottom))
             .combined(with: .opacity)
@@ -230,9 +233,12 @@ private struct ActiveOverlay: View {
     /// here. Nil until the first layout pass.
     let chromeTop: CGFloat?
 
-    /// Strength of the bottom gradient at the screen's bottom edge; it fades to clear at the
-    /// chrome's top (Figma 9272:16849 / 9272:17105: `from-[rgba(0,136,255,0)] to-[rgba(0,136,255,0.5)]`).
-    private static let gradientOpacity: Double = 0.5
+    /// Not in Figma (owner request): pins' badges scale up from their own center on a spring.
+    static let badgeAppearance: AnyTransition = .scale(scale: 0.3).combined(with: .opacity)
+        .animation(.spring(duration: 0.45, bounce: 0.35))
+    /// The glow and frost's blue ↔ green crossfade when Claude starts or stops working.
+    static let paletteChange: Animation = .easeInOut(duration: 0.8)
+
     var body: some View {
         let bounds = controller.bounds
         let openID = controller.draft?.annotation.id
@@ -255,10 +261,18 @@ private struct ActiveOverlay: View {
                 .allowsHitTesting(false)
 
             // Figma 9257:13546: the Overlay layer (dim + glow, 9257:13547) sits below every marker
-            // and badge, so pins near the edge stay pure white
-            ScreenGlow()
-                .frame(width: bounds.width, height: bounds.height)
-                .allowsHitTesting(false)
+            // and badge, so pins near the edge stay pure white. Green while Claude works (owner
+            // request): one glow per palette, crossfading, so only one renders at rest
+            ZStack {
+                if controller.isAgentWorking {
+                    ScreenGlow(palette: .working).transition(.opacity)
+                } else {
+                    ScreenGlow(palette: .idle).transition(.opacity)
+                }
+            }
+            .frame(width: bounds.width, height: bounds.height)
+            .allowsHitTesting(false)
+            .animation(Self.paletteChange, value: controller.isAgentWorking)
 
             // Figma layer order: Overlay (dim + glow), then the gradient, then pins and chrome
             bottomFrost
@@ -290,24 +304,24 @@ private struct ActiveOverlay: View {
                 PinBadge(number: pin.index) {
                     controller.openExisting(pin.id)
                 }
-                .position(OverlayPlacement.pinCenter(
+                .badgePlaced(at: OverlayPlacement.pinCenter(
                     for: pin.pinAnchorFrame,
                     radius: AnnotateStyle.badgeSize / 2,
                     in: bounds
                 ))
-                .transition(.scale(scale: 0.3).combined(with: .opacity))
+                .transition(Self.badgeAppearance)
             }
 
             ForEach(sent) { pin in
                 SentPinBadge(number: pin.index, mark: controller.sentPinMark(for: pin)) {
                     controller.openNotes()
                 }
-                .position(OverlayPlacement.pinCenter(
+                .badgePlaced(at: OverlayPlacement.pinCenter(
                     for: pin.pinAnchorFrame,
                     radius: AnnotateStyle.badgeSize / 2,
                     in: bounds
                 ))
-                .transition(.opacity)
+                .transition(Self.badgeAppearance)
             }
         }
         .animation(.snappy(duration: 0.2), value: controller.annotations)
@@ -333,7 +347,14 @@ private struct ActiveOverlay: View {
     private var bottomFrost: some View {
         let bounds = controller.bounds
         let top = chromeTop ?? estimatedChromeTop
-        return BottomFrost()
+        return ZStack {
+            if controller.isAgentWorking {
+                BottomFrost(palette: .working).transition(.opacity)
+            } else {
+                BottomFrost(palette: .idle).transition(.opacity)
+            }
+        }
+        .animation(Self.paletteChange, value: controller.isAgentWorking)
             .frame(width: bounds.width, height: max(bounds.maxY - top, 0))
             .offset(y: top)
             // Decoration only: drawing on the frozen screen behind it must keep working
@@ -352,6 +373,9 @@ private struct ActiveOverlay: View {
 /// The whole thing fades to clear toward its top, as Figma's does. Blobs are elliptical gradients,
 /// not blurred shapes, so moving them costs no blur per frame.
 private struct BottomFrost: View {
+    /// Blue normally, green while Claude works.
+    let palette: GlowPalette
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// One drifting pool of color: where it rests (fractions of the frost's size), how big it is,
@@ -369,14 +393,14 @@ private struct BottomFrost: View {
     private static let washOpacity: Double = 0.28
     /// Where the frost reaches full strength, from its top (the top fades in, like Figma's gradient).
     private static let fadeEnd: CGFloat = 0.6
-    private static let blobs: [Blob] = [
+    private var blobs: [Blob] { [
         Blob(x: 0.2, y: 0.85, width: 0.95, height: 1.1, sway: 0.18, period: 11, phase: 0,
-             color: Color(uiColor: .systemBlue).opacity(0.42)),
+             color: palette.main.opacity(0.42)),
         Blob(x: 0.65, y: 0.95, width: 0.8, height: 0.9, sway: 0.22, period: 8, phase: 2,
-             color: Color(uiColor: .systemCyan).opacity(0.28)),
+             color: palette.light.opacity(0.28)),
         Blob(x: 0.9, y: 0.75, width: 0.7, height: 1.0, sway: 0.16, period: 14, phase: 4,
-             color: Color(uiColor: .systemIndigo).opacity(0.3))
-    ]
+             color: palette.deep.opacity(0.3))
+    ] }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: FluidMotion.frameInterval, paused: reduceMotion)) { context in
@@ -385,12 +409,12 @@ private struct BottomFrost: View {
                 let size = proxy.size
                 ZStack {
                     LinearGradient(
-                        colors: [AnnotateStyle.action.opacity(0), AnnotateStyle.action.opacity(Self.washOpacity)],
+                        colors: [palette.main.opacity(0), palette.main.opacity(Self.washOpacity)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    ForEach(Self.blobs.indices, id: \.self) { index in
-                        let blob = Self.blobs[index]
+                    ForEach(blobs.indices, id: \.self) { index in
+                        let blob = blobs[index]
                         let drift = blob.sway * CGFloat(sin(FluidMotion.angle(time, period: blob.period) + blob.phase))
                         Rectangle()
                             .fill(EllipticalGradient(colors: [blob.color, blob.color.opacity(0)]))
@@ -410,6 +434,21 @@ private struct BottomFrost: View {
     }
 }
 
+/// The colors the edge glow and the frost are mixed from: Accents/Blue with cyan and indigo passages
+/// normally, green with mint and teal while Claude works (owner request).
+struct GlowPalette {
+    let main: Color
+    let light: Color
+    let deep: Color
+
+    static let idle = GlowPalette(
+        main: Color(uiColor: .systemBlue), light: Color(uiColor: .systemCyan), deep: Color(uiColor: .systemIndigo)
+    )
+    static let working = GlowPalette(
+        main: Color(uiColor: .systemGreen), light: Color(uiColor: .systemMint), deep: Color(uiColor: .systemTeal)
+    )
+}
+
 /// Shared clock math for the fluid glow and frost.
 private enum FluidMotion {
     /// They drift slowly, so 30 fps is plenty and halves the work of the display's full rate.
@@ -419,6 +458,17 @@ private enum FluidMotion {
     /// reference-date seconds don't lose precision in the trig.
     static func angle(_ time: TimeInterval, period: Double) -> Double {
         (time.truncatingRemainder(dividingBy: period) / period) * 2 * .pi
+    }
+}
+
+private extension View {
+    /// Places a pin badge by its center in the overlay's top-leading ZStack through alignment guides,
+    /// which move its layout frame. `.position` makes the view fill the screen and `.offset` moves only
+    /// the drawing, so with either a scale transition pivoted far from the badge and it flew in;
+    /// here the badge-sized frame sits on the pin, so it scales about its own center.
+    func badgePlaced(at center: CGPoint) -> some View {
+        alignmentGuide(.leading) { _ in -(center.x - PinBadge.hitSize / 2) }
+            .alignmentGuide(.top) { _ in -(center.y - PinBadge.hitSize / 2) }
     }
 }
 
@@ -512,6 +562,9 @@ private struct SpotMarker: View {
 /// inset shadow, so each band is a wide stroke blurred and masked back inside the screen shape. The
 /// bands never change; only the light behind them turns. Reduce Motion holds the light still.
 private struct ScreenGlow: View {
+    /// Blue normally, green while Claude works.
+    let palette: GlowPalette
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The deeper band reaches about twice Figma's 62pt into the screen, faintly.
@@ -523,34 +576,34 @@ private struct ScreenGlow: View {
 
     /// Around the near band (Figma's 62pt glow): Accents/Blue swelling past Figma's 0.5 and thinning
     /// well below it, with cyan and indigo passages. The ring wraps, so it ends where it starts.
-    private static let nearStops: [Gradient.Stop] = [
-        .init(color: Color(uiColor: .systemBlue).opacity(0.7), location: 0),
-        .init(color: Color(uiColor: .systemCyan).opacity(0.25), location: 0.13),
-        .init(color: Color(uiColor: .systemBlue).opacity(0.55), location: 0.27),
-        .init(color: Color(uiColor: .systemIndigo).opacity(0.18), location: 0.41),
-        .init(color: Color(uiColor: .systemBlue).opacity(0.75), location: 0.56),
-        .init(color: Color(uiColor: .systemCyan).opacity(0.35), location: 0.7),
-        .init(color: Color(uiColor: .systemBlue).opacity(0.2), location: 0.85),
-        .init(color: Color(uiColor: .systemBlue).opacity(0.7), location: 1)
-    ]
+    private var nearStops: [Gradient.Stop] { [
+        .init(color: palette.main.opacity(0.7), location: 0),
+        .init(color: palette.light.opacity(0.25), location: 0.13),
+        .init(color: palette.main.opacity(0.55), location: 0.27),
+        .init(color: palette.deep.opacity(0.18), location: 0.41),
+        .init(color: palette.main.opacity(0.75), location: 0.56),
+        .init(color: palette.light.opacity(0.35), location: 0.7),
+        .init(color: palette.main.opacity(0.2), location: 0.85),
+        .init(color: palette.main.opacity(0.7), location: 1)
+    ] }
     /// Around the deep band: a few faint pools that reach further in, clear in between.
-    private static let deepStops: [Gradient.Stop] = [
-        .init(color: Color(uiColor: .systemBlue).opacity(0.3), location: 0),
+    private var deepStops: [Gradient.Stop] { [
+        .init(color: palette.main.opacity(0.3), location: 0),
         .init(color: .clear, location: 0.18),
-        .init(color: Color(uiColor: .systemIndigo).opacity(0.28), location: 0.37),
+        .init(color: palette.deep.opacity(0.28), location: 0.37),
         .init(color: .clear, location: 0.55),
-        .init(color: Color(uiColor: .systemCyan).opacity(0.3), location: 0.72),
+        .init(color: palette.light.opacity(0.3), location: 0.72),
         .init(color: .clear, location: 0.88),
-        .init(color: Color(uiColor: .systemBlue).opacity(0.3), location: 1)
-    ]
+        .init(color: palette.main.opacity(0.3), location: 1)
+    ] }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: FluidMotion.frameInterval, paused: reduceMotion)) { context in
             let time = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             ZStack {
-                Self.ring(Self.deepStops, turn: -FluidMotion.angle(time, period: Self.deepPeriod))
+                Self.ring(deepStops, turn: -FluidMotion.angle(time, period: Self.deepPeriod))
                     .mask(EdgeBand(width: Self.deepWidth))
-                Self.ring(Self.nearStops, turn: FluidMotion.angle(time, period: Self.nearPeriod))
+                Self.ring(nearStops, turn: FluidMotion.angle(time, period: Self.nearPeriod))
                     .mask(EdgeBand(width: AnnotateStyle.glowBlur))
             }
         }

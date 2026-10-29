@@ -958,6 +958,14 @@ final class AnnotateController {
         bounds.maxY - max(safeInsets.bottom, 12)
     }
 
+    /// Claude is reading or working on the last Send: the edge glow and frost turn green meanwhile.
+    var isAgentWorking: Bool {
+        switch delivery {
+        case .received, .working: true
+        default: false
+        }
+    }
+
     /// What the launcher pill says: the delivery stage while one is showing, otherwise idle with
     /// the pins kept from earlier (saved but not sent).
     var launcherStatus: LauncherStatus {

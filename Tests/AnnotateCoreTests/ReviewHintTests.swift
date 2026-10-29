@@ -257,14 +257,15 @@ import Testing
         #expect(!hint.showsElapsed)
     }
 
-    @Test("elapsed text: seconds below a minute, floored whole minutes from 60, negative reads 0s",
+    @Test("elapsed text: seconds below a minute, then minutes and seconds, negative reads 0s",
           arguments: [
               (-5, "0s"),
               (0, "0s"),
               (59, "59s"),
-              (60, "1m"),
-              (119, "1m"),
-              (3600, "60m")
+              (60, "1m 0s"),
+              (65, "1m 5s"),
+              (119, "1m 59s"),
+              (3600, "60m 0s")
           ])
     func elapsedText(seconds: Int, expected: String) {
         #expect(ReviewHint.elapsedText(seconds) == expected)

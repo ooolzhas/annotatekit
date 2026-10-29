@@ -97,6 +97,14 @@ All notable changes to this project are documented here. The format is based on
     sits right under the toolbar.
   - The launcher pill is Liquid Glass instead of a solid black capsule, with 8pt between its dot
     and title.
+  - On iOS 26 the overlay's glass materializes as it appears and dematerializes as it leaves
+    (`glassEffectTransition(.materialize)`): the bar and card switches fade while their glass
+    condenses in or melts away, in place of the slide and scale (kept before iOS 26).
+  - Pin badges scale up from their own center on a spring instead of flying in from the screen's
+    middle. The edge glow and the frost turn green, with mint and teal, while Claude reads or works
+    on a Send, crossfading back to blue after. The elapsed counter reads "45s", then "1m 5s",
+    never minutes alone. The notes sheet's empty states use one speech-bubble family:
+    `text.bubble`, `progress.indicator`, `checkmark.bubble`, `exclamationmark.bubble`.
   - The hint line swaps with a soft rise: the new line comes up from below while the old one leaves
     upward, both blurred and faded (a plain fade with Reduce Motion).
   - The hint line's elapsed counter rolls its digits on each tick, and its status dot pulses slowly

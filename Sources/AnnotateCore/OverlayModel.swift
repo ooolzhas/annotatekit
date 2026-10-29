@@ -302,15 +302,15 @@ public enum ReviewHint: Equatable, Sendable {
     }
 
     /// Elapsed time since Send: "Ns" below a minute (Figma 9273:18007 sample "1s"), a negative input
-    /// (clock skew) reads "0s". From 60 s it reads whole minutes, floored ("Nm"); no Figma frame
-    /// (derived), since seconds past a minute are noise on a one-line hint.
+    /// (clock skew) reads "0s". From 60 s it reads minutes and seconds ("1m 5s"), never minutes
+    /// alone (owner request), so the counter keeps visibly moving.
     public static func elapsedText(_ seconds: Int) -> String {
         let seconds = max(seconds, 0)
         if seconds < secondsPerMinute { return "\(seconds)s" }
-        return "\(seconds / secondsPerMinute)m"
+        return "\(seconds / secondsPerMinute)m \(seconds % secondsPerMinute)s"
     }
 
-    /// Where `elapsedText` switches from seconds to minutes.
+    /// Where `elapsedText` adds minutes.
     private static let secondsPerMinute = 60
 
     /// "Save" while offline (Figma 9272:17306), else "Send" (Figma 9272:17119).

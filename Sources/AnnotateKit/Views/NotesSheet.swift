@@ -157,10 +157,11 @@ struct NotesSheet: View {
 
     private static func emptySymbol(_ filter: NoteFilter) -> String {
         switch filter {
-        case .current: "note.text"
-        case .inProgress: "hourglass"
-        case .resolved: "checkmark.circle"
-        case .failed: "xmark.circle"
+        // Owner picks: one speech-bubble family, and the system spinner glyph for work under way
+        case .current: "text.bubble"
+        case .inProgress: "progress.indicator"
+        case .resolved: "checkmark.bubble"
+        case .failed: "exclamationmark.bubble"
         }
     }
 
