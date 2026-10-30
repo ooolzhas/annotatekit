@@ -128,11 +128,10 @@ img { display: block; }
   letter-spacing: -0.2px;
   text-decoration: none;
 }
+/* The favicon artwork (loop + plain pin, drawn for small sizes); its squircle is in the SVG. */
 .wordmark-mark {
   width: 24px; height: 24px;
-  border-radius: 30%;
-  corner-shape: round;
-  background: var(--text-faint);
+  background: url("favicon.svg") center / contain no-repeat;
   flex: none;
 }
 
