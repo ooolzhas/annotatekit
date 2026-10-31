@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- Opening a pin no longer cuts straight from the review bar to the comment card: the bar and its
+  hint line shrink and fade while the card rises from below, the same motion as the Annotate pill
+  handing over to the bar. Closing the card grows the bar back the same way.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
