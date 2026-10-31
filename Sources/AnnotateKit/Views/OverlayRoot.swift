@@ -8,9 +8,9 @@
 // screen's bottom. The notes sheet (every note and the last Send's outcomes) hangs off the chrome.
 // Motion (no Figma motion context): entering and leaving annotate mode fades the frozen screen, its
 // dim, the edge glow and the frost in and out over the same `modeDuration` the bottom chrome
-// (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; the bar,
-// comment card and reply card swap with a fade while their glass materializes (iOS 26; before it a
-// short slide, fade and scale from the bottom); the launcher pill scales down and fades about its own center, and
+// (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; when a pin
+// opens, the review bar and hint line shrink and fade like the launcher pill while the comment (or
+// reply) card rises from below like the chrome does, on the same timing; the launcher pill scales down and fades about its own center, and
 // comes in the same way once on a fresh open (`isLauncherRevealed`) instead of popping up. The edge glow and
 // the frost behind the chrome drift like liquid while annotate mode is on. Reduce Motion keeps the
 // fades only and holds the glow and frost still.
@@ -31,14 +31,14 @@ struct OverlayRoot: View {
     @State private var chromeTop: CGFloat?
 
     /// How small the launcher pill gets as it fades out (and grows back from as it fades in).
-    private static let launcherHiddenScale: CGFloat = 0.8
+    fileprivate static let launcherHiddenScale: CGFloat = 0.8
     /// How far below its place the bottom chrome starts as annotate mode opens (and ends as it closes).
-    private static let chromeEntranceOffset: CGFloat = 48
+    fileprivate static let chromeEntranceOffset: CGFloat = 48
     /// How long entering and leaving annotate mode takes: the chrome's rise and the fade of the frozen
     /// screen, its dim, glow and frost all share it, so they arrive and leave together.
     static let modeDuration: Double = 0.3
     /// The chrome's rise and sink, and the launcher's scale.
-    private static let modeAnimation: Animation = .snappy(duration: modeDuration)
+    fileprivate static let modeAnimation: Animation = .snappy(duration: modeDuration)
     /// The dim, glow and frost fade on an ease rather than the chrome's spring: a spring on opacity
     /// is all but done in its first third and reads as a pop, an ease reads as a gradual fade.
     private static let backdropFade: Animation = .easeInOut(duration: modeDuration)
@@ -110,11 +110,6 @@ private struct BottomChrome: View {
     private static let hintGap: CGFloat = 16
     /// The chrome's keyboard snap (no Figma motion), shared by the gradient so the two move together.
     private static let chromeAnimation: Animation = .snappy(duration: 0.25)
-    /// Bar ↔ card swaps: each comes in from (and leaves toward) this far below, slightly
-    /// scaled down from its bottom edge, fading.
-    private static let swapOffset: CGFloat = 24
-    private static let swapScale: CGFloat = 0.96
-    private static let swapAnimation: Animation = .spring(duration: 0.35, bounce: 0.15)
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -164,10 +159,11 @@ private struct BottomChrome: View {
                 }
                 // Anchored to the home indicator: the bar never rides the keyboard
                 .padding(.bottom, belowBar)
-                .transition(swapTransition)
+                .transition(barTransition)
             }
         }
-        .animation(Self.swapAnimation, value: chromeKind)
+        // Bar ↔ card swaps share annotate mode's own timing, so they move like the launcher ↔ bar swap
+        .animation(OverlayRoot.modeAnimation, value: chromeKind)
         .frame(width: bounds.width)
         // The gradient lives in ActiveOverlay (under markers and badges), so it can't simply be
         // this stack's background; it reads the stack's top from here instead. The tree ignores
@@ -211,20 +207,23 @@ private struct BottomChrome: View {
         case replying, composing(UUID?), review
     }
 
-    /// On iOS 26 the glass itself materializes and dematerializes (`annotateGlass`), so the view only
-    /// fades and the material carries the motion; before it, a short slide and scale from the bottom.
-    private var swapTransition: AnyTransition {
+    /// The review bar and hint line shrink and fade about their center as a card takes over, and grow
+    /// back the same way, like the launcher pill. Glass alone barely fades (the old opacity-only swap
+    /// read as an instant cut), so the scale carries the motion.
+    private var barTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
-        if #available(iOS 26.0, *) { return .opacity }
-        return .offset(y: Self.swapOffset)
-            .combined(with: .scale(scale: Self.swapScale, anchor: .bottom))
-            .combined(with: .opacity)
+        return .scale(scale: OverlayRoot.launcherHiddenScale).combined(with: .opacity)
     }
 
-    /// The comment and reply cards slide in like the bar, but leave at once (design choice): by the
-    /// time one goes, a send has already hidden it while the keyboard slid away (SendAfterKeyboard).
+    /// The comment and reply cards rise from below like the chrome does as annotate mode opens, but
+    /// leave at once (design choice): by the time one goes, a send has already hidden it while the
+    /// keyboard slid away (SendAfterKeyboard).
     private var cardTransition: AnyTransition {
-        .asymmetric(insertion: swapTransition, removal: .identity)
+        guard !reduceMotion else { return .asymmetric(insertion: .opacity, removal: .identity) }
+        return .asymmetric(
+            insertion: .offset(y: OverlayRoot.chromeEntranceOffset).combined(with: .opacity),
+            removal: .identity
+        )
     }
 }
 
