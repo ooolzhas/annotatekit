@@ -147,7 +147,6 @@ Tools:
 | Back out | `Esc` |
 | Send | **↑** on the bar or `⌘Return`. Annotate mode stays open with the sent notes' progress |
 | See, open or delete notes | Tap the note count on the bar: the notes sheet lists them; swipe to delete, the trash icon clears them all |
-| Move the pill | Drag it up or down. Left alone, it keeps clear of your tab bar and other bottom bars |
 
 To annotate another screen, leave annotate mode, navigate, and come back. One Send carries every
 screen with pins on it.

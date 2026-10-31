@@ -106,40 +106,41 @@ struct ChromeButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Sending from a card
+// MARK: - Leaving a card
 
-/// Sending from the comment or reply card (design choice): the card vanishes at once but stays in
-/// place while its field lets go of the keyboard, and only once the keyboard has slid away does `send`
-/// run and take the card out for real. Taking the field out with the keyboard still up made iOS drop
-/// the keyboard without its slide. Callers send directly when no keyboard is up.
-struct SendAfterKeyboard: ViewModifier {
-    @Binding var isLeaving: Bool
-    let send: () -> Void
+/// Leaving the comment or reply card with the keyboard up (send or cancel): the card first lets go of
+/// the keyboard, and `leave` runs once the keyboard starts sliding away, taking the card out so it
+/// shrinks and fades in place while the bar rises from below (`BottomChrome.swapTransition`).
+/// Taking the field out while it still held the keyboard made iOS drop the keyboard without its
+/// slide; once focus is gone the slide survives. The card takes no touches in between. Callers run
+/// the action directly when no keyboard is up.
+struct LeaveAfterKeyboard: ViewModifier {
+    /// What leaving does (save, send, discard, cancel); nil while the card stays.
+    @Binding var leave: (() -> Void)?
 
-    /// If iOS never reports the keyboard gone, the card leaves anyway after this; longer than the
+    /// If iOS never reports the keyboard going, the card leaves anyway after this; longer than the
     /// keyboard's own slide.
     static let timeout: Duration = .milliseconds(600)
 
     func body(content: Content) -> some View {
         content
-            .opacity(isLeaving ? 0 : 1)
-            .allowsHitTesting(!isLeaving)
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+            .allowsHitTesting(leave == nil)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                 finish()
             }
-            .task(id: isLeaving) {
-                guard isLeaving else { return }
+            .task(id: leave != nil) {
+                guard leave != nil else { return }
                 try? await Task.sleep(for: Self.timeout)
                 finish()
             }
     }
 
     private func finish() {
-        guard isLeaving else { return }
-        // Stays hidden through its own removal: un-hiding in the same update faded a ghost of the
-        // card in under the arriving bar. The ↑ that started this only works when a send can go
-        // through, so the card always leaves here.
-        send()
+        guard let action = leave else { return }
+        leave = nil
+        // A turn later: iOS posts the will-hide while the field is still letting go of focus, and
+        // taking the field out inside that call dropped the keyboard without its slide
+        DispatchQueue.main.async { action() }
     }
 }
 
@@ -187,112 +188,119 @@ private func annotateGlassStyle(interactive: Bool, tint: Color?) -> Glass {
 
 // MARK: - Pins
 
-/// Numbered pin marker at a pin's anchor (Figma 9378:6116 Marker): the 28pt blue
-/// marker with a white number; tap reopens the pin.
+/// What a pin's marker shows. Each pin keeps one marker through every state, so going from one to
+/// the next swaps only the glyph (and the fill, when it differs), never the marker itself.
+enum PinFace: Equatable {
+    /// The pin's comment card is open: + for a pin being created (Figma 9378:5659), a pencil for a
+    /// saved pin being edited (9378:5178).
+    case drafting(isNew: Bool)
+    /// Saved, waiting for a Send: its number (9378:6116).
+    case saved
+    /// Sent, while the Send's pins stay on screen (9276:28552): number, spinner or outcome glyph.
+    case sent(SentPinMark)
+}
+
+/// A pin's marker at its anchor (Figma 9378:6116 Marker): the 28pt marker with a white glyph that
+/// follows `face`. Saved pins reopen on tap, sent pins open the notes sheet, and the open pin's
+/// marker takes no taps (its card is where it's edited). OverlayRoot keys it by the pin, so saving,
+/// reopening and sending change the glyph in place: it scales and fades between glyphs, and the
+/// fill crossfades when the new face has another color (blue → green on resolve).
 struct PinBadge: View {
     let number: Int
+    let face: PinFace
     let action: () -> Void
 
     /// The HIG's 44pt minimum around the 28pt marker, so markers are easy to hit on a phone.
     static let hitSize: CGFloat = 44
-
-    var body: some View {
-        Button(action: action) {
-            BadgeNumber(number: number)
-                .modifier(BadgeShape(fill: AnnotateStyle.pinFill))
-        }
-        .buttonStyle(ChromeButtonStyle())
-        .accessibilityLabel("Pin \(number)")
-    }
-}
-
-/// A sent pin's marker while the Send's pins stay on screen (Figma 9276:28552): the same 28pt blue
-/// marker holding a white spinner while the agent has the pin, the outcome's white glyph once it
-/// reports one (Figma 9378:6440: the marker turns green behind a white checkmark for resolved), or
-/// the number. Which one comes from `SentPinMark`; tap opens the notes sheet.
-struct SentPinBadge: View {
-    let number: Int
-    let mark: SentPinMark
-    let action: () -> Void
-
-    /// Figma 9276:27955: SF Pro Bold 12. No longer drawn on the marker (its glyphs are 15pt semibold,
-    /// `MarkerGlyph`); the notes sheet's outcome badge still uses it.
-    static let glyphSize: CGFloat = 12
-    /// Not in Figma (no motion context): the spinner turning into a checkmark pops rather than cuts,
-    /// and the marker's fill crossfades blue → green with it.
+    /// Not in Figma (no motion context): the glyph swap and the fill crossfade.
     static let changeAnimation: Animation = .snappy(duration: 0.25)
+    /// Figma 9276:27955: SF Pro Bold 12, the notes sheet's outcome glyph (the marker's glyphs are
+    /// 15pt semibold, `MarkerGlyph`).
+    static let listGlyphSize: CGFloat = 12
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                switch mark {
-                case .number:
-                    BadgeNumber(number: number)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                case .progress:
-                    // Figma draws SF Symbols' progress.indicator in white; the system spinner is the same glyph, animated
-                    ProgressView()
-                        .controlSize(.mini)
-                        .tint(.white)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                case .symbol(let name, _):
-                    MarkerGlyph(systemName: name)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                }
+                glyph
+                    // A new identity per glyph, so the swap runs the transition; the same glyph in a
+                    // new face (saved → sent, both numbered) stays put
+                    .id(glyphKey)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
-            .modifier(BadgeShape(fill: Self.fill(for: mark)))
-            .animation(Self.changeAnimation, value: mark)
+            .modifier(BadgeShape(fill: fill))
+            .animation(Self.changeAnimation, value: face)
         }
         .buttonStyle(ChromeButtonStyle())
+        .allowsHitTesting(!isDrafting)
+        .accessibilityHidden(isDrafting)
         .accessibilityLabel("Pin \(number)")
         .accessibilityValue(accessibilityValue)
-        .accessibilityHint("Show the notes")
+        .accessibilityHint(accessibilityHint)
+    }
+
+    private var isDrafting: Bool {
+        if case .drafting = face { return true }
+        return false
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        switch face {
+        case .drafting(let isNew):
+            MarkerGlyph(systemName: isNew ? "plus" : "pencil")
+        case .saved, .sent(.number):
+            BadgeNumber(number: number)
+        case .sent(.progress):
+            // Figma draws SF Symbols' progress.indicator in white; the system spinner is the same glyph, animated
+            ProgressView()
+                .controlSize(.mini)
+                .tint(.white)
+        case .sent(.symbol(let name, _)):
+            MarkerGlyph(systemName: name)
+        }
+    }
+
+    /// Which glyph shows, for the swap: + / pencil / the number / spinner / a symbol.
+    private var glyphKey: String {
+        switch face {
+        case .drafting(let isNew): isNew ? "plus" : "pencil"
+        case .saved, .sent(.number): "number \(number)"
+        case .sent(.progress): "progress"
+        case .sent(.symbol(let name, _)): name
+        }
+    }
+
+    /// The marker's fill behind the white glyph. Figma: Accents/Blue while open, saved, numbered or
+    /// spinning (9378:6116), green for resolved (9378:6440). The other outcomes have no Figma frame
+    /// (derived): gray for dismissed, orange for a question, matching the notes sheet.
+    private var fill: Color {
+        guard case .sent(.symbol(_, let tone)) = face else { return AnnotateStyle.pinFill }
+        switch tone {
+        case .neutral: return AnnotateStyle.pinFill
+        case .success: return AnnotateStyle.pinResolvedFill
+        case .muted: return Color(uiColor: .systemGray)
+        case .attention: return Color(uiColor: .systemOrange)
+        }
     }
 
     private var accessibilityValue: String {
+        guard case .sent(let mark) = face else { return "" }
         switch mark {
-        case .number: "Sent"
-        case .progress: "In progress"
+        case .number: return "Sent"
+        case .progress: return "In progress"
         case .symbol(let name, _):
             switch name {
-            case "checkmark": "Resolved"
-            case "questionmark": "Question"
-            case "xmark": "Dismissed"
-            default: name
+            case "checkmark": return "Resolved"
+            case "questionmark": return "Question"
+            case "xmark": return "Dismissed"
+            default: return name
             }
         }
     }
 
-    /// The marker's fill behind the white glyph. Figma: Accents/Blue for the number and the spinner
-    /// (9378:6116), green for resolved (9378:6440). The other tones have no Figma frame (derived):
-    /// gray for dismissed, orange for a question, matching the notes sheet.
-    private static func fill(for mark: SentPinMark) -> Color {
-        switch mark {
-        case .number, .progress: AnnotateStyle.pinFill
-        case .symbol(_, let tone):
-            switch tone {
-            case .neutral: AnnotateStyle.pinFill
-            case .success: AnnotateStyle.pinResolvedFill
-            case .muted: Color(uiColor: .systemGray)
-            case .attention: Color(uiColor: .systemOrange)
-            }
-        }
-    }
-}
-
-/// The open pin's marker while its comment card is up: the blue marker with a + for a pin being
-/// created (Figma 9378:5659), a pencil for a saved pin being edited (9378:5178). Not a button: the
-/// card is where the pin is edited.
-struct DraftPinBadge: View {
-    /// A pin being created rather than a saved one reopened (`AnnotateController.Draft.isNew`).
-    let isNew: Bool
-
-    var body: some View {
-        MarkerGlyph(systemName: isNew ? "plus" : "pencil")
-            .frame(width: AnnotateStyle.badgeSize, height: AnnotateStyle.badgeSize)
-            .background(MarkerCircle(fill: AnnotateStyle.pinFill))
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+    private var accessibilityHint: String {
+        if case .sent = face { return "Show the notes" }
+        return ""
     }
 }
 
@@ -647,16 +655,26 @@ private struct HintSwap: Transition {
 /// lives on `LauncherStatus` in AnnotateCore, so the wording stays testable on Linux.
 struct LauncherButton: View {
     let controller: AnnotateController
-    /// Vertical drag only: the pill keeps its column (centered, or the side avoidance put it on).
-    @GestureState private var dragOffset: CGFloat = 0
+    /// The status indicator is in the pill. Off the first time the pill shows in a run, so it can
+    /// introduce itself; on for every later appearance.
+    @State private var showsIndicator = LauncherButton.hasIntroducedIndicator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The indicator has slid in once this run (owner request): the pill first reads just
+    /// "Annotate", then the dot slides out leftward from behind the label and the pill widens to
+    /// make room. Later appearances show it from the start.
+    @MainActor private static var hasIntroducedIndicator = false
+    /// How long the pill shows just its title first: past its own fade-in (`OverlayRoot.modeDuration`)
+    /// with a beat to read it (design choice).
+    static let indicatorDelay: Duration = .milliseconds(600)
+    /// The slide and the widening, together (design choice; no Figma motion context).
+    static let indicatorAnimation: Animation = .spring(duration: 0.5, bounce: 0.2)
 
     /// Figma's horizontal title padding (9289:1310 `px-[16px]`).
     static let horizontalPadding: CGFloat = 16
     /// Figma title: SF Pro Medium 17 (9289:1312). Its 22pt leading is the 17pt default, so no
     /// line spacing modifier.
     static let titleSize: CGFloat = 17
-    /// Drag threshold kept from the old launcher, so a tap with a little jitter still taps.
-    static let dragThreshold: CGFloat = 8
     /// Not in Figma (no motion context for either frame): title and width changes animate so the
     /// pill visibly grows into "4 notes sent" instead of jumping.
     static let statusAnimation: Animation = .snappy(duration: 0.25)
@@ -675,13 +693,19 @@ struct LauncherButton: View {
         let link = controller.agentLink
 
         HStack(spacing: Self.dotSpacing) {
-            ConnectionDot(link: link)
+            if showsIndicator {
+                ConnectionDot(link: link)
+                    .transition(indicatorEntrance)
+            }
             Text(status.title)
                 .font(.system(size: Self.titleSize, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // Above the dot, so the dot comes out from behind it
+                .zIndex(1)
         }
+            .task { await introduceIndicator() }
             .padding(.horizontal, Self.horizontalPadding)
             // The 44pt Figma height wins over its py-8 (22 + 16 = 38)
             .frame(height: AnnotateController.launcherHeight)
@@ -694,14 +718,8 @@ struct LauncherButton: View {
             // which changes with every title; measured here, before `.position` expands the view
             .onGeometryChange(for: CGSize.self) { $0.size } action: { controller.updateLauncherSize($0) }
             .contentShape(Capsule())
+            // Tap only (owner request): the pill can't be dragged; avoidance places it
             .onTapGesture { controller.start() }
-            .gesture(
-                DragGesture(minimumDistance: Self.dragThreshold)
-                    .updating($dragOffset) { value, state, _ in state = value.translation.height }
-                    .onEnded { value in
-                        controller.moveLauncher(toCenterY: frame.midY + value.translation.height)
-                    }
-            )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(status.title)
             .accessibilityValue(ConnectionDot.accessibilityValue(link: link, agent: agent))
@@ -711,8 +729,28 @@ struct LauncherButton: View {
             // measurement and the hit shape, or they would take the capped frame's width (a
             // maxWidth-only frame grows to the proposal) instead of the pill's
             .frame(maxWidth: maxWidth)
-            .position(x: frame.midX, y: frame.midY + dragOffset)
+            .position(x: frame.midX, y: frame.midY)
             .animation(Self.placementAnimation, value: controller.launcherSpot)
+    }
+
+    /// The dot starts behind the label's first letters (one dot plus its gap to the right of its
+    /// place) and slides left into place, fading in as it clears the label.
+    private var indicatorEntrance: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .offset(x: Self.dotSpacing + StatusIndicator.dotSize).combined(with: .opacity),
+            removal: .opacity
+        )
+    }
+
+    private func introduceIndicator() async {
+        guard !showsIndicator else { return }
+        try? await Task.sleep(for: Self.indicatorDelay)
+        guard !Task.isCancelled else { return }
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : Self.indicatorAnimation) {
+            showsIndicator = true
+        }
+        Self.hasIntroducedIndicator = true
     }
 }
 

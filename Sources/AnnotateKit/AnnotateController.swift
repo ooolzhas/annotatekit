@@ -159,12 +159,10 @@ final class AnnotateController {
     /// The stroke under the finger, in screen points; joins a pin when the finger lifts.
     private(set) var liveStroke: Stroke?
     private(set) var toast: Toast?
-    /// Where the user dragged the launcher; nil keeps it docked above the home indicator.
-    private(set) var launcherCenterY: CGFloat?
     /// The pill's measured size: its width follows the title, so the hit frame must too.
     /// Starts at the Figma "Annotate" pill (9265:14504) until the view reports.
     private(set) var launcherPillSize = CGSize(width: 104, height: 44)
-    /// Where avoidance put the idle, undragged pill: the dock, or clear of the app's bottom chrome.
+    /// Where avoidance put the idle pill: the dock, or clear of the app's bottom chrome.
     private(set) var launcherSpot: LauncherSpot = .dock
     /// False until the overlay's first layout has settled: the pill then fades in where it belongs
     /// instead of popping up with the window.
@@ -1015,6 +1013,32 @@ final class AnnotateController {
         chromeBottom < screenChromeBottom
     }
 
+    /// Where the comment or reply card docks: its bottom edge, and whether a keyboard is under it
+    /// (which picks its insets).
+    struct CardDock: Equatable {
+        var bottom: CGFloat
+        var isKeyboardUp: Bool
+    }
+
+    /// The card's dock, held while the card leaves (`holdCardDock`), live otherwise.
+    var cardDock: CardDock {
+        heldCardDock ?? CardDock(bottom: chromeBottom, isKeyboardUp: isKeyboardUp)
+    }
+
+    /// Set while a card lets go of the keyboard before leaving (LeaveAfterKeyboard).
+    private var heldCardDock: CardDock?
+
+    /// Keeps the card where it is while the keyboard slides away under it: it leaves by shrinking
+    /// and fading in place (owner request), not by riding the keyboard down and widening.
+    func holdCardDock() {
+        heldCardDock = cardDock
+    }
+
+    /// The card has left; cards dock to the keyboard again.
+    func releaseCardDock() {
+        heldCardDock = nil
+    }
+
     /// The review bar's bottom: above the home indicator whether or not a keyboard is up, so the bar
     /// never rides a keyboard that's leaving with the card.
     var screenChromeBottom: CGFloat {
@@ -1049,17 +1073,11 @@ final class AnnotateController {
         ))
     }
 
-    /// The pill in overlay points. Dragged: where the user left it, in its spot's column. Otherwise
-    /// docked above the keyboard while one is up (the keyboard wins over avoidance), else at the
-    /// spot avoidance picked: the dock on `screenChromeBottom`, or clear of the app's chrome.
+    /// The pill in overlay points: docked above the keyboard while one is up (the keyboard wins over
+    /// avoidance), else at the spot avoidance picked: the dock on `screenChromeBottom`, or clear of
+    /// the app's chrome. People can't move it (owner request: dragging jittered).
     var launcherFrame: CGRect {
-        let layout = launcherLayout
-        // Clamped on read too: a rotation or safe-area change can leave a dragged position off screen
-        if let centerY = launcherCenterY.flatMap({ clampedLauncherCenterY($0) }) {
-            let frame = LauncherAvoidance.frame(for: launcherSpot, in: layout)
-            return frame.offsetBy(dx: 0, dy: centerY - frame.midY)
-        }
-        return LauncherAvoidance.frame(for: isKeyboardUp ? .dock : launcherSpot, in: layout)
+        LauncherAvoidance.frame(for: isKeyboardUp ? .dock : launcherSpot, in: launcherLayout)
     }
 
     /// Touch target the overlay window accepts while annotate mode is off.
@@ -1077,18 +1095,11 @@ final class AnnotateController {
         refreshLauncherPlacement()
     }
 
-    /// Vertical drag only: x stays in the spot's column, y is clamped so the whole pill stays in
-    /// the safe area. From here on the user's height wins over avoidance.
-    func moveLauncher(toCenterY y: CGFloat) {
-        guard let clamped = clampedLauncherCenterY(y) else { return }
-        if launcherCenterY != clamped { launcherCenterY = clamped }
-    }
-
     /// Re-reads the app's bottom chrome and moves the idle pill clear of it (LauncherButton springs
-    /// it there). Only the undragged pill avoids, and only while idle with no keyboard up: a drag
-    /// and the keyboard win, and nothing moves while annotating.
+    /// it there). Only while idle with no keyboard up: the keyboard wins, and nothing moves while
+    /// annotating.
     func refreshLauncherPlacement() {
-        guard options.showsLauncher, !isActive, launcherCenterY == nil, !isKeyboardUp,
+        guard options.showsLauncher, !isActive, !isKeyboardUp,
               let window, bounds.width > 0, UIApplication.shared.applicationState == .active else { return }
         let layout = launcherLayout
         let obstacles = LauncherObstacles.scan(band: layout.band, overlay: window)
@@ -1112,17 +1123,6 @@ final class AnnotateController {
     /// `launcherKeyboardGap` above the keyboard while one is up.
     private var launcherDockBottom: CGFloat {
         isKeyboardUp ? chromeBottom - Self.launcherKeyboardGap : screenChromeBottom
-    }
-
-    /// Range a dragged pill's center may take. The lowest center is the docked one, so there's one
-    /// bottom edge either way. nil before the first layout, when the area is smaller than the pill
-    /// and there's nothing to clamp to.
-    private func clampedLauncherCenterY(_ y: CGFloat) -> CGFloat? {
-        let half = Self.launcherHeight / 2
-        let top = safeBounds.minY + half
-        let bottom = launcherDockBottom - half
-        guard bottom >= top else { return nil }
-        return min(max(y, top), bottom)
     }
 
     /// The re-check loop; `refreshLauncherPlacement` skips its ticks while there's nothing to do.

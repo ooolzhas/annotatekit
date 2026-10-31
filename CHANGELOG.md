@@ -21,6 +21,17 @@ All notable changes to this project are documented here. The format is based on
   - The status dot on the Annotate pill and the hint line has a pulsing halo, and offline red is
     the system red.
   - A one-line quote in the comment card hugs its text (44pt) instead of sitting in a 64pt box.
+  - Each pin keeps one marker through its life: saving, reopening and sending change only its glyph
+    (+, pencil, number, spinner, outcome), and its color crossfades when that changes too.
+  - The bar and the cards swap one way: the arriving one rises from below, the leaving one shrinks
+    and fades in place. A card sent or cancelled with the keyboard up now stays put while the
+    keyboard slides away instead of vanishing.
+  - The Annotate pill first appears as just "Annotate"; its status dot then slides out from behind
+    the label and the pill widens to fit it.
+
+### Removed
+- Dragging the Annotate pill. It jittered under the finger; the pill still keeps clear of the app's
+  bottom bars on its own.
 
 ### Fixed
 - Opening a pin no longer cuts straight from the review bar to the comment card: the bar and its

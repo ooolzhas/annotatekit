@@ -333,13 +333,13 @@ private struct NoteBadge: View {
                     .controlSize(.mini)
             case .symbol(let name, let tone):
                 Image(systemName: name)
-                    .font(.system(size: SentPinBadge.glyphSize, weight: .bold))
+                    .font(.system(size: PinBadge.listGlyphSize, weight: .bold))
                     .foregroundStyle(Self.color(for: tone))
             }
         }
         .frame(width: AnnotateStyle.listBadgeSize, height: AnnotateStyle.listBadgeSize)
         .background(Circle().fill(Color(uiColor: .tertiarySystemFill)))
-        .animation(SentPinBadge.changeAnimation, value: mark)
+        .animation(PinBadge.changeAnimation, value: mark)
         .accessibilityHidden(true)
     }
 

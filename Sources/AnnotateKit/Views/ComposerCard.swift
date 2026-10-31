@@ -27,7 +27,8 @@ struct ComposerCard: View {
     /// The intent dropdown is open above the chip.
     @State private var isPickingIntent = false
     /// ↑ was tapped with the keyboard up: the card is hidden, waiting for the keyboard to slide away.
-    @State private var isLeaving = false
+    /// Set while the card waits for the keyboard to start sliding away before it leaves (LeaveAfterKeyboard).
+    @State private var leaving: (() -> Void)?
 
     /// Picked images are downscaled to this longest side before they are held in memory; the
     /// bundle stores them as JPEGs and a reference image never needs more.
@@ -81,7 +82,7 @@ struct ComposerCard: View {
                     .transition(.scale(scale: Self.pickerHiddenScale, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
-        .modifier(SendAfterKeyboard(isLeaving: $isLeaving) { controller.submitDraft() })
+        .modifier(LeaveAfterKeyboard(leave: $leaving))
         .onAppear { isFocused = !opensWithoutKeyboard }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
@@ -196,7 +197,7 @@ struct ComposerCard: View {
             if canUndo {
                 controller.undo()
             } else {
-                controller.discardDraft()
+                leave { controller.discardDraft() }
             }
         }
         // Four times the system speed (design choice): the swap reads as a state change, not an animation
@@ -319,15 +320,25 @@ struct ComposerCard: View {
             canSubmit = false
         }
         return CircleIconButton(systemName: "arrow.up", style: canSubmit ? .prominent : .dimmed) {
-            guard controller.isKeyboardUp else {
-                controller.submitDraft()
-                return
-            }
-            // Hide now, let the keyboard slide away, then save (SendAfterKeyboard)
-            isLeaving = true
-            isFocused = false
+            leave { controller.submitDraft() }
         }
         .disabled(!canSubmit)
+    }
+
+    /// Runs `action`, which takes the card out, right away with no keyboard up; otherwise lets the
+    /// keyboard go first so it keeps its slide (LeaveAfterKeyboard).
+    private func leave(_ action: @escaping () -> Void) {
+        guard controller.isKeyboardUp else {
+            action()
+            return
+        }
+        // Pin the card where it is, so it leaves in place rather than riding the keyboard down
+        controller.holdCardDock()
+        leaving = { [controller] in
+            action()
+            controller.releaseCardDock()
+        }
+        isFocused = false
     }
 
     // MARK: - Attachments (9272:17019)
