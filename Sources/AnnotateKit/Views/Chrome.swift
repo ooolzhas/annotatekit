@@ -1,7 +1,8 @@
 // Shared overlay chrome for the redesigned annotate mode (Figma group
 // 9257:13754): the 44pt round icon button every surface uses, the shared chrome button style
-// (press feedback only, no disabled dimming), the glass helper, the white number badge and the sent
-// pin's progress badge (spinner, outcome glyph or number; 9276:28552), white sketch strokes, and the
+// (press feedback only, no disabled dimming), the glass helper, the 28pt blue pin markers (number,
+// the sent pin's spinner or outcome glyph, and the open draft's +; 9378:6116 / 9378:6440 / 9378:5659),
+// the status indicator dot with its pulsing wave (9378:5495), white sketch strokes, and the
 // review bar shown when no pin is open (9276:27550: back, the note count and ↑, each its own glass
 // shape; the count opens the notes sheet). Also owns the hint
 // line drawn above that bar (9272:17120 / 17213 / 17307, 9276:28045), which says how to annotate or
@@ -105,40 +106,41 @@ struct ChromeButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Sending from a card
+// MARK: - Leaving a card
 
-/// Sending from the comment or reply card (design choice): the card vanishes at once but stays in
-/// place while its field lets go of the keyboard, and only once the keyboard has slid away does `send`
-/// run and take the card out for real. Taking the field out with the keyboard still up made iOS drop
-/// the keyboard without its slide. Callers send directly when no keyboard is up.
-struct SendAfterKeyboard: ViewModifier {
-    @Binding var isLeaving: Bool
-    let send: () -> Void
+/// Leaving the comment or reply card with the keyboard up (send or cancel): the card first lets go of
+/// the keyboard, and `leave` runs once the keyboard starts sliding away, taking the card out so it
+/// shrinks and fades in place while the bar rises from below (`BottomChrome.swapTransition`).
+/// Taking the field out while it still held the keyboard made iOS drop the keyboard without its
+/// slide; once focus is gone the slide survives. The card takes no touches in between. Callers run
+/// the action directly when no keyboard is up.
+struct LeaveAfterKeyboard: ViewModifier {
+    /// What leaving does (save, send, discard, cancel); nil while the card stays.
+    @Binding var leave: (() -> Void)?
 
-    /// If iOS never reports the keyboard gone, the card leaves anyway after this; longer than the
+    /// If iOS never reports the keyboard going, the card leaves anyway after this; longer than the
     /// keyboard's own slide.
     static let timeout: Duration = .milliseconds(600)
 
     func body(content: Content) -> some View {
         content
-            .opacity(isLeaving ? 0 : 1)
-            .allowsHitTesting(!isLeaving)
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+            .allowsHitTesting(leave == nil)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                 finish()
             }
-            .task(id: isLeaving) {
-                guard isLeaving else { return }
+            .task(id: leave != nil) {
+                guard leave != nil else { return }
                 try? await Task.sleep(for: Self.timeout)
                 finish()
             }
     }
 
     private func finish() {
-        guard isLeaving else { return }
-        // Stays hidden through its own removal: un-hiding in the same update faded a ghost of the
-        // card in under the arriving bar. The ↑ that started this only works when a send can go
-        // through, so the card always leaves here.
-        send()
+        guard let action = leave else { return }
+        leave = nil
+        // A turn later: iOS posts the will-hide while the field is still letting go of focus, and
+        // taking the field out inside that call dropped the keyboard without its slide
+        DispatchQueue.main.async { action() }
     }
 }
 
@@ -186,111 +188,193 @@ private func annotateGlassStyle(interactive: Bool, tint: Color?) -> Glass {
 
 // MARK: - Pins
 
-/// White numbered badge at a pin's top-trailing corner (9257:13566/13567); tap reopens the pin.
-struct PinBadge: View {
-    let number: Int
-    let action: () -> Void
-
-    /// Bigger than the 24pt dot so badges are easy to hit on a phone.
-    static let hitSize: CGFloat = 40
-
-    var body: some View {
-        Button(action: action) {
-            BadgeNumber(number: number)
-                .modifier(BadgeShape())
-        }
-        .buttonStyle(ChromeButtonStyle())
-        .accessibilityLabel("Pin \(number)")
-    }
+/// What a pin's marker shows. Each pin keeps one marker through every state, so going from one to
+/// the next swaps only the glyph (and the fill, when it differs), never the marker itself.
+enum PinFace: Equatable {
+    /// The pin's comment card is open: + for a pin being created (Figma 9378:5659), a pencil for a
+    /// saved pin being edited (9378:5178).
+    case drafting(isNew: Bool)
+    /// Saved, waiting for a Send: its number (9378:6116).
+    case saved
+    /// Sent, while the Send's pins stay on screen (9276:28552): number, spinner or outcome glyph.
+    case sent(SentPinMark)
 }
 
-/// A sent pin's badge while the Send's pins stay on screen (Figma 9276:28552): the same white 24pt
-/// badge holding a spinner while the agent has the pin (9276:27574), the outcome's glyph once it
-/// reports one (9276:27954: green 12pt bold checkmark for resolved), or the number. Which one comes
-/// from `SentPinMark`; tap opens the notes sheet.
-struct SentPinBadge: View {
+/// A pin's marker at its anchor (Figma 9378:6116 Marker): the 28pt marker with a white glyph that
+/// follows `face`. Saved pins reopen on tap, sent pins open the notes sheet, and the open pin's
+/// marker takes no taps (its card is where it's edited). OverlayRoot keys it by the pin, so saving,
+/// reopening and sending change the glyph in place: it scales and fades between glyphs, and the
+/// fill crossfades when the new face has another color (blue → green on resolve).
+struct PinBadge: View {
     let number: Int
-    let mark: SentPinMark
+    let face: PinFace
     let action: () -> Void
 
-    /// Figma 9276:27955: SF Pro Bold 12.
-    static let glyphSize: CGFloat = 12
-    /// Not in Figma (no motion context): the spinner turning into a checkmark pops rather than cuts.
+    /// The HIG's 44pt minimum around the 28pt marker, so markers are easy to hit on a phone.
+    static let hitSize: CGFloat = 44
+    /// Not in Figma (no motion context): the glyph swap and the fill crossfade.
     static let changeAnimation: Animation = .snappy(duration: 0.25)
+    /// Figma 9276:27955: SF Pro Bold 12, the notes sheet's outcome glyph (the marker's glyphs are
+    /// 15pt semibold, `MarkerGlyph`).
+    static let listGlyphSize: CGFloat = 12
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                switch mark {
-                case .number:
-                    BadgeNumber(number: number)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                case .progress:
-                    // Figma draws SF Symbols' progress.indicator; the system spinner is the same glyph, animated
-                    ProgressView()
-                        .controlSize(.mini)
-                        .tint(AnnotateStyle.badgeText)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                case .symbol(let name, let tone):
-                    Image(systemName: name)
-                        .font(.system(size: Self.glyphSize, weight: .bold))
-                        .foregroundStyle(Self.color(for: tone))
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                }
+                glyph
+                    // A new identity per glyph, so the swap runs the transition; the same glyph in a
+                    // new face (saved → sent, both numbered) stays put
+                    .id(glyphKey)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
-            .modifier(BadgeShape())
-            .animation(Self.changeAnimation, value: mark)
+            .modifier(BadgeShape(fill: fill))
+            .animation(Self.changeAnimation, value: face)
         }
         .buttonStyle(ChromeButtonStyle())
+        .allowsHitTesting(!isDrafting)
+        .accessibilityHidden(isDrafting)
         .accessibilityLabel("Pin \(number)")
         .accessibilityValue(accessibilityValue)
-        .accessibilityHint("Show the notes")
+        .accessibilityHint(accessibilityHint)
+    }
+
+    private var isDrafting: Bool {
+        if case .drafting = face { return true }
+        return false
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        switch face {
+        case .drafting(let isNew):
+            MarkerGlyph(systemName: isNew ? "plus" : "pencil")
+        case .saved, .sent(.number):
+            BadgeNumber(number: number)
+        case .sent(.progress):
+            // Figma draws SF Symbols' progress.indicator in white; the system spinner is the same glyph, animated
+            ProgressView()
+                .controlSize(.mini)
+                .tint(.white)
+        case .sent(.symbol(let name, _)):
+            MarkerGlyph(systemName: name)
+        }
+    }
+
+    /// Which glyph shows, for the swap: + / pencil / the number / spinner / a symbol.
+    private var glyphKey: String {
+        switch face {
+        case .drafting(let isNew): isNew ? "plus" : "pencil"
+        case .saved, .sent(.number): "number \(number)"
+        case .sent(.progress): "progress"
+        case .sent(.symbol(let name, _)): name
+        }
+    }
+
+    /// The marker's fill behind the white glyph. Figma: Accents/Blue while open, saved, numbered or
+    /// spinning (9378:6116), green for resolved (9378:6440). The other outcomes have no Figma frame
+    /// (derived): gray for dismissed, orange for a question, matching the notes sheet.
+    private var fill: Color {
+        guard case .sent(.symbol(_, let tone)) = face else { return AnnotateStyle.pinFill }
+        switch tone {
+        case .neutral: return AnnotateStyle.pinFill
+        case .success: return AnnotateStyle.pinResolvedFill
+        case .muted: return Color(uiColor: .systemGray)
+        case .attention: return Color(uiColor: .systemOrange)
+        }
     }
 
     private var accessibilityValue: String {
+        guard case .sent(let mark) = face else { return "" }
         switch mark {
-        case .number: "Sent"
-        case .progress: "In progress"
+        case .number: return "Sent"
+        case .progress: return "In progress"
         case .symbol(let name, _):
             switch name {
-            case "checkmark": "Resolved"
-            case "questionmark": "Question"
-            case "xmark": "Dismissed"
-            default: name
+            case "checkmark": return "Resolved"
+            case "questionmark": return "Question"
+            case "xmark": return "Dismissed"
+            default: return name
             }
         }
     }
 
-    /// Glyphs on the white badge: Figma Primitive/Green #34C759 (systemGreen) for resolved; the
-    /// other tones match the notes sheet (derived).
-    private static func color(for tone: PinOutcome.Tone) -> Color {
-        switch tone {
-        case .neutral: AnnotateStyle.badgeText
-        case .success: Color(uiColor: .systemGreen)
-        case .muted: Color(uiColor: .systemGray)
-        case .attention: Color(uiColor: .systemOrange)
-        }
+    private var accessibilityHint: String {
+        if case .sent = face { return "Show the notes" }
+        return ""
     }
 }
 
-/// The badge's number: SF Pro Semibold 15, black (Figma 9257:13567 / 9276:28055).
+/// Every marker glyph's type: SF Pro Semibold 15, white (Figma Subheadline/Emphasized, 9378:6116).
+private enum MarkerType {
+    static let size: CGFloat = 15
+    static let weight: Font.Weight = .semibold
+}
+
+/// The marker's number: white, tabular so 9 → 10 keeps its center (Figma 9378:6116).
 private struct BadgeNumber: View {
     let number: Int
 
     var body: some View {
         Text("\(number)")
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(size: MarkerType.size, weight: MarkerType.weight))
             .monospacedDigit()
-            .foregroundStyle(AnnotateStyle.badgeText)
+            .foregroundStyle(.white)
     }
 }
 
-/// The white 24pt circle every pin badge draws, inside a larger square that takes the taps.
+/// An SF Symbol on the marker: white, the number's type (Figma 9378:6440 checkmark, 9378:5659 plus).
+private struct MarkerGlyph: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: MarkerType.size, weight: MarkerType.weight))
+            .foregroundStyle(.white)
+    }
+}
+
+/// The marker's disc (Figma 9378:6122 Marker): `fill`, a soft-light white sheen that brightens toward
+/// the bottom, a 1pt soft-light rim that brightens toward the top, and a soft drop shadow (y 4,
+/// blur 8, 15%). SwiftUI has no per-paint blend modes, so the sheen and the rim are layers of their
+/// own, blended inside one compositing group: they mix with the fill only, never with the dimmed
+/// screen behind the marker.
+private struct MarkerCircle: View {
+    let fill: Color
+
+    var body: some View {
+        ZStack {
+            Circle().fill(fill)
+            Circle()
+                .fill(LinearGradient(
+                    colors: [.white.opacity(0), .white.opacity(AnnotateStyle.pinSheenOpacity)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ))
+                .blendMode(.softLight)
+            // Inside the edge, as Figma's INSIDE stroke
+            Circle()
+                .strokeBorder(LinearGradient(
+                    colors: [.white.opacity(AnnotateStyle.pinRimOpacity), .white.opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ), lineWidth: AnnotateStyle.pinBorderWidth)
+                .blendMode(.softLight)
+        }
+        // The sheen and rim blend with the fill only, and the shadow falls from the finished disc
+        .compositingGroup()
+        .shadow(color: .black.opacity(AnnotateStyle.pinShadowOpacity), radius: AnnotateStyle.pinShadowRadius,
+                x: 0, y: AnnotateStyle.pinShadowY)
+    }
+}
+
+/// The marker at `AnnotateStyle.badgeSize` behind a pin's glyph, inside a larger square that takes the taps.
 private struct BadgeShape: ViewModifier {
+    let fill: Color
+
     func body(content: Content) -> some View {
         content
             .frame(width: AnnotateStyle.badgeSize, height: AnnotateStyle.badgeSize)
-            .background(Circle().fill(AnnotateStyle.marker))
+            .background(MarkerCircle(fill: fill))
             .frame(width: PinBadge.hitSize, height: PinBadge.hitSize)
             .contentShape(Rectangle())
     }
@@ -440,12 +524,11 @@ struct ReviewHintLine: View {
     static let spacing: CGFloat = 6
     /// Figma `gap-[4px]` between the headline and what follows it, detail or elapsed (9276:27747).
     static let textSpacing: CGFloat = 4
-    /// Figma dot 8×8 (9272:17214 / 9272:17308).
-    static let dotSize: CGFloat = 8
     /// Figma Colors/Green #34C759, which is systemGreen in light mode.
     static let connectedColor = Color(uiColor: .systemGreen)
-    /// Figma Primitive/Red #F8001A, exact: it is a primitive, not a semantic system red.
-    static let offlineColor = Color(red: 248 / 255, green: 0, blue: 26 / 255)
+    /// Figma Colors/Red #FF383C (9378:6738, and the launcher's 9378:5495), which is systemRed in
+    /// light mode.
+    static let offlineColor = Color(uiColor: .systemRed)
     /// No Figma: the agent asked about a pin. Orange, matching the question badge in the notes sheet
     /// and the dot on the reply card, so the three read as one signal.
     static let attentionColor = Color(uiColor: .systemOrange)
@@ -464,12 +547,6 @@ struct ReviewHintLine: View {
     static let tickInterval: TimeInterval = 1
     /// Not in Figma: the digit roll on each tick, well inside the second between ticks.
     static let tickAnimation: Animation = .snappy(duration: 0.3)
-    /// Not in Figma (design choice): the status dot pulses, fading to this and back; a shallow,
-    /// slow breath so it reads as alive rather than alarming. Reduce Motion keeps it solid.
-    static let dotBlinkFloor: Double = 0.4
-    /// One fade of the pulse (bright → faint or back): a 2 s breath, between the first 1.2 s blink and
-    /// the 2.8 s one that felt too slow.
-    static let dotBlinkHalfPeriod: Double = 1.0
     /// The detail and the elapsed sit at half the headline's strength (Figma 9276:27749 / 9276:28049
     /// `opacity-50`).
     static let secondaryOpacity: Double = 0.5
@@ -507,7 +584,7 @@ struct ReviewHintLine: View {
     private func row(elapsed: String?) -> some View {
         HStack(spacing: Self.spacing) {
             if let dot = hint.dot {
-                statusDot(Self.color(for: dot))
+                StatusIndicator(color: Self.color(for: dot))
             }
             HStack(spacing: Self.textSpacing) {
                 Text(hint.headline)
@@ -549,22 +626,6 @@ struct ReviewHintLine: View {
         }
     }
 
-    @ViewBuilder
-    private func statusDot(_ color: Color) -> some View {
-        let dot = Circle()
-            .fill(color)
-            .frame(width: Self.dotSize, height: Self.dotSize)
-        if reduceMotion {
-            dot
-        } else {
-            dot.phaseAnimator([false, true]) { content, isFaint in
-                content.opacity(isFaint ? Self.dotBlinkFloor : 1)
-            } animation: { _ in
-                .easeInOut(duration: Self.dotBlinkHalfPeriod)
-            }
-        }
-    }
-
     private static func color(for dot: ReviewHint.Dot) -> Color {
         switch dot {
         case .connected: connectedColor
@@ -594,25 +655,40 @@ private struct HintSwap: Transition {
 /// lives on `LauncherStatus` in AnnotateCore, so the wording stays testable on Linux.
 struct LauncherButton: View {
     let controller: AnnotateController
-    /// Vertical drag only: the pill keeps its column (centered, or the side avoidance put it on).
-    @GestureState private var dragOffset: CGFloat = 0
+    /// The status indicator is in the pill. Off the first time the pill shows in a run, so it can
+    /// introduce itself; on for every later appearance.
+    @State private var showsIndicator = LauncherButton.hasIntroducedIndicator
+    /// The indicator's fade, run on its own ease beside the slide (`indicatorFade`).
+    @State private var indicatorOpacity: Double = LauncherButton.hasIntroducedIndicator ? 1 : 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The indicator has slid in once this run (owner request): the pill first reads just
+    /// "Annotate", then the dot slides out leftward from behind the label and the pill widens to
+    /// make room. Later appearances show it from the start.
+    @MainActor private static var hasIntroducedIndicator = false
+    /// How long the pill shows just its title first: past its own fade-in (`OverlayRoot.modeDuration`)
+    /// with a beat to read it (design choice).
+    static let indicatorDelay: Duration = .milliseconds(600)
+    /// The slide and the widening, together (design choice; no Figma motion context).
+    static let indicatorAnimation: Animation = .spring(duration: 0.5, bounce: 0.2)
+    /// The whole indicator (dot and wave) fades in over the slide (owner request). Its own ease:
+    /// a spring is all but done with opacity in its first third, so the dot read as fully there
+    /// while it was still sliding.
+    static let indicatorFade: Animation = .easeInOut(duration: 0.5)
 
     /// Figma's horizontal title padding (9289:1310 `px-[16px]`).
     static let horizontalPadding: CGFloat = 16
     /// Figma title: SF Pro Medium 17 (9289:1312). Its 22pt leading is the 17pt default, so no
     /// line spacing modifier.
     static let titleSize: CGFloat = 17
-    /// Drag threshold kept from the old launcher, so a tap with a little jitter still taps.
-    static let dragThreshold: CGFloat = 8
     /// Not in Figma (no motion context for either frame): title and width changes animate so the
     /// pill visibly grows into "4 notes sent" instead of jumping.
     static let statusAnimation: Animation = .snappy(duration: 0.25)
     /// Not in Figma: the pill springs to a new spot when the app's chrome pushes it (or lets it back).
     static let placementAnimation: Animation = .spring(duration: 0.4, bounce: 0.2)
 
-    /// Connection dot, Figma 9289:1311 (8×8, `gap-[8px]` to the title, green `#34C759`). Always shown
-    /// (design choice); its color follows `controller.agentLink`.
-    static let dotSize: CGFloat = 8
+    /// Gap between the status indicator (`StatusIndicator`, always shown, design choice; its color
+    /// follows `controller.agentLink`) and the title. Figma 9378:5494 `gap-[8px]`.
     static let dotSpacing: CGFloat = 8
 
     var body: some View {
@@ -623,13 +699,20 @@ struct LauncherButton: View {
         let link = controller.agentLink
 
         HStack(spacing: Self.dotSpacing) {
-            ConnectionDot(link: link)
+            if showsIndicator {
+                ConnectionDot(link: link)
+                    .opacity(indicatorOpacity)
+                    .transition(indicatorEntrance)
+            }
             Text(status.title)
                 .font(.system(size: Self.titleSize, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // Above the dot, so the dot comes out from behind it
+                .zIndex(1)
         }
+            .task { await introduceIndicator() }
             .padding(.horizontal, Self.horizontalPadding)
             // The 44pt Figma height wins over its py-8 (22 + 16 = 38)
             .frame(height: AnnotateController.launcherHeight)
@@ -642,14 +725,8 @@ struct LauncherButton: View {
             // which changes with every title; measured here, before `.position` expands the view
             .onGeometryChange(for: CGSize.self) { $0.size } action: { controller.updateLauncherSize($0) }
             .contentShape(Capsule())
+            // Tap only (owner request): the pill can't be dragged; avoidance places it
             .onTapGesture { controller.start() }
-            .gesture(
-                DragGesture(minimumDistance: Self.dragThreshold)
-                    .updating($dragOffset) { value, state, _ in state = value.translation.height }
-                    .onEnded { value in
-                        controller.moveLauncher(toCenterY: frame.midY + value.translation.height)
-                    }
-            )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(status.title)
             .accessibilityValue(ConnectionDot.accessibilityValue(link: link, agent: agent))
@@ -659,8 +736,32 @@ struct LauncherButton: View {
             // measurement and the hit shape, or they would take the capped frame's width (a
             // maxWidth-only frame grows to the proposal) instead of the pill's
             .frame(maxWidth: maxWidth)
-            .position(x: frame.midX, y: frame.midY + dragOffset)
+            .position(x: frame.midX, y: frame.midY)
             .animation(Self.placementAnimation, value: controller.launcherSpot)
+    }
+
+    /// The dot starts behind the label's first letters (one dot plus its gap to the right of its
+    /// place) and slides left into place; `indicatorOpacity` fades it in meanwhile. Reduce Motion
+    /// keeps the fade only.
+    private var indicatorEntrance: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .offset(x: Self.dotSpacing + StatusIndicator.dotSize),
+            removal: .opacity
+        )
+    }
+
+    private func introduceIndicator() async {
+        guard !showsIndicator else { return }
+        try? await Task.sleep(for: Self.indicatorDelay)
+        guard !Task.isCancelled else { return }
+        withAnimation(reduceMotion ? nil : Self.indicatorAnimation) {
+            showsIndicator = true
+        }
+        withAnimation(Self.indicatorFade) {
+            indicatorOpacity = 1
+        }
+        Self.hasIntroducedIndicator = true
     }
 }
 
@@ -724,10 +825,8 @@ struct ConnectionDot: View {
     static let resyncingColor = Color(uiColor: .systemYellow)
 
     var body: some View {
-        Circle()
-            .fill(Self.color(for: link))
-            .frame(width: LauncherButton.dotSize, height: LauncherButton.dotSize)
-            .accessibilityHidden(true)
+        // Figma 9378:5495: the launcher's dot is the same Indicator as the hint line's
+        StatusIndicator(color: Self.color(for: link))
     }
 
     static func color(for link: AgentLink) -> Color {
@@ -744,6 +843,61 @@ struct ConnectionDot: View {
         case .active: agent?.accessibilityDescription ?? "Agent connected"
         case .resyncing: "Reconnecting to the agent"
         case .offline: "No agent connected"
+        }
+    }
+}
+
+// MARK: - Status indicator
+
+/// Status dot with its pulsing wave (Figma 9378:5495 Indicator): an 8pt dot over a 16pt halo of the
+/// same color at 25% (Figma 15%, raised). Lays out at the dot's 8pt (the halo overflows it, as Figma's `inset-[-50%]`).
+struct StatusIndicator: View {
+    let color: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Figma "Circle" r4 inside the 8×8 Indicator frame (9378:5495 / 9378:6420).
+    static let dotSize: CGFloat = 8
+    /// Figma "Pulsing Wave" r8: twice the dot, centered on it.
+    static let haloSize: CGFloat = 16
+    /// Above Figma's "Pulsing Wave" 0.15 (owner request: the blurred wave read too faint).
+    static let haloOpacity: Double = 0.25
+    /// Not in Figma (no motion context; design choice from the layer's name): the wave breathes,
+    /// shrinking to this scale (back to the dot's size) and swelling to Figma's 16pt. The dot itself
+    /// stays solid. Reduce Motion holds the wave at scale 1, Figma's rest frame.
+    static let haloRestScale: CGFloat = 0.5
+    /// One half of the breath (in or out): a 2 s cycle, the same slow pace the old blinking dot had,
+    /// so it reads as alive rather than alarming.
+    static let haloHalfPeriod: Double = 1.0
+    /// How soft the wave gets at its fullest (owner request: it blurs as it grows, sharp when it's
+    /// back at the dot). Reduce Motion's still wave stays sharp, as Figma draws it.
+    static let haloBlur: CGFloat = 3
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: Self.dotSize, height: Self.dotSize)
+            // In the background so the halo overflows the 8pt layout instead of widening it
+            .background { halo }
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var halo: some View {
+        let wave = Circle()
+            .fill(color)
+            .opacity(Self.haloOpacity)
+            .frame(width: Self.haloSize, height: Self.haloSize)
+        if reduceMotion {
+            wave
+        } else {
+            wave.phaseAnimator([false, true]) { content, isSwollen in
+                content
+                    .scaleEffect(isSwollen ? 1 : Self.haloRestScale)
+                    .blur(radius: isSwollen ? Self.haloBlur : 0)
+            } animation: { _ in
+                .easeInOut(duration: Self.haloHalfPeriod)
+            }
         }
     }
 }

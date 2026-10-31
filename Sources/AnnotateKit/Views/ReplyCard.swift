@@ -15,8 +15,8 @@ struct ReplyCard: View {
     let reply: AnnotateController.ReplyDraft
 
     @FocusState private var isFocused: Bool
-    /// ↑ was tapped with the keyboard up: the card is hidden, waiting for the keyboard to slide away.
-    @State private var isLeaving = false
+    /// Set while the card waits for the keyboard to start sliding away before it leaves (LeaveAfterKeyboard).
+    @State private var leaving: (() -> Void)?
 
     /// No Figma: derived. The orange matches `ReviewHint.Dot.attention`, the question's tone
     /// elsewhere in the overlay, so the card reads as the answer to that hint.
@@ -66,7 +66,7 @@ struct ReplyCard: View {
         // to the frozen screen and starts a new pin. No card-wide tap gesture, as ComposerCard: it
         // can take taps meant for a menu drawn over the card.
         .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .modifier(SendAfterKeyboard(isLeaving: $isLeaving) { controller.submitReply() })
+        .modifier(LeaveAfterKeyboard(leave: $leaving))
         .onAppear { isFocused = true }
     }
 
@@ -159,18 +159,12 @@ struct ReplyCard: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 6) {
-                CircleIconButton(systemName: "xmark") { controller.cancelReply() }
+                CircleIconButton(systemName: "xmark") { leave { controller.cancelReply() } }
                     .accessibilityLabel("Cancel reply")
                 // Only `.dimmed` dims; `.disabled` just blocks the tap (submitReply no-ops anyway
                 // when it can't submit)
                 CircleIconButton(systemName: "arrow.up", style: canSubmit ? .prominent : .dimmed) {
-                    guard controller.isKeyboardUp else {
-                        controller.submitReply()
-                        return
-                    }
-                    // Hide now, let the keyboard slide away, then send (SendAfterKeyboard)
-                    isLeaving = true
-                    isFocused = false
+                    leave { controller.submitReply() }
                 }
                 .disabled(!canSubmit)
                 .accessibilityLabel("Send reply")
@@ -178,6 +172,22 @@ struct ReplyCard: View {
         }
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
+    }
+
+    /// Runs `action`, which takes the card out, right away with no keyboard up; otherwise lets the
+    /// keyboard go first so it keeps its slide (LeaveAfterKeyboard).
+    private func leave(_ action: @escaping () -> Void) {
+        guard controller.isKeyboardUp else {
+            action()
+            return
+        }
+        // Pin the card where it is, so it leaves in place rather than riding the keyboard down
+        controller.holdCardDock()
+        leaving = { [controller] in
+            action()
+            controller.releaseCardDock()
+        }
+        isFocused = false
     }
 }
 #endif

@@ -8,9 +8,10 @@
 // screen's bottom. The notes sheet (every note and the last Send's outcomes) hangs off the chrome.
 // Motion (no Figma motion context): entering and leaving annotate mode fades the frozen screen, its
 // dim, the edge glow and the frost in and out over the same `modeDuration` the bottom chrome
-// (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; when a pin
-// opens, the review bar and hint line shrink and fade like the launcher pill while the comment (or
-// reply) card rises from below like the chrome does, on the same timing; the launcher pill scales down and fades about its own center, and
+// (`BottomChrome`, a separate view so it can) takes to rise into place and sink away; swaps between
+// the review bar and the comment or reply card follow one rule on the same timing: the arriving
+// piece rises from below like the chrome does, the leaving one shrinks and fades in place like the
+// launcher pill; each pin keeps one marker whose glyph and fill change in place; the launcher pill scales down and fades about its own center, and
 // comes in the same way once on a fresh open (`isLauncherRevealed`) instead of popping up. The edge glow and
 // the frost behind the chrome drift like liquid while annotate mode is on. Reduce Motion keeps the
 // fades only and holds the glow and frost still.
@@ -123,9 +124,10 @@ private struct BottomChrome: View {
         // own, so a card leaving with the keyboard and the bar arriving at the home indicator overlap
         // correctly while they swap
         let belowBar = max(bounds.maxY - controller.screenChromeBottom, 0)
-        let isKeyboardUp = controller.isKeyboardUp
-        let cardSides = isKeyboardUp ? Self.keyboardInset : Self.screenInset
-        let belowCard = max(bounds.maxY - controller.chromeBottom, 0) + (isKeyboardUp ? Self.keyboardInset : 0)
+        // Held in place while a leaving card waits for the keyboard (AnnotateController.holdCardDock)
+        let dock = controller.cardDock
+        let cardSides = dock.isKeyboardUp ? Self.keyboardInset : Self.screenInset
+        let belowCard = max(bounds.maxY - dock.bottom, 0) + (dock.isKeyboardUp ? Self.keyboardInset : 0)
 
         // A ZStack, not a Group: the outgoing and incoming chrome overlap at the bottom while they swap,
         // and the measurement below reads the stack, not each child
@@ -138,7 +140,7 @@ private struct BottomChrome: View {
                     ReplyCard(controller: controller, reply: reply)
                         .padding(.horizontal, cardSides)
                         .padding(.bottom, belowCard)
-                        .transition(cardTransition)
+                        .transition(swapTransition)
                 }
             case .composing:
                 if let draft = controller.draft {
@@ -146,7 +148,7 @@ private struct BottomChrome: View {
                         .id(draft.annotation.id)
                         .padding(.horizontal, cardSides)
                         .padding(.bottom, belowCard)
-                        .transition(cardTransition)
+                        .transition(swapTransition)
                 }
             case .review:
                 VStack(spacing: Self.hintGap) {
@@ -159,7 +161,7 @@ private struct BottomChrome: View {
                 }
                 // Anchored to the home indicator: the bar never rides the keyboard
                 .padding(.bottom, belowBar)
-                .transition(barTransition)
+                .transition(swapTransition)
             }
         }
         // Bar ↔ card swaps share annotate mode's own timing, so they move like the launcher ↔ bar swap
@@ -207,22 +209,15 @@ private struct BottomChrome: View {
         case replying, composing(UUID?), review
     }
 
-    /// The review bar and hint line shrink and fade about their center as a card takes over, and grow
-    /// back the same way, like the launcher pill. Glass alone barely fades (the old opacity-only swap
-    /// read as an instant cut), so the scale carries the motion.
-    private var barTransition: AnyTransition {
+    /// Every swap between the bar and a card runs one way: the arriving piece rises into place from
+    /// `chromeEntranceOffset` below, fading in, as the chrome does when annotate mode opens; the
+    /// leaving one shrinks about its center and fades out where it is, as the launcher pill does
+    /// (owner request). Glass alone barely fades, so the offset and the scale carry the motion.
+    private var swapTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
-        return .scale(scale: OverlayRoot.launcherHiddenScale).combined(with: .opacity)
-    }
-
-    /// The comment and reply cards rise from below like the chrome does as annotate mode opens, but
-    /// leave at once (design choice): by the time one goes, a send has already hidden it while the
-    /// keyboard slid away (SendAfterKeyboard).
-    private var cardTransition: AnyTransition {
-        guard !reduceMotion else { return .asymmetric(insertion: .opacity, removal: .identity) }
         return .asymmetric(
             insertion: .offset(y: OverlayRoot.chromeEntranceOffset).combined(with: .opacity),
-            removal: .identity
+            removal: .scale(scale: OverlayRoot.launcherHiddenScale).combined(with: .opacity)
         )
     }
 }
@@ -243,8 +238,8 @@ private struct ActiveOverlay: View {
     var body: some View {
         let bounds = controller.bounds
         let openID = controller.draft?.annotation.id
-        // Figma's composing frames show no badge for the pin being written: the open draft draws
-        // its own marker from the live draft instead of its saved copy.
+        // The open draft draws its own strokes and box from the live draft, and its marker comes from
+        // it too (`pinMarkers`), so its saved copy is left out here.
         let saved = controller.visibleAnnotations.filter { $0.id != openID }
         // After a Send that kept annotate mode open: the sent pins, with their progress badges
         let sent = controller.sentPinsOnScreen
@@ -301,24 +296,20 @@ private struct ActiveOverlay: View {
                     .allowsHitTesting(false)
             }
 
-            ForEach(saved) { pin in
-                PinBadge(number: pin.index) {
-                    controller.openExisting(pin.id)
+            // One marker per pin, keyed by the pin: saving the open pin, reopening a saved one and
+            // sending only change its face (Figma 9378:5659 + while new, 9378:5178 pencil while
+            // edited, 9378:6116 number, 9378:6440 outcome), so the glyph and fill change in place
+            // instead of one marker leaving and another arriving
+            ForEach(pinMarkers(saved: saved, sent: sent)) { marker in
+                PinBadge(number: marker.number, face: marker.face) {
+                    switch marker.face {
+                    case .saved: controller.openExisting(marker.id)
+                    case .sent: controller.openNotes()
+                    case .drafting: break
+                    }
                 }
                 .badgePlaced(at: OverlayPlacement.pinCenter(
-                    for: pin.pinAnchorFrame,
-                    radius: AnnotateStyle.badgeSize / 2,
-                    in: bounds
-                ))
-                .transition(Self.badgeAppearance)
-            }
-
-            ForEach(sent) { pin in
-                SentPinBadge(number: pin.index, mark: controller.sentPinMark(for: pin)) {
-                    controller.openNotes()
-                }
-                .badgePlaced(at: OverlayPlacement.pinCenter(
-                    for: pin.pinAnchorFrame,
+                    for: marker.anchor,
                     radius: AnnotateStyle.badgeSize / 2,
                     in: bounds
                 ))
@@ -330,6 +321,44 @@ private struct ActiveOverlay: View {
         .frame(width: bounds.width, height: bounds.height, alignment: .topLeading)
         .animation(.snappy(duration: 0.2), value: controller.annotations)
         .animation(.snappy(duration: 0.2), value: sent.map(\.id))
+    }
+
+    /// One pin's marker: the pin's id, its number, what it shows and where it attaches.
+    private struct PinMarkerItem: Identifiable {
+        let id: UUID
+        let number: Int
+        let face: PinFace
+        let anchor: CGRect
+    }
+
+    /// Every marker on screen: saved pins, the last Send's pins, then the open pin. The open pin's
+    /// saved copy is already out of `saved`, so a pin never has two markers; a sent pin that is also
+    /// saved or open keeps the newer one.
+    private func pinMarkers(saved: [Annotation], sent: [Annotation]) -> [PinMarkerItem] {
+        var items = saved.map { PinMarkerItem(id: $0.id, number: $0.index, face: .saved, anchor: $0.pinAnchorFrame) }
+        let draft = controller.draft
+        let taken = Set(items.map(\.id) + [draft?.annotation.id].compactMap { $0 })
+        items += sent.filter { !taken.contains($0.id) }.map {
+            PinMarkerItem(id: $0.id, number: $0.index, face: .sent(controller.sentPinMark(for: $0)), anchor: $0.pinAnchorFrame)
+        }
+        if let draft {
+            items.append(PinMarkerItem(
+                id: draft.annotation.id,
+                number: draft.annotation.index,
+                face: .drafting(isNew: draft.isNew),
+                anchor: Self.draftAnchor(draft)
+            ))
+        }
+        return items
+    }
+
+    /// Where the open draft's marker attaches. A sketch reads the live strokes (already in screen
+    /// points), since the draft's saved sketch lags the strokes being drawn; everything else uses the
+    /// saved pin's anchor.
+    private static func draftAnchor(_ draft: AnnotateController.Draft) -> CGRect {
+        guard draft.annotation.kind == .sketch else { return draft.annotation.pinAnchorFrame }
+        return OverlayPlacement.sketchPin(for: draft.strokes)
+            .map { CGRect(origin: $0, size: .zero) } ?? draft.annotation.pinAnchorFrame
     }
 
     /// Full-screen catcher: every touch goes to the controller, which tells draw, tap and hold apart.
@@ -482,21 +511,22 @@ private extension View {
 }
 
 extension Annotation {
-    /// Where the numbered badge attaches: on the spot the user tapped to pick an element, just beside
-    /// a spot, a sketch's own stroke corner, or a legacy region's outer top-trailing corner.
+    /// Where the numbered badge attaches: on the spot the user tapped to pick an element or held, on a
+    /// sketch's first stroke 15% short of its end, or a legacy region's outer top-trailing corner.
     var pinAnchorFrame: CGRect {
         switch kind {
         case .point:
-            // Derived, no Figma row: SpotMarker.size / 2 (ring radius 9) plus badgeSize / 2 (12),
-            // along the 45° diagonal, so the ring and the badge touch without overlapping
-            let offset = AnnotateStyle.spotBadgeOffset
-            return CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0)
+            // Owner request 2026-11-01: the pin itself marks the held spot, centered on it, with no
+            // ring or dot of its own
+            return CGRect(origin: anchor.cgPoint, size: .zero)
         case .sketch:
-            // Figma puts the badge on the strokes' own corner (9257:13566), not the padded frame's
-            // (9257:13562). Read from the strokes rather than undoing the padding: at a screen edge
-            // the padded frame was clipped, and a thin stroke there left less than the padding to
-            // undo, a null rect that sent the badge to the bottom-trailing corner
-            return BundleRenderer.strokeBounds(sketchInScreenPoints) ?? frame.cgRect
+            // Owner request 2026-11-01 (Figma 9378:5659): the badge sits centered ON the first line, 15%
+            // short of where it ends (more strokes never move it), rather than on the strokes' bounding corner. A zero-size rect, so
+            // pinCenter clamps that point inside the screen. Falls back to the frame with no strokes
+            if let point = OverlayPlacement.sketchPin(for: sketchInScreenPoints) {
+                return CGRect(origin: point, size: .zero)
+            }
+            return frame.cgRect
         case .element:
             // Owner request 2026-10-30: the badge sits where the user tapped, not on the box's corner
             // (Figma 9257:13570): a block can be large, and its corner far from what was tapped
@@ -512,8 +542,9 @@ extension Annotation {
     }
 }
 
-/// Everything drawn for one pin except its badge: the element box (also used for legacy regions),
-/// the spot ring, and the pen strokes in screen points. Never takes touches.
+/// Everything drawn for one pin except its badge: the element box (also used for legacy regions) and
+/// the pen strokes in screen points. A hold pin draws nothing here: its badge marks the spot. Never
+/// takes touches.
 private struct PinMarker: View {
     let annotation: Annotation
     let strokes: [Stroke]
@@ -528,17 +559,11 @@ private struct PinMarker: View {
                     dx: -AnnotateStyle.elementBoxOutset,
                     dy: -AnnotateStyle.elementBoxOutset
                 )
-                RoundedRectangle(cornerRadius: AnnotateStyle.elementBoxRadius, style: .continuous)
-                    .strokeBorder(AnnotateStyle.marker, lineWidth: AnnotateStyle.elementBoxLineWidth)
+                SelectionBox()
                     .frame(width: box.width, height: box.height)
                     .offset(x: box.minX, y: box.minY)
-            case .point:
-                SpotMarker()
-                    .offset(
-                        x: annotation.anchor.x - SpotMarker.size / 2,
-                        y: annotation.anchor.y - SpotMarker.size / 2
-                    )
-            case .sketch:
+            case .point, .sketch:
+                // A hold pin is marked by its pin alone (centered on the spot); a sketch by its strokes
                 EmptyView()
             }
 
@@ -555,21 +580,48 @@ private struct PinMarker: View {
     }
 }
 
-/// Ring marking an exact spot (hold pins). No Figma frame: the 0.1.x spot marker restyled white.
-private struct SpotMarker: View {
-    /// Outer ring diameter (0.1.x SpotMarker).
-    static let size: CGFloat = 18
-    /// Ring stroke width (0.1.x SpotMarker; matches the element box's 2pt border).
-    private static let ringWidth: CGFloat = 2
-    /// Center dot diameter (0.1.x SpotMarker).
-    private static let dotSize: CGFloat = 4
-
+/// The box around a picked element (Figma 9378:6110 / 9378:6113 "Selection"): a faint white tint
+/// lightening the element (`mix-blend-plus-lighter`), plus white brackets on its four corners only.
+private struct SelectionBox: View {
     var body: some View {
         ZStack {
-            Circle().strokeBorder(AnnotateStyle.marker, lineWidth: Self.ringWidth)
-            Circle().fill(AnnotateStyle.marker).frame(width: Self.dotSize, height: Self.dotSize)
+            RoundedRectangle(cornerRadius: AnnotateStyle.elementBoxRadius, style: .continuous)
+                .fill(Color.white.opacity(AnnotateStyle.elementBoxTintOpacity))
+                .blendMode(.plusLighter)
+            // Figma's Corners SVG centers the 2pt stroke on the frame's edge, so no inset
+            SelectionCorners(radius: AnnotateStyle.elementBoxCornerRadius)
+                .stroke(
+                    AnnotateStyle.marker,
+                    style: StrokeStyle(lineWidth: AnnotateStyle.elementBoxLineWidth, lineCap: .round)
+                )
         }
-        .frame(width: Self.size, height: Self.size)
+    }
+}
+
+/// Only the four corner arcs of a rounded rect laid on the rect's own edge (Figma 9378:6113
+/// "Corners"): each runs from `radius` along one edge, round the corner, to `radius` along the other.
+private struct SelectionCorners: Shape {
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        // Clamped so a tiny element's arcs never cross each other (design choice)
+        let r = max(min(radius, rect.width / 2, rect.height / 2), 0)
+        var path = Path()
+        guard r > 0 else { return path }
+        // Each corner: start r along one edge, tangent at the corner, end r along the other
+        func bracket(_ start: CGPoint, _ corner: CGPoint, _ end: CGPoint) {
+            path.move(to: start)
+            path.addArc(tangent1End: corner, tangent2End: end, radius: r)
+        }
+        bracket(CGPoint(x: rect.minX, y: rect.minY + r), CGPoint(x: rect.minX, y: rect.minY),
+                CGPoint(x: rect.minX + r, y: rect.minY))
+        bracket(CGPoint(x: rect.maxX - r, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+                CGPoint(x: rect.maxX, y: rect.minY + r))
+        bracket(CGPoint(x: rect.maxX, y: rect.maxY - r), CGPoint(x: rect.maxX, y: rect.maxY),
+                CGPoint(x: rect.maxX - r, y: rect.maxY))
+        bracket(CGPoint(x: rect.minX + r, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY),
+                CGPoint(x: rect.minX, y: rect.maxY - r))
+        return path
     }
 }
 

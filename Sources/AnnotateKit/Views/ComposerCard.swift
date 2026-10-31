@@ -27,7 +27,8 @@ struct ComposerCard: View {
     /// The intent dropdown is open above the chip.
     @State private var isPickingIntent = false
     /// ↑ was tapped with the keyboard up: the card is hidden, waiting for the keyboard to slide away.
-    @State private var isLeaving = false
+    /// Set while the card waits for the keyboard to start sliding away before it leaves (LeaveAfterKeyboard).
+    @State private var leaving: (() -> Void)?
 
     /// Picked images are downscaled to this longest side before they are held in memory; the
     /// bundle stores them as JPEGs and a reference image never needs more.
@@ -81,7 +82,7 @@ struct ComposerCard: View {
                     .transition(.scale(scale: Self.pickerHiddenScale, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
-        .modifier(SendAfterKeyboard(isLeaving: $isLeaving) { controller.submitDraft() })
+        .modifier(LeaveAfterKeyboard(leave: $leaving))
         .onAppear { isFocused = !opensWithoutKeyboard }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
@@ -196,7 +197,7 @@ struct ComposerCard: View {
             if canUndo {
                 controller.undo()
             } else {
-                controller.discardDraft()
+                leave { controller.discardDraft() }
             }
         }
         // Four times the system speed (design choice): the swap reads as a state change, not an animation
@@ -319,15 +320,25 @@ struct ComposerCard: View {
             canSubmit = false
         }
         return CircleIconButton(systemName: "arrow.up", style: canSubmit ? .prominent : .dimmed) {
-            guard controller.isKeyboardUp else {
-                controller.submitDraft()
-                return
-            }
-            // Hide now, let the keyboard slide away, then save (SendAfterKeyboard)
-            isLeaving = true
-            isFocused = false
+            leave { controller.submitDraft() }
         }
         .disabled(!canSubmit)
+    }
+
+    /// Runs `action`, which takes the card out, right away with no keyboard up; otherwise lets the
+    /// keyboard go first so it keeps its slide (LeaveAfterKeyboard).
+    private func leave(_ action: @escaping () -> Void) {
+        guard controller.isKeyboardUp else {
+            action()
+            return
+        }
+        // Pin the card where it is, so it leaves in place rather than riding the keyboard down
+        controller.holdCardDock()
+        leaving = { [controller] in
+            action()
+            controller.releaseCardDock()
+        }
+        isFocused = false
     }
 
     // MARK: - Attachments (9272:17019)
@@ -347,16 +358,11 @@ struct ComposerCard: View {
     /// How far the badge pokes past the thumbnail's top and right edges (20 / 2 − 4 = 6).
     private static var badgeOverhang: CGFloat { badgeSize / 2 - badgeInset }
 
-    /// Figma 9276:27374: `w-[236px] h-[64px] px-[16px]`, at least as tall as a thumbnail.
+    /// Figma 9378:6016 / 9378:5922: `w-[236px] px-[16px]`; the height hugs the text.
     private static let quoteWidth: CGFloat = 236
     private static let quoteHorizontalPadding: CGFloat = 16
-    /// Figma has 12pt above the first line (two 20pt lines centered in the 64pt box, a single line
-    /// at the same top, 9276:27466); 2pt more above and below (design choice), so two lines make
-    /// the box 70pt and a single line hangs 14pt from its top.
-    private static let quoteVerticalPadding: CGFloat = 14
-    /// 2pt more between the quoted lines than Loose Leading's 20pt (design choice; no leading
-    /// setting reaches 22).
-    private static let quoteLineSpacing: CGFloat = 2
+    /// Figma `py-[12px]`: one 20pt line makes the box 44pt (9378:6016), two make it 64pt (9378:5922).
+    private static let quoteVerticalPadding: CGFloat = 12
     /// Figma `opacity-75` on the quoted lines (9276:27375).
     private static let quoteOpacity: Double = 0.75
 
@@ -394,20 +400,19 @@ struct ComposerCard: View {
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     }
 
-    /// The element's text in a thumbnail-shaped box (a thumbnail's radius and fill, at least its
-    /// height), like the message a reply quotes. Figma 9276:27374: Loose Leading/Footnote (13 / 20)
-    /// at 75%, two lines, then it truncates; 2pt more between the lines and around them.
+    /// The element's text in a box with a thumbnail's radius and fill, like the message a reply
+    /// quotes. Figma 9378:6016 / 9378:5922: Loose Leading/Footnote (13 / 20) at 75%, two lines, then
+    /// it truncates. The box hugs the text (44pt for one line, 64pt for two), so the text is
+    /// vertically centered by its equal padding.
     private func quoteBox(_ text: String) -> some View {
         Text(text)
             .font(.footnote.leading(.loose))
-            .lineSpacing(Self.quoteLineSpacing)
             .foregroundStyle(.primary.opacity(Self.quoteOpacity))
             .lineLimit(2)
             .truncationMode(.tail)
             .padding(.horizontal, Self.quoteHorizontalPadding)
             .padding(.vertical, Self.quoteVerticalPadding)
-            .frame(width: Self.quoteWidth, alignment: .topLeading)
-            .frame(minHeight: Self.thumbnailSize, alignment: .topLeading)
+            .frame(width: Self.quoteWidth, alignment: .leading)
             .background(
                 Color.primary.opacity(CircleIcon.fillOpacity),
                 in: RoundedRectangle(cornerRadius: Self.thumbnailRadius, style: .continuous)

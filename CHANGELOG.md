@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Overlay design pass** (Figma SUNSET 9378:7192):
+  - Pins are 28pt blue markers with a white number, a white spinner while the agent works, and a
+    green fill behind a white checkmark once resolved. A new pin shows a + while you write it, and
+    a saved pin you reopen shows a pencil.
+  - A sketch's pin sits centered on its first stroke, 15% short of where that stroke ends, instead
+    of on the drawing's corner. More strokes added to the same pin don't move it. It's measured
+    along the smoothed line as drawn, not the raw touch points. Bundle screenshots place it the
+    same way.
+  - The pin's rim is a 1pt soft-light gradient (bright at the top, gone by the bottom) instead of a
+    solid white ring, and its shadow is softer (blur 8).
+  - Element selections are a faint tint with rounded corner brackets instead of a white outline.
+  - The status dot on the Annotate pill and the hint line has a pulsing halo (25%) that blurs as
+    it grows, and offline red is the system red.
+  - A hold pin is just its pin, centered on the spot you held; the ring and dot are gone (bundle
+    crops still mark the spot with a ring, since they carry no pin).
+  - A one-line quote in the comment card hugs its text (44pt) instead of sitting in a 64pt box.
+  - Each pin keeps one marker through its life: saving, reopening and sending change only its glyph
+    (+, pencil, number, spinner, outcome), and its color crossfades when that changes too.
+  - The bar and the cards swap one way: the arriving one rises from below, the leaving one shrinks
+    and fades in place. A card sent or cancelled with the keyboard up now stays put while the
+    keyboard slides away instead of vanishing.
+  - The Annotate pill first appears as just "Annotate"; its status dot then slides out from behind
+    the label, fading in as it goes, and the pill widens to fit it.
+
+### Removed
+- Dragging the Annotate pill. It jittered under the finger; the pill still keeps clear of the app's
+  bottom bars on its own.
+
 ### Fixed
 - Opening a pin no longer cuts straight from the review bar to the comment card: the bar and its
   hint line shrink and fade while the card rises from below, the same motion as the Annotate pill
