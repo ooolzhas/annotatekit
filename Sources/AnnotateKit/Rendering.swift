@@ -79,11 +79,6 @@ enum AnnotateStyle {
     static let pinShadowRadius: CGFloat = 4
     static let pinShadowY: CGFloat = 4
 
-    /// Per-axis offset from a spot's center to its pin's center (pin sits diagonally).
-    /// No Figma row for spots; derived so the pin touches the ring without overlapping it:
-    /// (spot ring radius 9 + pin radius 14) / √2 ≈ 16.3, rounded up — same derivation as before.
-    /// Shared by the live overlay and the bundle PNG markers.
-    static let spotBadgeOffset: CGFloat = 17
     /// Half of `badgeSize`; the PNG markers use it too, so both match.
     static let pinRadius: CGFloat = 14
     /// Uniform 4pt pen, live and in the PNGs (user requirement; Figma SVG stroke-width 4, 9257:13562).
@@ -254,7 +249,9 @@ enum BundleRenderer {
             // The drawing speaks for itself; no box around it
             break
         case .point:
-            // Crosshair ring: the exact spot matters more than any box
+            // Crosshair ring: the exact spot matters more than any box. The overlay draws no ring
+            // (its pin sits on the spot); here it marks the spot in the per-pin crops, which carry no
+            // pin, and the numbered screen's pin covers it
             let ring = CGRect(x: anchor.x - 9, y: anchor.y - 9, width: 18, height: 18)
             cg.strokeEllipse(in: ring)
             cg.setFillColor(AnnotateStyle.accentUI.cgColor)
@@ -277,12 +274,10 @@ enum BundleRenderer {
         let sketchPin = OverlayPlacement.sketchPin(for: annotation.sketchInScreenPoints)
             .map { CGPoint(x: $0.x - offset.x, y: $0.y - offset.y) }
         let radius = AnnotateStyle.pinRadius
-        let spotOffset = AnnotateStyle.spotBadgeOffset
-        // As the live overlay (`pinAnchorFrame`): beside a spot, on an element's tap point, on a
-        // sketch's first line 15% short of its end, else the box's corner
+        // As the live overlay (`pinAnchorFrame`): on a held spot (covering its ring) or an element's
+        // tap point, on a sketch's first line 15% short of its end, else the box's corner
         let pinFrame = switch annotation.kind {
-        case .point: CGRect(x: anchor.x + spotOffset, y: anchor.y - spotOffset, width: 0, height: 0)
-        case .element: CGRect(origin: anchor, size: .zero)
+        case .point, .element: CGRect(origin: anchor, size: .zero)
         case .sketch: sketchPin.map { CGRect(origin: $0, size: .zero) } ?? frame
         case .region: frame
         }

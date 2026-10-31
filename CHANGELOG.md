@@ -18,8 +18,10 @@ All notable changes to this project are documented here. The format is based on
   - The pin's rim is a 1pt soft-light gradient (bright at the top, gone by the bottom) instead of a
     solid white ring, and its shadow is softer (blur 8).
   - Element selections are a faint tint with rounded corner brackets instead of a white outline.
-  - The status dot on the Annotate pill and the hint line has a pulsing halo, and offline red is
-    the system red.
+  - The status dot on the Annotate pill and the hint line has a pulsing halo that blurs as it
+    grows, and offline red is the system red.
+  - A hold pin is just its pin, centered on the spot you held; the ring and dot are gone (bundle
+    crops still mark the spot with a ring, since they carry no pin).
   - A one-line quote in the comment card hugs its text (44pt) instead of sitting in a 64pt box.
   - Each pin keeps one marker through its life: saving, reopening and sending change only its glyph
     (+, pencil, number, spinner, outcome), and its color crossfades when that changes too.

@@ -511,15 +511,14 @@ private extension View {
 }
 
 extension Annotation {
-    /// Where the numbered badge attaches: on the spot the user tapped to pick an element, just beside
-    /// a spot, on a sketch's first stroke 15% short of its end, or a legacy region's outer top-trailing corner.
+    /// Where the numbered badge attaches: on the spot the user tapped to pick an element or held, on a
+    /// sketch's first stroke 15% short of its end, or a legacy region's outer top-trailing corner.
     var pinAnchorFrame: CGRect {
         switch kind {
         case .point:
-            // Derived, no Figma row: SpotMarker.size / 2 (ring radius 9) plus badgeSize / 2 (12),
-            // along the 45° diagonal, so the ring and the badge touch without overlapping
-            let offset = AnnotateStyle.spotBadgeOffset
-            return CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0)
+            // Owner request 2026-11-01: the pin itself marks the held spot, centered on it, with no
+            // ring or dot of its own
+            return CGRect(origin: anchor.cgPoint, size: .zero)
         case .sketch:
             // Owner request 2026-11-01 (Figma 9378:5659): the badge sits centered ON the first line, 15%
             // short of where it ends (more strokes never move it), rather than on the strokes' bounding corner. A zero-size rect, so
@@ -543,8 +542,9 @@ extension Annotation {
     }
 }
 
-/// Everything drawn for one pin except its badge: the element box (also used for legacy regions),
-/// the spot ring, and the pen strokes in screen points. Never takes touches.
+/// Everything drawn for one pin except its badge: the element box (also used for legacy regions) and
+/// the pen strokes in screen points. A hold pin draws nothing here: its badge marks the spot. Never
+/// takes touches.
 private struct PinMarker: View {
     let annotation: Annotation
     let strokes: [Stroke]
@@ -562,13 +562,8 @@ private struct PinMarker: View {
                 SelectionBox()
                     .frame(width: box.width, height: box.height)
                     .offset(x: box.minX, y: box.minY)
-            case .point:
-                SpotMarker()
-                    .offset(
-                        x: annotation.anchor.x - SpotMarker.size / 2,
-                        y: annotation.anchor.y - SpotMarker.size / 2
-                    )
-            case .sketch:
+            case .point, .sketch:
+                // A hold pin is marked by its pin alone (centered on the spot); a sketch by its strokes
                 EmptyView()
             }
 
@@ -627,24 +622,6 @@ private struct SelectionCorners: Shape {
         bracket(CGPoint(x: rect.minX + r, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY),
                 CGPoint(x: rect.minX, y: rect.maxY - r))
         return path
-    }
-}
-
-/// Ring marking an exact spot (hold pins). No Figma frame: the 0.1.x spot marker restyled white.
-private struct SpotMarker: View {
-    /// Outer ring diameter (0.1.x SpotMarker).
-    static let size: CGFloat = 18
-    /// Ring stroke width (0.1.x SpotMarker; matches the element box's 2pt border).
-    private static let ringWidth: CGFloat = 2
-    /// Center dot diameter (0.1.x SpotMarker).
-    private static let dotSize: CGFloat = 4
-
-    var body: some View {
-        ZStack {
-            Circle().strokeBorder(AnnotateStyle.marker, lineWidth: Self.ringWidth)
-            Circle().fill(AnnotateStyle.marker).frame(width: Self.dotSize, height: Self.dotSize)
-        }
-        .frame(width: Self.size, height: Self.size)
     }
 }
 

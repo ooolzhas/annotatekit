@@ -858,6 +858,9 @@ struct StatusIndicator: View {
     /// One half of the breath (in or out): a 2 s cycle, the same slow pace the old blinking dot had,
     /// so it reads as alive rather than alarming.
     static let haloHalfPeriod: Double = 1.0
+    /// How soft the wave gets at its fullest (owner request: it blurs as it grows, sharp when it's
+    /// back at the dot). Reduce Motion's still wave stays sharp, as Figma draws it.
+    static let haloBlur: CGFloat = 3
 
     var body: some View {
         Circle()
@@ -878,7 +881,9 @@ struct StatusIndicator: View {
             wave
         } else {
             wave.phaseAnimator([false, true]) { content, isSwollen in
-                content.scaleEffect(isSwollen ? 1 : Self.haloRestScale)
+                content
+                    .scaleEffect(isSwollen ? 1 : Self.haloRestScale)
+                    .blur(radius: isSwollen ? Self.haloBlur : 0)
             } animation: { _ in
                 .easeInOut(duration: Self.haloHalfPeriod)
             }
