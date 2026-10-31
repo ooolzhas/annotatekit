@@ -839,7 +839,7 @@ struct ConnectionDot: View {
 // MARK: - Status indicator
 
 /// Status dot with its pulsing wave (Figma 9378:5495 Indicator): an 8pt dot over a 16pt halo of the
-/// same color at 15%. Lays out at the dot's 8pt (the halo overflows it, as Figma's `inset-[-50%]`).
+/// same color at 25% (Figma 15%, raised). Lays out at the dot's 8pt (the halo overflows it, as Figma's `inset-[-50%]`).
 struct StatusIndicator: View {
     let color: Color
 
@@ -849,8 +849,8 @@ struct StatusIndicator: View {
     static let dotSize: CGFloat = 8
     /// Figma "Pulsing Wave" r8: twice the dot, centered on it.
     static let haloSize: CGFloat = 16
-    /// Figma "Pulsing Wave" opacity 0.15.
-    static let haloOpacity: Double = 0.15
+    /// Above Figma's "Pulsing Wave" 0.15 (owner request: the blurred wave read too faint).
+    static let haloOpacity: Double = 0.25
     /// Not in Figma (no motion context; design choice from the layer's name): the wave breathes,
     /// shrinking to this scale (back to the dot's size) and swelling to Figma's 16pt. The dot itself
     /// stays solid. Reduce Motion holds the wave at scale 1, Figma's rest frame.
