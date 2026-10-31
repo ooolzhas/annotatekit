@@ -162,7 +162,7 @@ img { display: block; }
   text-decoration: none;
   transition: color 0.1s, background-color 0.1s;
 }
-.sidebar li a:hover { color: var(--text-strong); background: var(--nav-hover); }
+@media (hover: hover) { .sidebar li a:hover { color: var(--text-strong); background: var(--nav-hover); } }
 /* The current page (aria-current="page") or section ("location") is medium weight; the pill shows on hover only. Each
    link reserves its medium-weight width with an invisible zero-height copy of its label, so the
    weight change never shifts the bar; the label centers in that width. */
@@ -540,6 +540,10 @@ main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
 @media (max-width: 768px) {
   .hero-media { --bleed: 8px; }
   main:has(.hero-media) { --hero-gap: 28px; }
+}
+/* On a phone a 3:2 board leaves the demo phone ~175pt tall; a square board gives it ~295pt. */
+@media (max-width: 560px) {
+  .hero-media { aspect-ratio: 1 / 1; }
 }
 /* The headline opens the page; the install line follows the intro. */
 main > section:first-child h1 { margin-top: 0; }
@@ -929,7 +933,7 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   transition: color 0.1s, background-color 0.1s;
 }
 html:not(.js) .copy { display: none; }
-.copy:hover { color: var(--text-strong); background: var(--nav-hover); }
+@media (hover: hover) { .copy:hover { color: var(--text-strong); background: var(--nav-hover); } }
 /* A successful copy fills the button: white on the accent. */
 .copy.is-copied { color: #fff; background: var(--accent); }
 /* Between states: the copy icon shrinks out as the check grows in (stacked in one cell), and the
@@ -1060,16 +1064,16 @@ main p a, main li a, main dd a {
 main p a, main li a, main dd a { position: relative; }
 main p a::after, main li a::after, main dd a::after { content: ""; position: absolute; inset: -4px; }
 /* Hover: the blue fades a little (reads in light and dark). */
-main p a:hover, main li a:hover, main dd a:hover { opacity: 0.7; }
+@media (hover: hover) { main p a:hover, main li a:hover, main dd a:hover { opacity: 0.7; } }
 /* A link inside a caption takes the caption's gray and darkens on hover. */
 main .note a { color: inherit; }
-main .note a:hover { color: var(--text-strong); opacity: 1; }
+@media (hover: hover) { main .note a:hover { color: var(--text-strong); opacity: 1; } }
 /* An arrow that scrolls in place on hover: it slides out to the right while a copy waiting one slot to
    its left slides in behind it; the clipping box keeps both inside the arrow's own footprint. */
 .roll { display: inline-block; overflow: hidden; vertical-align: bottom; }
 .roll > span { display: inline-block; position: relative; transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.2, 1); }
 .roll > span::before { content: "→"; position: absolute; right: calc(100% + 0.6em); }
-a:hover .roll > span { transform: translateX(calc(100% + 0.6em)); }
+@media (hover: hover) { a:hover .roll > span { transform: translateX(calc(100% + 0.6em)); } }
 @media (prefers-reduced-motion: reduce) { .roll > span { transition: none; } }
 
 /* ---------- Mobile: sidebar becomes a top bar ---------- */
@@ -1100,17 +1104,20 @@ a:hover .roll > span { transform: translateX(calc(100% + 0.6em)); }
     min-width: 0;
     height: 100%;
     overflow-x: auto;
-    padding-right: 12px;
+    padding-right: 4px;
     scrollbar-width: none;
-    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 20px), transparent 100%);
-    mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 20px), transparent 100%);
   }
   .nav-scroll::-webkit-scrollbar { display: none; }
 
   .nav-group, .nav-group + .nav-group { display: contents; margin: 0; }
-  .nav-label, .nav-group.nav-resources { display: none; }
+  .nav-label { display: none; }
   .nav-sections { display: flex; flex: none; }
-  .sidebar li a { white-space: nowrap; padding: 4px 8px; }
+  /* 44pt tall: the bar's full height is the tap target */
+  .sidebar li a { white-space: nowrap; padding: 12px 8px; }
+  /* GitHub stays reachable, pinned to the bar's end; llms.txt is for agents, so desktop only */
+  .nav-group.nav-resources { display: flex; flex: none; margin-left: auto; }
+  .nav-resources li:has(a[href="llms.txt"]) { display: none; }
+  .sidebar li a.nav-icon { padding: 16px; }
 
   main {
     max-width: none;
@@ -1119,6 +1126,24 @@ a:hover .roll > span { transform: translateX(calc(100% + 0.6em)); }
   }
   section { scroll-margin-top: 48px; padding-top: 44px; }
   h1 { margin-top: 28px; }
+
+  /* The setup prompt is a sentence: it wraps instead of scrolling under a fade */
+  .cmd.quote { align-items: flex-start; }
+  .cmd.quote code {
+    white-space: normal;
+    padding-right: 60px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  /* The wrapped prompt has no room for the label to slide over: copied shows just the blue check
+     (the live region still announces "Copied to clipboard") */
+  .cmd.quote .copy.is-copied .copy-done { grid-template-columns: 0fr; opacity: 0; }
+  .cmd.quote .copy.is-copied .copy-icons { margin-right: 0; }
+}
+/* Touch: copy buttons get the 44pt minimum */
+@media (pointer: coarse) {
+  .copy { min-width: 44px; height: 44px; padding: 0 13px; }
+  .cmd .copy { top: 4px; right: 4px; }
 }
 
 @media (max-width: 520px) {
