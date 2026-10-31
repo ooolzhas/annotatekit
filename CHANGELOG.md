@@ -29,7 +29,7 @@ All notable changes to this project are documented here. The format is based on
     and fades in place. A card sent or cancelled with the keyboard up now stays put while the
     keyboard slides away instead of vanishing.
   - The Annotate pill first appears as just "Annotate"; its status dot then slides out from behind
-    the label and the pill widens to fit it.
+    the label, fading in as it goes, and the pill widens to fit it.
 
 ### Removed
 - Dragging the Annotate pill. It jittered under the finger; the pill still keeps clear of the app's

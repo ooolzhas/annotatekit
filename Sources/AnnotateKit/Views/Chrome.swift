@@ -658,6 +658,8 @@ struct LauncherButton: View {
     /// The status indicator is in the pill. Off the first time the pill shows in a run, so it can
     /// introduce itself; on for every later appearance.
     @State private var showsIndicator = LauncherButton.hasIntroducedIndicator
+    /// The indicator's fade, run on its own ease beside the slide (`indicatorFade`).
+    @State private var indicatorOpacity: Double = LauncherButton.hasIntroducedIndicator ? 1 : 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The indicator has slid in once this run (owner request): the pill first reads just
@@ -669,6 +671,10 @@ struct LauncherButton: View {
     static let indicatorDelay: Duration = .milliseconds(600)
     /// The slide and the widening, together (design choice; no Figma motion context).
     static let indicatorAnimation: Animation = .spring(duration: 0.5, bounce: 0.2)
+    /// The whole indicator (dot and wave) fades in over the slide (owner request). Its own ease:
+    /// a spring is all but done with opacity in its first third, so the dot read as fully there
+    /// while it was still sliding.
+    static let indicatorFade: Animation = .easeInOut(duration: 0.5)
 
     /// Figma's horizontal title padding (9289:1310 `px-[16px]`).
     static let horizontalPadding: CGFloat = 16
@@ -695,6 +701,7 @@ struct LauncherButton: View {
         HStack(spacing: Self.dotSpacing) {
             if showsIndicator {
                 ConnectionDot(link: link)
+                    .opacity(indicatorOpacity)
                     .transition(indicatorEntrance)
             }
             Text(status.title)
@@ -734,11 +741,12 @@ struct LauncherButton: View {
     }
 
     /// The dot starts behind the label's first letters (one dot plus its gap to the right of its
-    /// place) and slides left into place, fading in as it clears the label.
+    /// place) and slides left into place; `indicatorOpacity` fades it in meanwhile. Reduce Motion
+    /// keeps the fade only.
     private var indicatorEntrance: AnyTransition {
-        guard !reduceMotion else { return .opacity }
+        guard !reduceMotion else { return .identity }
         return .asymmetric(
-            insertion: .offset(x: Self.dotSpacing + StatusIndicator.dotSize).combined(with: .opacity),
+            insertion: .offset(x: Self.dotSpacing + StatusIndicator.dotSize),
             removal: .opacity
         )
     }
@@ -747,8 +755,11 @@ struct LauncherButton: View {
         guard !showsIndicator else { return }
         try? await Task.sleep(for: Self.indicatorDelay)
         guard !Task.isCancelled else { return }
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : Self.indicatorAnimation) {
+        withAnimation(reduceMotion ? nil : Self.indicatorAnimation) {
             showsIndicator = true
+        }
+        withAnimation(Self.indicatorFade) {
+            indicatorOpacity = 1
         }
         Self.hasIntroducedIndicator = true
     }
