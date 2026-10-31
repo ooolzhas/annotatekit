@@ -84,4 +84,67 @@ public enum OverlayPlacement {
         let b = CGPoint(x: end.x - length * cos(angle + spread), y: end.y - length * sin(angle + spread))
         return (a, b)
     }
+
+    /// How far along a sketch, as a fraction of its total stroke length from the first point drawn,
+    /// its pin sits (owner request: about 15%, centered on the line; Figma 9378:5659).
+    public static let sketchPinFraction: Double = 0.15
+
+    /// The point `fraction` of the way along `strokes`' total length, walked along the line as it is
+    /// drawn (`drawnPoints(of:)`), not the raw touch samples: the drawn curve cuts inside every
+    /// sample, so a point on the samples sat off the line, under the pin's edge. The gap between one
+    /// stroke's end and the next stroke's start does not count. `fraction` is clamped to 0...1. Nil
+    /// when there are no points at all; strokes with zero total length return the first point.
+    public static func point(along strokes: [Stroke], fraction: Double) -> CGPoint? {
+        let lines = strokes.map(drawnPoints(of:)).filter { !$0.isEmpty }
+        guard let first = lines.first?.first, let last = lines.last?.last else { return nil }
+        let length = { (a: CGPoint, b: CGPoint) in hypot(Double(b.x - a.x), Double(b.y - a.y)) }
+        let total = lines.reduce(0.0) { sum, line in
+            zip(line, line.dropFirst()).reduce(sum) { $0 + length($1.0, $1.1) }
+        }
+        let target = total * Swift.min(Swift.max(fraction, 0), 1)
+        guard target > 0 else { return first }
+        var walked = 0.0
+        for line in lines {
+            for (a, b) in zip(line, line.dropFirst()) {
+                let segment = length(a, b)
+                if segment > 0, walked + segment >= target {
+                    let t = CGFloat((target - walked) / segment)
+                    return CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+                }
+                walked += segment
+            }
+        }
+        // Floating-point shortfall at fraction 1 lands here.
+        return last
+    }
+
+    /// How many straight pieces each curved piece of a drawn pen line is measured in. The curves
+    /// span two touch samples at most, so 8 keeps the measured line within a fraction of a point.
+    static let curveSteps = 8
+
+    /// A stroke as it is drawn, flattened into short straight pieces. A pen stroke follows the
+    /// renderer's smoothing (AnnotateKit's `SketchPath`; keep the two in step): straight from the
+    /// first sample to the midpoint of the first two, a quadratic curve from each midpoint to the
+    /// next with the sample between as its control, then straight to the last sample. Shapes and
+    /// arrows keep their points as they are.
+    public static func drawnPoints(of stroke: Stroke) -> [CGPoint] {
+        let samples = stroke.points.map(\.cgPoint)
+        guard stroke.tool == .pen, samples.count > 2 else { return samples }
+        let mid = { (a: CGPoint, b: CGPoint) in CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2) }
+        var line = [samples[0], mid(samples[0], samples[1])]
+        for index in 1..<(samples.count - 1) {
+            let start = mid(samples[index - 1], samples[index])
+            let control = samples[index]
+            let end = mid(samples[index], samples[index + 1])
+            for step in 1...curveSteps {
+                let t = CGFloat(step) / CGFloat(curveSteps), u = 1 - t
+                line.append(CGPoint(
+                    x: u * u * start.x + 2 * u * t * control.x + t * t * end.x,
+                    y: u * u * start.y + 2 * u * t * control.y + t * t * end.y
+                ))
+            }
+        }
+        line.append(samples[samples.count - 1])
+        return line
+    }
 }

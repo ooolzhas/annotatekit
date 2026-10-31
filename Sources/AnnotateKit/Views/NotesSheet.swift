@@ -337,7 +337,7 @@ private struct NoteBadge: View {
                     .foregroundStyle(Self.color(for: tone))
             }
         }
-        .frame(width: AnnotateStyle.badgeSize, height: AnnotateStyle.badgeSize)
+        .frame(width: AnnotateStyle.listBadgeSize, height: AnnotateStyle.listBadgeSize)
         .background(Circle().fill(Color(uiColor: .tertiarySystemFill)))
         .animation(SentPinBadge.changeAnimation, value: mark)
         .accessibilityHidden(true)

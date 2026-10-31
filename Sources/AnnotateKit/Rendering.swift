@@ -37,10 +37,8 @@ enum AnnotateStyle {
     static var sketch: Color { Color(uiColor: sketchUI) }
     static var sketchFill: Color { Color(uiColor: sketchFillUI) }
 
-    /// Live overlay markers (strokes, element boxes, spots) and badge fill: white on the dimmed screen. Figma 9257:13562 stroke=white, 9257:13564 border-white
+    /// Live overlay markers (strokes, element boxes, spots, pin borders): white on the dimmed screen. Figma 9257:13562 stroke=white, 9378:6116 border-white
     static var marker: Color { .white }
-    /// Badge number. Figma 9257:13567 text-black
-    static var badgeText: Color { .black }
     /// Fill of the primary actions (↑, Send). Accents/Blue #0088FF. Figma 9257:13480, 9257:13560
     static var action: Color { Color(uiColor: .systemBlue) }
     /// Dim over the frozen screen. Figma 9257:13385 bg-[rgba(0,0,0,0.5)]
@@ -50,21 +48,41 @@ enum AnnotateStyle {
     static let screenCornerRadius: CGFloat = 58
     /// Glow spread: inset shadow 0 0 62px. Figma 9257:13385
     static let glowBlur: CGFloat = 62
-    /// Element box: border-2, rounded-[8px]. Figma 9257:13564
+    /// Corner-bracket stroke width. Figma 9378:6112
     static let elementBoxLineWidth: CGFloat = 2
-    static let elementBoxRadius: CGFloat = 8
+    /// Selection box (Figma 9378:6110 / 6113): tint rounded-[4px] (was 8, 9257:13564).
+    static let elementBoxRadius: CGFloat = 4
+    /// Tint: bg rgba(255,255,255,0.25) at opacity-50, plus-lighter → white at 0.125. Figma 9378:6110
+    static let elementBoxTintOpacity: Double = 0.125
+    /// Corner brackets (Figma 9378:6112 Corners SVG): white 2pt, round caps, one 6.4pt-radius arc
+    /// per corner, stroked on the box edge.
+    static let elementBoxCornerRadius: CGFloat = 6.4
     /// How far the box sits outside the element; Figma's hand-drawn boxes sit 1–7pt out (9257:13564/13565), so 2 is an estimate.
     static let elementBoxOutset: CGFloat = 2
-    /// Number badge: 24pt circle. Figma 9257:13566 size-[24px]
-    static let badgeSize: CGFloat = 24
+    /// Pin marker: 28pt circle. Figma 9378:6116 size-[28px] (was 24, 9257:13566)
+    static let badgeSize: CGFloat = 28
+    /// The notes sheet's list badge keeps the old 24pt (a list row, not a marker on the screen).
+    static let listBadgeSize: CGFloat = 24
+    /// Pin fill: Accents/Blue #0088FF (Figma 9378:6116 bg var(--accents/blue)) = systemBlue.
+    static var pinFill: Color { Color(uiColor: .systemBlue) }
+    /// Resolved pin fill: Primitive/Green #34C759 (Figma 9378:6440) = systemGreen.
+    static var pinResolvedFill: Color { Color(uiColor: .systemGreen) }
+    /// Figma 9378:6116 `border border-white`.
+    static let pinBorderWidth: CGFloat = 1
+    /// Figma 9378:6116 soft-light sheen: white 0% → 25% top to bottom.
+    static let pinSheenOpacity: Double = 0.25
+    /// Figma 9378:6116 `drop-shadow 0 4 4 rgba(0,0,0,0.15)`; SwiftUI radius ≈ half the CSS blur.
+    static let pinShadowOpacity: Double = 0.15
+    static let pinShadowRadius: CGFloat = 2
+    static let pinShadowY: CGFloat = 4
 
-    /// Per-axis offset from a spot's center to its badge's center (badge sits diagonally).
-    /// No Figma row for spots; derived so the badge touches the ring without overlapping it:
-    /// (ring radius 9 + badge radius 12, half of `badgeSize`) / √2 ≈ 14.85, rounded up to 15.
+    /// Per-axis offset from a spot's center to its pin's center (pin sits diagonally).
+    /// No Figma row for spots; derived so the pin touches the ring without overlapping it:
+    /// (spot ring radius 9 + pin radius 14) / √2 ≈ 16.3, rounded up — same derivation as before.
     /// Shared by the live overlay and the bundle PNG markers.
-    static let spotBadgeOffset: CGFloat = 15
-    /// Half of `badgeSize` (Figma 9257:13566); the PNG markers use it too, so both match.
-    static let pinRadius: CGFloat = 12
+    static let spotBadgeOffset: CGFloat = 17
+    /// Half of `badgeSize`; the PNG markers use it too, so both match.
+    static let pinRadius: CGFloat = 14
     /// Uniform 4pt pen, live and in the PNGs (user requirement; Figma SVG stroke-width 4, 9257:13562).
     static let sketchLineWidth: CGFloat = 4
 }
@@ -82,7 +100,8 @@ enum SketchPath {
                 path.addLine(to: first)
                 return path
             }
-            // Quadratic segments through midpoints smooth out touch sampling
+            // Quadratic segments through midpoints smooth out touch sampling. Pins are placed along
+            // this same curve (OverlayPlacement.drawnPoints, AnnotateCore); keep the two in step
             for index in 1..<points.count {
                 let previous = points[index - 1], current = points[index]
                 let mid = CGPoint(x: (previous.x + current.x) / 2, y: (previous.y + current.y) / 2)
@@ -251,13 +270,18 @@ enum BundleRenderer {
         }
 
         guard numbered else { return }
+        // On the drawn line, in the space the strokes were drawn in above (screen points minus `offset`)
+        let sketchPin = OverlayPlacement.point(along: annotation.sketchInScreenPoints, fraction: OverlayPlacement.sketchPinFraction)
+            .map { CGPoint(x: $0.x - offset.x, y: $0.y - offset.y) }
         let radius = AnnotateStyle.pinRadius
-        let offset = AnnotateStyle.spotBadgeOffset
-        // As the live overlay (`pinAnchorFrame`): beside a spot, on an element's tap point, else the box's corner
+        let spotOffset = AnnotateStyle.spotBadgeOffset
+        // As the live overlay (`pinAnchorFrame`): beside a spot, on an element's tap point, on a
+        // sketch's line 15% along, else the box's corner
         let pinFrame = switch annotation.kind {
-        case .point: CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0)
+        case .point: CGRect(x: anchor.x + spotOffset, y: anchor.y - spotOffset, width: 0, height: 0)
         case .element: CGRect(origin: anchor, size: .zero)
-        case .region, .sketch: frame
+        case .sketch: sketchPin.map { CGRect(origin: $0, size: .zero) } ?? frame
+        case .region: frame
         }
         let center = OverlayPlacement.pinCenter(for: pinFrame, radius: radius, in: bounds)
         let circle = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)

@@ -243,8 +243,8 @@ private struct ActiveOverlay: View {
     var body: some View {
         let bounds = controller.bounds
         let openID = controller.draft?.annotation.id
-        // Figma's composing frames show no badge for the pin being written: the open draft draws
-        // its own marker from the live draft instead of its saved copy.
+        // The open draft draws its own marker and its + badge (Figma 9378:5659 "Marker 2") from the
+        // live draft, so its saved copy is left out here.
         let saved = controller.visibleAnnotations.filter { $0.id != openID }
         // After a Send that kept annotate mode open: the sent pins, with their progress badges
         let sent = controller.sentPinsOnScreen
@@ -324,12 +324,35 @@ private struct ActiveOverlay: View {
                 ))
                 .transition(Self.badgeAppearance)
             }
+
+            // The pin being written: a + badge at its anchor (Figma 9378:5659 "Marker 2"), a pencil
+            // when a saved pin is reopened (9378:5178). Keyed by the pin, so opening another one
+            // re-runs the appearance
+            if let draft = controller.draft {
+                DraftPinBadge(isNew: draft.isNew)
+                    .badgePlaced(at: OverlayPlacement.pinCenter(
+                        for: Self.draftAnchor(draft),
+                        radius: AnnotateStyle.badgeSize / 2,
+                        in: bounds
+                    ))
+                    .id(draft.annotation.id)
+                    .transition(Self.badgeAppearance)
+            }
         }
         // Screen-sized whatever a layer does: a layer wider than the screen made the window
         // re-center the overlay, shifting the frozen screen under the pins
         .frame(width: bounds.width, height: bounds.height, alignment: .topLeading)
         .animation(.snappy(duration: 0.2), value: controller.annotations)
         .animation(.snappy(duration: 0.2), value: sent.map(\.id))
+    }
+
+    /// Where the open draft's + badge attaches. A sketch reads the live strokes (already in screen
+    /// points), since the draft's saved sketch lags the strokes being drawn; everything else uses the
+    /// saved pin's anchor.
+    private static func draftAnchor(_ draft: AnnotateController.Draft) -> CGRect {
+        guard draft.annotation.kind == .sketch else { return draft.annotation.pinAnchorFrame }
+        return OverlayPlacement.point(along: draft.strokes, fraction: OverlayPlacement.sketchPinFraction)
+            .map { CGRect(origin: $0, size: .zero) } ?? draft.annotation.pinAnchorFrame
     }
 
     /// Full-screen catcher: every touch goes to the controller, which tells draw, tap and hold apart.
@@ -483,7 +506,7 @@ private extension View {
 
 extension Annotation {
     /// Where the numbered badge attaches: on the spot the user tapped to pick an element, just beside
-    /// a spot, a sketch's own stroke corner, or a legacy region's outer top-trailing corner.
+    /// a spot, on a sketch's stroke 15% along it, or a legacy region's outer top-trailing corner.
     var pinAnchorFrame: CGRect {
         switch kind {
         case .point:
@@ -492,11 +515,16 @@ extension Annotation {
             let offset = AnnotateStyle.spotBadgeOffset
             return CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0)
         case .sketch:
-            // Figma puts the badge on the strokes' own corner (9257:13566), not the padded frame's
-            // (9257:13562). Read from the strokes rather than undoing the padding: at a screen edge
-            // the padded frame was clipped, and a thin stroke there left less than the padding to
-            // undo, a null rect that sent the badge to the bottom-trailing corner
-            return BundleRenderer.strokeBounds(sketchInScreenPoints) ?? frame.cgRect
+            // Owner request 2026-11-01 (Figma 9378:5659): the badge sits centered ON the line, 15%
+            // along the strokes, rather than on the strokes' bounding corner. A zero-size rect, so
+            // pinCenter clamps that point inside the screen. Falls back to the frame with no strokes
+            if let point = OverlayPlacement.point(
+                along: sketchInScreenPoints,
+                fraction: OverlayPlacement.sketchPinFraction
+            ) {
+                return CGRect(origin: point, size: .zero)
+            }
+            return frame.cgRect
         case .element:
             // Owner request 2026-10-30: the badge sits where the user tapped, not on the box's corner
             // (Figma 9257:13570): a block can be large, and its corner far from what was tapped
@@ -528,8 +556,7 @@ private struct PinMarker: View {
                     dx: -AnnotateStyle.elementBoxOutset,
                     dy: -AnnotateStyle.elementBoxOutset
                 )
-                RoundedRectangle(cornerRadius: AnnotateStyle.elementBoxRadius, style: .continuous)
-                    .strokeBorder(AnnotateStyle.marker, lineWidth: AnnotateStyle.elementBoxLineWidth)
+                SelectionBox()
                     .frame(width: box.width, height: box.height)
                     .offset(x: box.minX, y: box.minY)
             case .point:
@@ -552,6 +579,51 @@ private struct PinMarker: View {
         // the overlay (which would re-center everything)
         .frame(width: bounds.width, height: bounds.height, alignment: .topLeading)
         .allowsHitTesting(false)
+    }
+}
+
+/// The box around a picked element (Figma 9378:6110 / 9378:6113 "Selection"): a faint white tint
+/// lightening the element (`mix-blend-plus-lighter`), plus white brackets on its four corners only.
+private struct SelectionBox: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: AnnotateStyle.elementBoxRadius, style: .continuous)
+                .fill(Color.white.opacity(AnnotateStyle.elementBoxTintOpacity))
+                .blendMode(.plusLighter)
+            // Figma's Corners SVG centers the 2pt stroke on the frame's edge, so no inset
+            SelectionCorners(radius: AnnotateStyle.elementBoxCornerRadius)
+                .stroke(
+                    AnnotateStyle.marker,
+                    style: StrokeStyle(lineWidth: AnnotateStyle.elementBoxLineWidth, lineCap: .round)
+                )
+        }
+    }
+}
+
+/// Only the four corner arcs of a rounded rect laid on the rect's own edge (Figma 9378:6113
+/// "Corners"): each runs from `radius` along one edge, round the corner, to `radius` along the other.
+private struct SelectionCorners: Shape {
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        // Clamped so a tiny element's arcs never cross each other (design choice)
+        let r = max(min(radius, rect.width / 2, rect.height / 2), 0)
+        var path = Path()
+        guard r > 0 else { return path }
+        // Each corner: start r along one edge, tangent at the corner, end r along the other
+        func bracket(_ start: CGPoint, _ corner: CGPoint, _ end: CGPoint) {
+            path.move(to: start)
+            path.addArc(tangent1End: corner, tangent2End: end, radius: r)
+        }
+        bracket(CGPoint(x: rect.minX, y: rect.minY + r), CGPoint(x: rect.minX, y: rect.minY),
+                CGPoint(x: rect.minX + r, y: rect.minY))
+        bracket(CGPoint(x: rect.maxX - r, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+                CGPoint(x: rect.maxX, y: rect.minY + r))
+        bracket(CGPoint(x: rect.maxX, y: rect.maxY - r), CGPoint(x: rect.maxX, y: rect.maxY),
+                CGPoint(x: rect.maxX - r, y: rect.maxY))
+        bracket(CGPoint(x: rect.minX + r, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY),
+                CGPoint(x: rect.minX, y: rect.maxY - r))
+        return path
     }
 }
 

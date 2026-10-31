@@ -161,6 +161,43 @@ import Testing
         #expect(OverlayPlacement.pinCenter(for: CGRect(x: 300, y: 0, width: 100, height: 40), radius: 11, in: bounds) == CGPoint(x: 389, y: 11))
     }
 
+    @Test func sketchPinSitsOnTheLineAFractionAlong() {
+        // Two strokes, 100 + 100 long; the jump between them doesn't count
+        let strokes = [
+            Stroke(tool: .pen, points: [AnnotationPoint(x: 0, y: 0), AnnotationPoint(x: 100, y: 0)]),
+            Stroke(tool: .pen, points: [AnnotationPoint(x: 100, y: 50), AnnotationPoint(x: 100, y: 150)])
+        ]
+        #expect(OverlayPlacement.point(along: strokes, fraction: 0.15) == CGPoint(x: 30, y: 0))
+        #expect(OverlayPlacement.point(along: strokes, fraction: 0.75) == CGPoint(x: 100, y: 100))
+        #expect(OverlayPlacement.point(along: strokes, fraction: 1) == CGPoint(x: 100, y: 150))
+        #expect(OverlayPlacement.point(along: strokes, fraction: 2) == CGPoint(x: 100, y: 150))
+        #expect(OverlayPlacement.point(along: strokes, fraction: -1) == CGPoint(x: 0, y: 0))
+    }
+
+    @Test func sketchPinSitsOnTheDrawnCurveNotTheSamples() throws {
+        // The drawn line rounds the corner at (100, 0) through (50, 0) and (100, 50), so halfway
+        // along it is inside the corner, not on it as halfway along the samples would be
+        let corner = [Stroke(tool: .pen, points: [
+            AnnotationPoint(x: 0, y: 0), AnnotationPoint(x: 100, y: 0), AnnotationPoint(x: 100, y: 100)
+        ])]
+        let line = OverlayPlacement.drawnPoints(of: corner[0])
+        #expect(line.first == CGPoint(x: 0, y: 0))
+        #expect(line.last == CGPoint(x: 100, y: 100))
+        #expect(line.contains(CGPoint(x: 50, y: 0)))
+        #expect(line.contains(CGPoint(x: 100, y: 50)))
+        let point = try #require(OverlayPlacement.point(along: corner, fraction: 0.5))
+        #expect(point.x < 100 && point.y > 0)
+        // On the curve: the quadratic from (50, 0) to (100, 50) bulges toward (100, 0) no further
+        // than the point at t = 0.5, (87.5, 12.5)
+        #expect(abs(point.x - 87.5) < 1 && abs(point.y - 12.5) < 1)
+    }
+
+    @Test func sketchPinWithoutLengthFallsBack() {
+        #expect(OverlayPlacement.point(along: [], fraction: 0.15) == nil)
+        let dot = [Stroke(tool: .pen, points: [AnnotationPoint(x: 7, y: 9)])]
+        #expect(OverlayPlacement.point(along: dot, fraction: 0.15) == CGPoint(x: 7, y: 9))
+    }
+
     @Test func cardGoesBelowThenAboveThenBottom() {
         let size = CGSize(width: 280, height: 120)
         let below = OverlayPlacement.cardFrame(size: size, anchoredTo: CGRect(x: 20, y: 100, width: 100, height: 40), in: bounds)
