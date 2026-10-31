@@ -351,7 +351,7 @@ private struct ActiveOverlay: View {
     /// saved pin's anchor.
     private static func draftAnchor(_ draft: AnnotateController.Draft) -> CGRect {
         guard draft.annotation.kind == .sketch else { return draft.annotation.pinAnchorFrame }
-        return OverlayPlacement.point(along: draft.strokes, fraction: OverlayPlacement.sketchPinFraction)
+        return OverlayPlacement.sketchPin(for: draft.strokes)
             .map { CGRect(origin: $0, size: .zero) } ?? draft.annotation.pinAnchorFrame
     }
 
@@ -506,7 +506,7 @@ private extension View {
 
 extension Annotation {
     /// Where the numbered badge attaches: on the spot the user tapped to pick an element, just beside
-    /// a spot, on a sketch's stroke 15% along it, or a legacy region's outer top-trailing corner.
+    /// a spot, on a sketch's first stroke 15% short of its end, or a legacy region's outer top-trailing corner.
     var pinAnchorFrame: CGRect {
         switch kind {
         case .point:
@@ -515,13 +515,10 @@ extension Annotation {
             let offset = AnnotateStyle.spotBadgeOffset
             return CGRect(x: anchor.x + offset, y: anchor.y - offset, width: 0, height: 0)
         case .sketch:
-            // Owner request 2026-11-01 (Figma 9378:5659): the badge sits centered ON the line, 15%
-            // along the strokes, rather than on the strokes' bounding corner. A zero-size rect, so
+            // Owner request 2026-11-01 (Figma 9378:5659): the badge sits centered ON the first line, 15%
+            // short of where it ends (more strokes never move it), rather than on the strokes' bounding corner. A zero-size rect, so
             // pinCenter clamps that point inside the screen. Falls back to the frame with no strokes
-            if let point = OverlayPlacement.point(
-                along: sketchInScreenPoints,
-                fraction: OverlayPlacement.sketchPinFraction
-            ) {
+            if let point = OverlayPlacement.sketchPin(for: sketchInScreenPoints) {
                 return CGRect(origin: point, size: .zero)
             }
             return frame.cgRect

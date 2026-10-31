@@ -192,6 +192,15 @@ import Testing
         #expect(abs(point.x - 87.5) < 1 && abs(point.y - 12.5) < 1)
     }
 
+    @Test func sketchPinSitsOnTheFirstStrokeNearItsEnd() {
+        let first = Stroke(tool: .pen, points: [AnnotationPoint(x: 0, y: 0), AnnotationPoint(x: 100, y: 0)])
+        let second = Stroke(tool: .pen, points: [AnnotationPoint(x: 0, y: 50), AnnotationPoint(x: 300, y: 50)])
+        #expect(OverlayPlacement.sketchPin(for: [first]) == CGPoint(x: 85, y: 0))
+        // Drawing another shape into the same pin leaves it where it was
+        #expect(OverlayPlacement.sketchPin(for: [first, second]) == CGPoint(x: 85, y: 0))
+        #expect(OverlayPlacement.sketchPin(for: []) == nil)
+    }
+
     @Test func sketchPinWithoutLengthFallsBack() {
         #expect(OverlayPlacement.point(along: [], fraction: 0.15) == nil)
         let dot = [Stroke(tool: .pen, points: [AnnotationPoint(x: 7, y: 9)])]

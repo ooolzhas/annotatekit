@@ -325,8 +325,11 @@ private struct MarkerGlyph: View {
     }
 }
 
-/// The marker's disc (Figma 9378:6116 Marker): `fill`, a soft-light white sheen top → bottom, a 1pt
-/// white border, and a soft drop shadow `0 4 4 rgba(0,0,0,0.15)`.
+/// The marker's disc (Figma 9378:6122 Marker): `fill`, a soft-light white sheen that brightens toward
+/// the bottom, a 1pt soft-light rim that brightens toward the top, and a soft drop shadow (y 4,
+/// blur 8, 15%). SwiftUI has no per-paint blend modes, so the sheen and the rim are layers of their
+/// own, blended inside one compositing group: they mix with the fill only, never with the dimmed
+/// screen behind the marker.
 private struct MarkerCircle: View {
     let fill: Color
 
@@ -340,9 +343,16 @@ private struct MarkerCircle: View {
                     endPoint: .bottom
                 ))
                 .blendMode(.softLight)
-            Circle().strokeBorder(.white, lineWidth: AnnotateStyle.pinBorderWidth)
+            // Inside the edge, as Figma's INSIDE stroke
+            Circle()
+                .strokeBorder(LinearGradient(
+                    colors: [.white.opacity(AnnotateStyle.pinRimOpacity), .white.opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ), lineWidth: AnnotateStyle.pinBorderWidth)
+                .blendMode(.softLight)
         }
-        // The sheen blends with the fill only, and the shadow falls from the finished disc
+        // The sheen and rim blend with the fill only, and the shadow falls from the finished disc
         .compositingGroup()
         .shadow(color: .black.opacity(AnnotateStyle.pinShadowOpacity), radius: AnnotateStyle.pinShadowRadius,
                 x: 0, y: AnnotateStyle.pinShadowY)

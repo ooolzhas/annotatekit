@@ -67,13 +67,16 @@ enum AnnotateStyle {
     static var pinFill: Color { Color(uiColor: .systemBlue) }
     /// Resolved pin fill: Primitive/Green #34C759 (Figma 9378:6440) = systemGreen.
     static var pinResolvedFill: Color { Color(uiColor: .systemGreen) }
-    /// Figma 9378:6116 `border border-white`.
+    /// Pin rim (Figma 9378:6122 stroke, read from the node: design context flattens it to a white
+    /// border): 1pt inside, white 100% → 0% top to bottom at 50%, soft light, so it reads as a lit
+    /// edge of the fill rather than a white ring.
     static let pinBorderWidth: CGFloat = 1
-    /// Figma 9378:6116 soft-light sheen: white 0% → 25% top to bottom.
+    static let pinRimOpacity: Double = 0.5
+    /// Figma 9378:6122 second fill: white 0% → 100% top to bottom at 25%, soft light.
     static let pinSheenOpacity: Double = 0.25
-    /// Figma 9378:6116 `drop-shadow 0 4 4 rgba(0,0,0,0.15)`; SwiftUI radius ≈ half the CSS blur.
+    /// Figma 9378:6122 drop shadow: y 4, blur 8, black 15%; SwiftUI's radius is about half the blur.
     static let pinShadowOpacity: Double = 0.15
-    static let pinShadowRadius: CGFloat = 2
+    static let pinShadowRadius: CGFloat = 4
     static let pinShadowY: CGFloat = 4
 
     /// Per-axis offset from a spot's center to its pin's center (pin sits diagonally).
@@ -271,12 +274,12 @@ enum BundleRenderer {
 
         guard numbered else { return }
         // On the drawn line, in the space the strokes were drawn in above (screen points minus `offset`)
-        let sketchPin = OverlayPlacement.point(along: annotation.sketchInScreenPoints, fraction: OverlayPlacement.sketchPinFraction)
+        let sketchPin = OverlayPlacement.sketchPin(for: annotation.sketchInScreenPoints)
             .map { CGPoint(x: $0.x - offset.x, y: $0.y - offset.y) }
         let radius = AnnotateStyle.pinRadius
         let spotOffset = AnnotateStyle.spotBadgeOffset
         // As the live overlay (`pinAnchorFrame`): beside a spot, on an element's tap point, on a
-        // sketch's line 15% along, else the box's corner
+        // sketch's first line 15% short of its end, else the box's corner
         let pinFrame = switch annotation.kind {
         case .point: CGRect(x: anchor.x + spotOffset, y: anchor.y - spotOffset, width: 0, height: 0)
         case .element: CGRect(origin: anchor, size: .zero)

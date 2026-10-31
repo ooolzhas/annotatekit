@@ -11,9 +11,12 @@ All notable changes to this project are documented here. The format is based on
   - Pins are 28pt blue markers with a white number, a white spinner while the agent works, and a
     green fill behind a white checkmark once resolved. A new pin shows a + while you write it, and
     a saved pin you reopen shows a pencil.
-  - A sketch's pin sits centered on the line itself, about 15% along it from where you started
-    drawing, instead of on the drawing's corner. It's measured along the smoothed line as drawn, not
-    the raw touch points. Bundle screenshots place it the same way.
+  - A sketch's pin sits centered on its first stroke, 15% short of where that stroke ends, instead
+    of on the drawing's corner. More strokes added to the same pin don't move it. It's measured
+    along the smoothed line as drawn, not the raw touch points. Bundle screenshots place it the
+    same way.
+  - The pin's rim is a 1pt soft-light gradient (bright at the top, gone by the bottom) instead of a
+    solid white ring, and its shadow is softer (blur 8).
   - Element selections are a faint tint with rounded corner brackets instead of a white outline.
   - The status dot on the Annotate pill and the hint line has a pulsing halo, and offline red is
     the system red.

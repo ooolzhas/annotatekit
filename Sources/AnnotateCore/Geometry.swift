@@ -85,9 +85,18 @@ public enum OverlayPlacement {
         return (a, b)
     }
 
-    /// How far along a sketch, as a fraction of its total stroke length from the first point drawn,
-    /// its pin sits (owner request: about 15%, centered on the line; Figma 9378:5659).
-    public static let sketchPinFraction: Double = 0.15
+    /// How far along a sketch's first stroke, as a fraction of its length from the first point drawn,
+    /// its pin sits: 15% short of where that stroke ends, centered on the line (owner request
+    /// 2026-11-01; Figma 9378:5659).
+    public static let sketchPinFraction: Double = 0.85
+
+    /// Where a sketch's pin sits: on its first stroke, `sketchPinFraction` along it. Only the first
+    /// stroke counts, so drawing more shapes into the same pin never moves it (owner request
+    /// 2026-11-01). Nil with no points.
+    public static func sketchPin(for strokes: [Stroke]) -> CGPoint? {
+        guard let first = strokes.first(where: { !$0.points.isEmpty }) else { return nil }
+        return point(along: [first], fraction: sketchPinFraction)
+    }
 
     /// The point `fraction` of the way along `strokes`' total length, walked along the line as it is
     /// drawn (`drawnPoints(of:)`), not the raw touch samples: the drawn curve cuts inside every
