@@ -1,7 +1,7 @@
 # ``AnnotateKit``
 
-Cursor-style visual annotation for iOS apps: tap, draw and comment on your running app, then send it
-straight to your coding agent.
+Visual feedback for iOS apps, straight to your coding agent: AnnotateKit turns drawings and comments
+inside your running app into prompts for your agent.
 
 ## Overview
 

@@ -5,7 +5,7 @@
     "url": "https://github.com/ooolzhas"
   },
   "metadata": {
-    "description": "AnnotateKit: send visual UI feedback from your running iOS app straight to Claude."
+    "description": "AnnotateKit: visual feedback for iOS apps, straight to your coding agent."
   },
   "plugins": [
     {
