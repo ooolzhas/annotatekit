@@ -160,7 +160,7 @@ img { display: block; }
   font-size: 13px;
   line-height: 20px;
   text-decoration: none;
-  transition: color 0.15s, background-color 0.15s;
+  transition: color 0.1s, background-color 0.1s;
 }
 .sidebar li a:hover { color: var(--text-strong); background: var(--nav-hover); }
 /* The current page (aria-current="page") or section ("location") is medium weight; the pill shows on hover only. Each
@@ -463,6 +463,63 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .hero-media::after { animation: paper-grain 0.6s step-end infinite; }
+}
+/* Light on the desk. Light mode: late sun through a window, two slanted beams split by the window bar,
+   coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves.
+   Dark mode: a warm desk lamp just off the top-right corner; its pool flickers on once at load, like a
+   bulb catching, then holds. The layer lights the sheet and its grid, under the phone and terminal so
+   their screens stay crisp, and under the grain. */
+.hero-light {
+  --sun: rgba(255, 238, 200, 0.95);
+  position: absolute;
+  inset: -6%;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(118deg,
+    transparent 14%, var(--sun) 19%, var(--sun) 33%, transparent 35.5%,
+    transparent 37%, var(--sun) 39.5%, var(--sun) 51%, transparent 56%);
+  mix-blend-mode: soft-light;
+  -webkit-mask: radial-gradient(ellipse 115% 105% at 0% 0%, #000 25%, transparent 88%);
+  mask: radial-gradient(ellipse 115% 105% at 0% 0%, #000 25%, transparent 88%);
+}
+@keyframes sun-drift {
+  from { transform: translateX(-1.5%) rotate(-0.4deg); }
+  to { transform: translateX(1.5%) rotate(0.4deg); }
+}
+@media (prefers-color-scheme: dark) {
+  .hero-light {
+    inset: 0;
+    /* Warm light tints the blue toward amber (a plain mix: screening amber over blue goes white). */
+    background: radial-gradient(ellipse 80% 100% at 92% -8%,
+      rgba(255, 170, 90, 0.55) 0%, rgba(255, 150, 70, 0.3) 32%, rgba(255, 140, 60, 0.1) 60%, transparent 80%);
+    mix-blend-mode: normal;
+    opacity: 1;
+    -webkit-mask: none;
+    mask: none;
+  }
+  /* The bulb's hot spot, brightest just under the lamp. */
+  .hero-light::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 45% 55% at 90% -2%, rgba(255, 200, 130, 0.7), rgba(255, 170, 90, 0.2) 50%, transparent 75%);
+    mix-blend-mode: screen;
+    opacity: 0.7;
+  }
+}
+@keyframes lamp-on {
+  0%, 6% { opacity: 0; }
+  9% { opacity: 0.7; }
+  12% { opacity: 0.1; }
+  18% { opacity: 0.9; }
+  22% { opacity: 0.35; }
+  40%, 100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-light { animation: sun-drift 18s ease-in-out infinite alternate; }
+}
+@media (prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark) {
+  .hero-light { animation: lamp-on 1.6s linear 0.3s both; }
 }
 /* Boiling edge: edge.js traces three slightly wobbly takes of the sheet's outline (--edge-0..2, sized
    to the sheet) and the mask cuts between them on the marks' 200ms beat. */
@@ -867,9 +924,9 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   border-radius: 8px;
   background: transparent;
   color: var(--text-muted);
-  font: 500 12px/1 var(--font);
+  font: 500 12.5px/1 var(--font);   /* the same size as the code beside it */
   cursor: pointer;
-  transition: color 0.2s, background-color 0.2s;
+  transition: color 0.1s, background-color 0.1s;
 }
 html:not(.js) .copy { display: none; }
 .copy:hover { color: var(--text-strong); background: var(--nav-hover); }
@@ -996,7 +1053,7 @@ details > p:first-of-type { margin-top: 2px; }
 main p a, main li a, main dd a {
   color: var(--accent);
   text-decoration: none;
-  transition: opacity 0.15s;
+  transition: opacity 0.1s, color 0.1s;
 }
 /* Every text link is easier to hit: an invisible layer reaches 4px past it on all sides without
    moving any text. */
@@ -1010,7 +1067,7 @@ main .note a:hover { color: var(--text-strong); opacity: 1; }
 /* An arrow that scrolls in place on hover: it slides out to the right while a copy waiting one slot to
    its left slides in behind it; the clipping box keeps both inside the arrow's own footprint. */
 .roll { display: inline-block; overflow: hidden; vertical-align: bottom; }
-.roll > span { display: inline-block; position: relative; transition: transform 0.35s cubic-bezier(0.3, 0.7, 0.2, 1); }
+.roll > span { display: inline-block; position: relative; transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.2, 1); }
 .roll > span::before { content: "→"; position: absolute; right: calc(100% + 0.6em); }
 a:hover .roll > span { transform: translateX(calc(100% + 0.6em)); }
 @media (prefers-reduced-motion: reduce) { .roll > span { transition: none; } }
