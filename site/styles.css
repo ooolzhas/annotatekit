@@ -2,13 +2,13 @@
 
 :root {
   --font: Geist, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace;
+  --mono: "Geist Mono", "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace;
 
   --accent: #0A84FF;
   --on-accent: #fff;
 
-  --bg: #fff;
-  --bg-elevated: rgba(255, 255, 255, 0.86);
+  --bg: #fafaf9;
+  --bg-elevated: rgba(250, 250, 249, 0.72);
   --text: #333;
   --text-strong: rgba(0, 0, 0, 0.82);
   --text-muted: #737373;
@@ -21,7 +21,7 @@
   --tag-text: #0060c0;
   /* Code tokens, Xcode default themes */
   --tk-key: #ad3da4;
-  --tk-attr: #815f03;
+  --tk-attr: var(--accent);   /* attributes (@main) in the site's blue */
   --tk-str: #d12f1b;
   --tk-com: #707f8c;
 
@@ -34,7 +34,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #111112;
-    --bg-elevated: rgba(17, 17, 18, 0.86);
+    --bg-elevated: rgba(17, 17, 18, 0.72);
     --text: #c9c9cc;
     --text-strong: rgba(255, 255, 255, 0.92);
     --text-muted: #8e8e93;
@@ -46,7 +46,7 @@
     --tag-bg: rgba(10, 132, 255, 0.18);
     --tag-text: #64b0ff;
     --tk-key: #ff7ab2;
-    --tk-attr: #cc9768;
+    --tk-attr: var(--accent);
     --tk-str: #fc6a5d;
     --tk-com: #7f8c98;
   }
@@ -68,8 +68,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 15px;
+  line-height: 26px;
   letter-spacing: -0.08px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -120,7 +120,7 @@ img { display: block; }
 .wordmark {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px; /* lockup spacing: about a third of the 16px mark */
   margin: 0 0 28px 10px;
   color: var(--text-strong);
   font-size: 14px;
@@ -128,9 +128,9 @@ img { display: block; }
   letter-spacing: -0.2px;
   text-decoration: none;
 }
-/* The favicon artwork (loop + plain pin, drawn for small sizes); its squircle is in the SVG. */
+/* The favicon artwork (hand-drawn circle over a square, white on blue); its 30% corners are in the SVG. */
 .wordmark-mark {
-  width: 24px; height: 24px;
+  width: 16px; height: 16px;
   background: url("favicon.svg") center / contain no-repeat;
   flex: none;
 }
@@ -155,15 +155,33 @@ img { display: block; }
   position: relative;
   display: block;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: 999px;
   color: var(--text-muted);
   font-size: 13px;
   line-height: 20px;
   text-decoration: none;
-  transition: color 0.15s, background-color 0.15s;
+  transition: color 0.1s, background-color 0.1s;
 }
-.sidebar li a:hover { color: var(--text-strong); background: var(--nav-hover); }
-.sidebar li a[aria-current="location"] { color: var(--text-strong); font-weight: 500; }
+@media (hover: hover) { .sidebar li a:hover { color: var(--text-strong); background: var(--nav-hover); } }
+/* The current page (aria-current="page") or section ("location") is medium weight; the pill shows on hover only. Each
+   link reserves its medium-weight width with an invisible zero-height copy of its label, so the
+   weight change never shifts the bar; the label centers in that width. */
+.sidebar li a { text-align: center; }
+.sidebar li a[aria-current] { color: var(--text-strong); font-weight: 500; }
+/* Icon-only links (GitHub): 12px mark, padded to the text links' 28px height. */
+.sidebar li a.nav-icon { padding: 8px; }
+.sidebar li a.nav-icon svg { display: block; width: 12px; height: 12px; }
+.sidebar li a[data-text]::after {
+  content: attr(data-text);
+  content: attr(data-text) / "";
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 500;
+  user-select: none;
+  pointer-events: none;
+}
 /* ---------- Content column ---------- */
 
 main {
@@ -177,21 +195,22 @@ section {
   padding-top: 56px;
   scroll-margin-top: 0;
 }
-section#overview { padding-top: 0; }
+/* The first section opens the page (the overview here, Install on install.html) */
+main > section:first-child { padding-top: 0; }
 
-p { margin: 0 0 14px; }
+p { margin: 0 0 16px; }   /* every block (paragraph, list, command, code) ends 16px above the next */
 /* Prose wraps "pretty" (no one-word last lines); headings balance their lines */
 main p, main li, main dd { text-wrap: pretty; }
 main h1, main h2, main h3 { text-wrap: balance; }
 
-strong { color: var(--text-strong); font-weight: 600; }
+strong { color: var(--text-strong); font-weight: 500; }
 
 h1 {
-  margin: 36px 0 12px;
+  margin: 36px 0 16px;   /* at least the room a section heading gets */
   color: var(--text-strong);
   font-size: 17px;
   line-height: 24px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.15px;
 }
 
@@ -203,7 +222,7 @@ h2 {
   color: var(--text-strong);
   font-size: 15px;
   line-height: 22px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.08px;
 }
 /* Hand-drawn rule: an uneven path stretched to the heading's width; non-scaling-stroke keeps the
@@ -214,8 +233,8 @@ h2::after {
   height: 8px;
   background: var(--text-faint);
   opacity: 0.55;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='0.625' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='0.625' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
 }
 
 h3 {
@@ -223,13 +242,313 @@ h3 {
   color: var(--text-strong);
   font-size: 15px;
   line-height: 22px;
-  font-weight: 600;
+  font-weight: 500;
 }
-h2 + h3 { margin-top: 0; }
+/* A step below h3 (which already matches body size): caption-sized label, medium weight, muted.
+   Subheads that sit straight under an h2 are h3.sub, so the outline doesn't skip a level. */
+h4, h3.sub {
+  margin: 24px 0 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 19px;
+  font-weight: 500;
+}
+h2 + h3, h2 + h3.sub { margin-top: 0; }
 
-.intro { margin-bottom: 24px; }
+.intro { margin-bottom: 24px; }   /* the setup prompt stays part of the opening */
+/* Header media above the headline: a 3:2 landscape rounded rect wider than the text column.
+   It overhangs the text by up to 128px a side, never closer than 16px to the window edge. */
+.hero-media {
+  --bleed: min(128px, calc((100vw - var(--col)) / 2 - 16px));
+  --grid-minor: rgba(255, 255, 255, 0.14);
+  --grid-major: rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  margin: 0 calc(-1 * var(--bleed)) var(--hero-gap);
+  border-radius: 32px;
+  /* Blueprint: an accent-blue sheet with a white grid and white-ish grain. */
+  background-color: var(--accent);
+  isolation: isolate;   /* the grain's screen blend stays inside the sheet */
+}
+/* The iPhone demo, centered with 32px above and below, in demo.css's 244 x 511.7 frame (an 8px black
+   bezel around a 228px screen), scaled by --u. The screen corner is the one baked into demo.mp4: a
+   circular 93px arc on its 590px-wide frame, i.e. 35.9 at 228, so the screen stays round. The device's
+   outer edge is a squircle; a squircle can't be parallel to a circle, so its radius (76.9) is the one that
+   keeps the bezel closest to 8 through the corner (7.1 to 8.9). Where corner-shape is unsupported
+   (Safari) the edge is the concentric circle instead (35.9 + 8 = 43.9). */
+.hero-media { container-type: size; display: grid; place-items: center; }
+.hero-phone {
+  --u: calc((100cqh - 64px) / 511.7);
+  position: relative;
+  z-index: 1;   /* above the paper grain */
+  height: calc(511.7 * var(--u));
+  aspect-ratio: 244 / 511.7;
+  padding: calc(8 * var(--u));
+  border-radius: calc(43.9 * var(--u));
+  corner-shape: round;
+  background: #000;
+  box-shadow: 0 calc(24 * var(--u)) calc(48 * var(--u)) calc(-18 * var(--u)) rgba(0, 0, 0, .35),
+              0 calc(8 * var(--u)) calc(18 * var(--u)) calc(-8 * var(--u)) rgba(0, 0, 0, .25);
+}
+@supports (corner-shape: squircle) {
+  .hero-phone { border-radius: calc(76.9 * var(--u)); corner-shape: squircle; }
+}
+.hero-phone video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: calc(35.9 * var(--u));
+  corner-shape: round;
+  background: #000;
+}
+/* Static grid, centered: each 1px line sits mid-tile and the tiles are centered on the sheet, so a
+   major line runs through the exact middle both ways and the grid is symmetric. It fades out over
+   the outer 24px, so no line runs along an edge. */
+.hero-media::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 0.5px), var(--grid-major) calc(50% - 0.5px), var(--grid-major) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--grid-major) calc(50% - 0.5px), var(--grid-major) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to right, transparent calc(50% - 0.5px), var(--grid-minor) calc(50% - 0.5px), var(--grid-minor) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--grid-minor) calc(50% - 0.5px), var(--grid-minor) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+  background-position: center;
+  -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+                linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  -webkit-mask-composite: source-in;
+  mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+        linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-composite: intersect;
+  pointer-events: none;
+}
+/* A light-mode Claude terminal on the left and the phone on the right, centered as a group. The terminal prints
+   in step with the video (inline script in index.html). Below 769px the board is too narrow for both,
+   so the terminal hides and the phone stays centered. */
+@media (min-width: 769px) {
+  .hero-media { grid-template-columns: auto auto; justify-content: center; column-gap: 40px; }
+}
+.hero-term {
+  position: relative;
+  z-index: 1;
+  display: none;
+  width: 44cqw;
+  aspect-ratio: 4 / 3;
+  border-radius: 16px;
+  corner-shape: round;
+  /* Light by default; the dark-mode set is right below. */
+  --term-bg: #fff;
+  --term-text: #1d1d1f;
+  --term-ring: rgba(0, 0, 0, 0.08);
+  --term-title: rgba(0, 0, 0, 0.55);
+  --term-dim: rgba(0, 0, 0, 0.45);
+  --term-bold: #000;
+  --term-blue: #0A84FF;
+  --term-green: #1a8f3c;
+  --term-orange: #c4571f;
+  --term-str: #467a1c;
+  background: var(--term-bg);
+  color: var(--term-text);
+  font-family: var(--mono);
+  font-size: clamp(9px, 1.45cqw, 12px);
+  line-height: 1.6;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--term-ring), 0 24px 48px -18px rgba(0, 0, 0, 0.35), 0 8px 18px -8px rgba(0, 0, 0, 0.2);
+}
+/* Dark mode: a deep blueprint blue (the accent mixed into near-black), with the grid and grain stepped
+   down to suit the darker sheet. */
+@media (prefers-color-scheme: dark) {
+  .hero-media {
+    --grid-minor: rgba(255, 255, 255, 0.11);
+    --grid-major: rgba(255, 255, 255, 0.22);
+    background-color: color-mix(in srgb, var(--accent) 55%, #050a14);
+  }
+  main .hero-media::after { opacity: 0.35; }   /* beats the base grain rule further down */
+}
+@media (prefers-color-scheme: dark) {
+  .hero-term {
+    --term-bg: #1c1c1e;
+    --term-text: #e7e7ea;
+    --term-ring: rgba(255, 255, 255, 0.09);
+    --term-title: rgba(255, 255, 255, 0.55);
+    --term-dim: rgba(255, 255, 255, 0.45);
+    --term-bold: #fff;
+    --term-blue: #4aa3ff;
+    --term-green: #3fd06a;
+    --term-orange: #e08a5f;
+    --term-str: #b5d68b;
+  }
+}
+@media (min-width: 769px) { .hero-term { display: block; } }
+/* Until the terminal is needed (the script adds .is-split just before the send), the phone sits centered
+   and the terminal waits past the board's left edge; it slides in from the left as the phone glides right
+   into the side-by-side layout (terminal left, phone right), and back. */
+@media (min-width: 769px) {
+  .hero-term { order: -1; }
+  .hero-phone, .hero-term { transition: transform 0.7s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.45s ease; }
+  .hero-media:not(.is-split) .hero-phone { transform: translateX(calc(-20px - 22cqw)); }
+  .hero-media:not(.is-split) .hero-term { transform: translateX(-60cqw); opacity: 0; }
+}
+/* A squircle where supported, at a larger radius so it reads as soft as the 16px circle it replaces. */
+@supports (corner-shape: squircle) {
+  .hero-term { border-radius: 28px; corner-shape: squircle; }
+}
+.term-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  height: 2.6em;
+  padding: 0 0.9em;
+  background: var(--term-bg);
+}
+.term-head i { width: 1em; height: 1em; border-radius: 50%; corner-shape: round; display: block; }
+.term-head i:nth-child(1) { background: #ff5f57; }
+.term-head i:nth-child(2) { background: #febc2e; }
+.term-head i:nth-child(3) { background: #28c840; }
+.term-title {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  font-family: var(--font);
+  font-weight: 500;
+  color: var(--term-title);
+}
+.term-claude { width: 1.05em; height: 1.05em; color: #D97757; }
+.term-body { padding: 0.9em 1.1em; }
+.term-line {
+  position: relative;
+  padding-left: 1.5em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.term-g { position: absolute; left: 0; top: 0; }
+.term-line b { font-weight: 600; color: var(--term-bold); }
+.term-dim { color: var(--term-dim); }
+.term-blue { color: var(--term-blue); }
+.term-green { color: var(--term-green); }
+.term-orange { color: var(--term-orange); }
+.term-str { color: var(--term-str); }
+.term-later { opacity: 0; transform: translateY(5px); transition: opacity 0.3s ease, transform 0.4s ease; }
+.term-later.is-on { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .term-live { animation: term-pulse 1.6s ease-in-out infinite; }
+  .term-star { display: inline-block; animation: term-rot 2.4s linear infinite; }
+}
+@keyframes term-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes term-rot { to { transform: rotate(360deg); } }
+/* Rough paper grain over the grid: screen-blended, so only its light flecks show, white on blue. */
+.hero-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E") center / 150px 150px;   /* half scale: 300px tiles drawn at 150px */
+  opacity: 0.45;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+/* The grain cuts between three takes every 200ms (hard cuts, no tweens), the same cadence as the
+   headline's hand-drawn marks, so the sheet feels alive. */
+@keyframes paper-grain {
+  0% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
+  33.333% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='17' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
+  66.667%, 100% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='29' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-media::after { animation: paper-grain 0.6s step-end infinite; }
+}
+/* Light on the desk. Light mode: late sun through a window, two slanted beams split by the window bar,
+   coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves.
+   Dark mode: a warm desk lamp just off the top-right corner; its pool flickers on once at load, like a
+   bulb catching, then holds. The layer lights the sheet and its grid, under the phone and terminal so
+   their screens stay crisp, and under the grain. */
+.hero-light {
+  --sun: rgba(255, 238, 200, 0.95);
+  position: absolute;
+  inset: -6%;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(118deg,
+    transparent 14%, var(--sun) 19%, var(--sun) 33%, transparent 35.5%,
+    transparent 37%, var(--sun) 39.5%, var(--sun) 51%, transparent 56%);
+  mix-blend-mode: soft-light;
+  -webkit-mask: radial-gradient(ellipse 115% 105% at 0% 0%, #000 25%, transparent 88%);
+  mask: radial-gradient(ellipse 115% 105% at 0% 0%, #000 25%, transparent 88%);
+}
+@keyframes sun-drift {
+  from { transform: translateX(-1.5%) rotate(-0.4deg); }
+  to { transform: translateX(1.5%) rotate(0.4deg); }
+}
+@media (prefers-color-scheme: dark) {
+  .hero-light {
+    inset: 0;
+    /* Warm light tints the blue toward amber (a plain mix: screening amber over blue goes white). */
+    background: radial-gradient(ellipse 80% 100% at 92% -8%,
+      rgba(255, 170, 90, 0.55) 0%, rgba(255, 150, 70, 0.3) 32%, rgba(255, 140, 60, 0.1) 60%, transparent 80%);
+    mix-blend-mode: normal;
+    opacity: 1;
+    -webkit-mask: none;
+    mask: none;
+  }
+  /* The bulb's hot spot, brightest just under the lamp. */
+  .hero-light::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 45% 55% at 90% -2%, rgba(255, 200, 130, 0.7), rgba(255, 170, 90, 0.2) 50%, transparent 75%);
+    mix-blend-mode: screen;
+    opacity: 0.7;
+  }
+}
+@keyframes lamp-on {
+  0%, 6% { opacity: 0; }
+  9% { opacity: 0.7; }
+  12% { opacity: 0.1; }
+  18% { opacity: 0.9; }
+  22% { opacity: 0.35; }
+  40%, 100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-light { animation: sun-drift 18s ease-in-out infinite alternate; }
+}
+@media (prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark) {
+  .hero-light { animation: lamp-on 1.6s linear 0.3s both; }
+}
+/* Boiling edge: edge.js traces three slightly wobbly takes of the sheet's outline (--edge-0..2, sized
+   to the sheet) and the mask cuts between them on the marks' 200ms beat. */
+.hero-media.has-edge {
+  -webkit-mask: var(--edge-0) 0 0 / 100% 100% no-repeat;
+  mask: var(--edge-0) 0 0 / 100% 100% no-repeat;
+}
+@keyframes edge-boil {
+  0% { -webkit-mask-image: var(--edge-0); mask-image: var(--edge-0); }
+  33.333% { -webkit-mask-image: var(--edge-1); mask-image: var(--edge-1); }
+  66.667%, 100% { -webkit-mask-image: var(--edge-2); mask-image: var(--edge-2); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-media.has-edge { animation: edge-boil 0.6s step-end infinite; }
+}
+/* The space above the header media matches the space below it, between it and the headline. */
+main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
+@media (max-width: 768px) {
+  .hero-media { --bleed: 8px; }
+  main:has(.hero-media) { --hero-gap: 28px; }
+}
+/* On a phone a 3:2 board leaves the demo phone ~175pt tall; a square board gives it ~295pt. */
+@media (max-width: 560px) {
+  .hero-media { aspect-ratio: 1 / 1; }
+}
 /* The headline opens the page; the install line follows the intro. */
-section#overview h1 { margin-top: 0; }
+main > section:first-child h1 { margin-top: 0; }
+/* A page title followed straight by a section heading (install.html) gets room, like the home intro gives. */
+h1 + h2 { margin-top: 40px; }
 
 /* The headline's promise gets a hand-drawn blue double underline, the same ink as the loops. A
    background (not a pseudo-element) so it follows the phrase onto every line it wraps to. */
@@ -262,18 +581,38 @@ section#overview h1 { margin-top: 0; }
   55% { background-size: 100% 4.5px, 0 4.5px, 100% 9px; }
   100% { background-size: 0 4.5px, 0 4.5px, 100% 9px; }
 }
+/* Line boil: from the first stroke on, each mark cuts between three hand-traced takes of itself,
+   200ms each, while drawing and after. Every take draws on the same schedule, so the cut never
+   changes how much is drawn. Hard cuts, not tweens: it reads as drawn several times, still alive. */
+.rays .boil-1, .rays .boil-2 { visibility: hidden; }
+@keyframes boil-frame { 0% { visibility: visible; } 33.333%, 100% { visibility: hidden; } }
+@keyframes underline-boil {
+  0% { background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(var(--bg), var(--bg)), var(--ul-0); }
+  33.333% { background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(var(--bg), var(--bg)), var(--ul-1); }
+  66.667%, 100% { background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(var(--bg), var(--bg)), var(--ul-2); }
+}
 @media (prefers-reduced-motion: no-preference) {
-  .underlined { animation: underline-draw 1.5s cubic-bezier(.45, 0, .25, 1) 1.2s both; }
+  .underlined {
+    animation:
+      underline-draw 1.5s cubic-bezier(.45, 0, .25, 1) 1.2s both,
+      underline-boil 0.6s step-end infinite;
+  }
   .rays path { animation: ray-draw 0.2s ease-out var(--t) both; }
+  .rays .boil-0 { animation: boil-frame 0.6s step-end infinite; }
+  .rays .boil-1 { animation: boil-frame 0.6s step-end 0.2s infinite; }
+  .rays .boil-2 { animation: boil-frame 0.6s step-end 0.4s infinite; }
 }
 .underlined {
+  --ul-0: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M2 3.2C60 2.2 118 3.9 178 2.8S262 2.4 298 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 8.1C70 7.2 130 8.8 196 7.6S270 7.4 294 8.4' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
+  --ul-1: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M1.3 2.9C60.6 1.8 118.1 3.8 176.2 2.8S260.1 2.3 296.3 3.2' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M5.7 8.4C68.5 7 130.5 9.2 196.3 7.5S271.9 7 295.4 8.2' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
+  --ul-2: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M3.7 3.6C61.6 1.8 118.4 3.8 178.1 2.5S260.8 2.4 296.9 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M4.1 7.7C70.8 7.1 130.1 9 195.4 7.2S271.1 7.5 294.6 8.5' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
   padding-bottom: 7px;
   /* Two page-colored covers over the drawn lines (top half, bottom half) shrink toward the right
      one after the other on load, so line 1 draws, then line 2. At rest the covers are 0 wide. */
   background:
     linear-gradient(var(--bg), var(--bg)) right 0 bottom 0 / 0 4.5px no-repeat,
     linear-gradient(var(--bg), var(--bg)) right 0 bottom 4.5px / 0 4.5px no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M2 3.2C60 2.2 118 3.9 178 2.8S262 2.4 298 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 8.1C70 7.2 130 8.8 196 7.6S270 7.4 294 8.4' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E") left bottom / 100% 9px no-repeat;
+    var(--ul-0) left bottom / 100% 9px no-repeat;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
@@ -305,6 +644,8 @@ section#overview h1 { margin-top: 0; }
   line-height: 19px;
 }
 .caption { margin: 20px 0 8px; }
+/* A caption line hangs 8px under the block it describes, closer than the next paragraph would. */
+.cmd:has(+ .note), .steps:has(+ .note), .bullets:has(+ .note) { margin-bottom: 8px; }
 
 /* The pane's resize handle exists only where the pane is a side panel (from 1000px). */
 .pane-handle { display: none; }
@@ -375,40 +716,36 @@ section#overview h1 { margin-top: 0; }
 /* ---------- Lists ---------- */
 
 .steps {
-  counter-reset: step;
   margin: 0 0 16px;
-  padding: 0;
-  list-style: none;
+  padding-left: 25.5px; /* numbers ("1. " is 15.5px) sit 10px in from the paragraph edge */
 }
-.steps li {
-  counter-increment: step;
-  position: relative;
-  padding-left: 32px;
-  margin-bottom: 8px;
-}
-.steps li::before {
-  content: counter(step);
-  position: absolute;
-  left: 0; top: 2px;
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  corner-shape: round;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-  text-align: center;
-  letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
-}
+.steps li { margin-bottom: 8px; padding-left: 4px; }
+.steps li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
 
 .bullets {
   margin: 0 0 16px;
-  padding-left: 16px;
+  padding-left: 25.5px; /* same indent as .steps, so both lists' text starts 29.5px in */
 }
-.bullets li { margin-bottom: 8px; padding-left: 2px; }
-.bullets li::marker { color: var(--text-faint); }
+.bullets li { margin-bottom: 8px; padding-left: 4px; }
+/* Hand-drawn dots: each bullet keeps the "•" glyph's size (about 3.4px of ink) and spot, but is an
+   irregular blob, four shapes in rotation, in the spirit of the hand-drawn rules. */
+.bullets { list-style: none; }
+.bullets li { position: relative; }
+.bullets li::before {
+  content: "";
+  position: absolute;
+  left: -13.07px;             /* centered under the steps' digits: 14.43px in (9.97 + half of 8.92) */
+  top: calc(0.5lh - 1.2px);   /* centered on the first line, nudged like the glyph */
+  width: 4px;
+  height: 4px;
+  background: var(--accent);
+  -webkit-mask: var(--dot) center / contain no-repeat;
+  mask: var(--dot) center / contain no-repeat;
+}
+.bullets li:nth-child(4n+1) { --dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M16.65 15.71C15.23 17.1 11.42 17.48 9.19 17.56C6.97 17.64 4.44 17.75 3.28 16.18C2.12 14.62 1.43 10.57 2.23 8.17C3.03 5.76 5.95 2.6 8.06 1.77C10.17 0.94 13.29 1.94 14.9 3.18C16.51 4.42 17.45 7.12 17.74 9.21C18.03 11.3 18.08 14.32 16.65 15.71Z'/%3E%3C/svg%3E"); }
+.bullets li:nth-child(4n+2) { --dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M8.36 18.24C6.13 17.81 3.45 16.51 2.57 14.7C1.69 12.88 2.47 9.37 3.05 7.35C3.64 5.33 4.21 3.27 6.09 2.55C7.97 1.84 12.38 2.04 14.32 3.06C16.25 4.07 17.44 6.27 17.71 8.65C17.98 11.02 17.5 15.71 15.94 17.31C14.38 18.91 10.59 18.68 8.36 18.24Z'/%3E%3C/svg%3E"); }
+.bullets li:nth-child(4n+3) { --dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M7.38 16.94C5.2 15.8 1.49 12.99 0.93 10.93C0.37 8.86 2.62 5.91 4.02 4.55C5.42 3.19 7.32 2.75 9.33 2.76C11.34 2.78 14.6 3.29 16.09 4.66C17.58 6.02 18.6 8.78 18.26 10.96C17.92 13.13 15.85 16.72 14.04 17.72C12.23 18.72 9.57 18.07 7.38 16.94Z'/%3E%3C/svg%3E"); }
+.bullets li:nth-child(4n+0) { --dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M11.59 18.24C9.48 19 6.52 18.65 4.72 17.3C2.92 15.96 1.16 12.33 0.8 10.17C0.44 8.01 0.98 5.63 2.57 4.35C4.15 3.07 7.91 2.39 10.32 2.5C12.73 2.61 15.86 3.29 17.02 5C18.19 6.71 18.23 10.54 17.33 12.74C16.42 14.95 13.69 17.48 11.59 18.24Z'/%3E%3C/svg%3E"); }
 
 /* ---------- Code ---------- */
 
@@ -419,6 +756,7 @@ code, pre {
 }
 
 :not(pre) > code {
+  font-weight: 500;
   padding: 1px 4px;
   border-radius: 4px;
   background: var(--code-bg);
@@ -426,6 +764,17 @@ code, pre {
   overflow-wrap: break-word;
 }
 :not(pre) > code.nw { white-space: nowrap; }
+/* Highlighted snippets (what the agent reads, under After; the paths in Install step 3): a blue tint
+   instead of the gray chip. */
+:not(pre) > code.hl {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: color-mix(in srgb, var(--accent) 75%, #000);
+}
+@media (prefers-color-scheme: dark) {
+  :not(pre) > code.hl { background: color-mix(in srgb, var(--accent) 22%, transparent); color: color-mix(in srgb, var(--accent) 70%, #fff); }
+}
+/* Code inside a caption-style line matches the caption's size and color. */
+.note code, .caption code { font-size: inherit; color: inherit; }
 
 pre {
   margin: 0;
@@ -442,7 +791,7 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 
 .code-block {
   position: relative;
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   border-radius: 14px;
   background: var(--code-bg);
 }
@@ -450,14 +799,9 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   position: absolute;
   top: 10px; right: 10px;
   background: var(--bg);
-  box-shadow: 0 0 0 1px var(--code-border);
 }
 /* With a mouse, the copy button appears on hover or keyboard focus. */
-@media (hover: hover) {
-  .code-block .copy { opacity: 0; transition: opacity 0.15s, color 0.15s, background-color 0.15s; }
-  .code-block:hover .copy, .code-block .copy:focus-visible, .code-block .copy.is-copied { opacity: 1; }
-}
-.tk-key { color: var(--tk-key); font-weight: 600; }
+.tk-key { color: var(--tk-key); font-weight: 500; }
 .tk-attr { color: var(--tk-attr); }
 .tk-str { color: var(--tk-str); }
 .tk-com { color: var(--tk-com); font-style: italic; }
@@ -517,16 +861,29 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   align-items: center;
   gap: 8px;
   min-width: 0;
-  margin: 0 0 18px;
-  padding: 12px 12px 12px 18px;
+  position: relative;
+  margin: 0 0 16px;
+  padding: 16px 0 16px 18px;   /* 52px tall: 16 + the 20px line + 16 */
   border-radius: 14px;
   background: var(--code-bg);
 }
-.cmd .copy { background: var(--bg); box-shadow: 0 0 0 1px var(--code-border); }
-@media (hover: hover) {
-  .cmd .copy { opacity: 0; transition: opacity 0.15s, color 0.15s, background-color 0.15s; }
-  .cmd:hover .copy, .cmd .copy:focus-visible, .cmd .copy.is-copied { opacity: 1; }
+/* The copy button floats over the end of the field; the text fades out just before it, and a command
+   longer than the field scrolls (its end padding lets the last characters clear the fade). */
+.cmd .copy { position: absolute; top: 8px; right: 8px; background: var(--bg); }
+/* The setup prompt runs 16px past the column in Geist Mono; a hair of tracking keeps it on one line. */
+.cmd.quote code { letter-spacing: -0.32px; }
+/* The setup prompt wears the blue highlight of inline `code.hl`; its copy icon takes the same ink. */
+.cmd.quote {
+  --quote-ink: color-mix(in srgb, var(--accent) 75%, #000);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+@media (prefers-color-scheme: dark) {
+  .cmd.quote {
+    --quote-ink: color-mix(in srgb, var(--accent) 70%, #fff);
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+}
+.cmd.quote code, .cmd.quote .copy:not(.is-copied) { color: var(--quote-ink); }
 .cmd code {
   flex: 1;
   min-width: 0;
@@ -539,11 +896,23 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   color: var(--text-strong);
   overflow-wrap: normal;
   scrollbar-width: none;
+  padding-right: 76px;
+  --cmd-fade: 72px;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--cmd-fade)), transparent calc(100% - var(--cmd-fade) + 24px));
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--cmd-fade)), transparent calc(100% - var(--cmd-fade) + 24px));
+  transition: --cmd-fade 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
+/* While the button reads "✓ Copied" it is ~80px wide, so the fade slides left to clear it (the
+   registered length lets the mask animate; without @property it just jumps). */
+@property --cmd-fade { syntax: "<length>"; inherits: false; initial-value: 72px; }
+.cmd:has(.copy.is-copied) code { --cmd-fade: 116px; }
 .cmd code::-webkit-scrollbar { display: none; }
+/* Right after a copy, the line under the prompt says what to do next, in the button's blue. */
+.paste-hint { transition: color 0.2s; }
+.cmd:has(.copy.is-copied) + .note .paste-hint { color: var(--accent); }
 .cmd.shell code::before { content: "$ "; color: var(--text-faint); }
 
-.cmd-stack { margin-bottom: 14px; }
+.cmd-stack { margin-bottom: 16px; }
 .cmd-stack .cmd { margin-bottom: 8px; }
 
 /* Copy buttons (hidden until JS fills them) */
@@ -552,25 +921,41 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 7px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 9px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-muted);
-  font: 500 12px/1 var(--font);
+  font: 500 12.5px/1 var(--font);   /* the same size as the code beside it */
   cursor: pointer;
-  transition: color 0.15s, background-color 0.15s;
+  transition: color 0.1s, background-color 0.1s;
 }
 html:not(.js) .copy { display: none; }
-.copy:hover { color: var(--text-strong); background: var(--nav-hover); }
-.copy .i-check, .copy .copy-done { display: none; }
-.copy.is-copied { color: var(--accent); }
-.copy.is-copied .i-copy { display: none; }
-.copy.is-copied .i-check, .copy.is-copied .copy-done { display: inline; }
-.copy svg { display: block; }
+@media (hover: hover) { .copy:hover { color: var(--text-strong); background: var(--nav-hover); } }
+/* A successful copy fills the button: white on the accent. */
+.copy.is-copied { color: #fff; background: var(--accent); }
+/* Between states: the copy icon shrinks out as the check grows in (stacked in one cell), and the
+   "Copied" label slides open beside it (its column grows from 0fr to 1fr) while it fades in. Leaving
+   the copied state runs the same moves backwards. */
+.copy-icons { display: grid; transition: margin-right 0.25s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.copy-icons svg { grid-area: 1 / 1; transition: opacity 0.2s, transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.copy .i-check, .copy.is-copied .i-copy { opacity: 0; transform: scale(0.5); }
+.copy.is-copied .i-check { opacity: 1; transform: none; }
+.copy-done {
+  display: grid;
+  grid-template-columns: 0fr;
+  opacity: 0;
+  transition: grid-template-columns 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.2s;
+}
+.copy-done > span { min-width: 0; overflow: hidden; white-space: nowrap; }
+.copy.is-copied .copy-icons { margin-right: 4px; }
+.copy.is-copied .copy-done { grid-template-columns: 1fr; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .copy, .copy-icons, .copy-icons svg, .copy-done, .cmd code { transition: none; }
+}
+.copy svg { display: block; width: 18px; height: 18px; }
 
 /* ---------- Delivery modes ---------- */
 
@@ -578,7 +963,7 @@ html:not(.js) .copy { display: none; }
 .modes > div { padding: 12px 0; }
 .modes dt {
   color: var(--text-strong);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 15.5px;
 }
 .modes dd { margin: 2px 0 0; }
@@ -618,12 +1003,12 @@ details > p:first-of-type { margin-top: 2px; }
 /* ---------- Footer ---------- */
 
 .footer {
+  position: relative;
   margin-top: 72px;
   padding: 20px 0 48px;
-  border-top: 1px solid var(--hairline);
   color: var(--text-muted);
-  font-size: 15px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 19px;
 }
 .footer-links {
   display: flex;
@@ -633,16 +1018,63 @@ details > p:first-of-type { margin-top: 2px; }
   padding: 0;
   list-style: none;
 }
-.footer a { text-decoration: none; }
-.footer a:hover { color: var(--text-strong); }
+/* The divider is the section headings' hand-drawn rule (same path and ink), across the column. */
+.footer::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: var(--text-faint);
+  opacity: 0.55;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='0.625' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='0.625' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
 .footer p { margin: 0; }
+/* "love" in Geist's true italic. Google Fonts serves Geist upright only, so the italic is self-hosted
+   (geist npm package 1.9.0, SIL OFL) as the same family's italic face. */
+@font-face {
+  font-family: "Geist";
+  src: url("fonts/Geist-Italic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+.footer .love { font-style: italic; }
+/* Hearts that bubble up from "love" on hover (hearts.js). */
+.footer .love { position: relative; }
+.love-heart {
+  position: absolute;
+  bottom: 70%;
+  color: #FF2D55;
+  pointer-events: none;
+  transform-origin: 50% 100%;   /* scale from the base, where the heart leaves the word */
+}
+.love-heart svg { display: block; width: 100%; height: 100%; }
 
 /* Body links */
 main p a, main li a, main dd a {
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
-  text-underline-offset: 2px;
+  color: var(--accent);
+  text-decoration: none;
+  transition: opacity 0.1s, color 0.1s;
 }
+/* Every text link is easier to hit: an invisible layer reaches 4px past it on all sides without
+   moving any text. */
+main p a, main li a, main dd a { position: relative; }
+main p a::after, main li a::after, main dd a::after { content: ""; position: absolute; inset: -4px; }
+/* Hover: the blue fades a little (reads in light and dark). */
+@media (hover: hover) { main p a:hover, main li a:hover, main dd a:hover { opacity: 0.7; } }
+/* A link inside a caption takes the caption's gray and darkens on hover. */
+main .note a { color: inherit; }
+@media (hover: hover) { main .note a:hover { color: var(--text-strong); opacity: 1; } }
+/* An arrow that scrolls in place on hover: it slides out to the right while a copy waiting one slot to
+   its left slides in behind it; the clipping box keeps both inside the arrow's own footprint. */
+.roll { display: inline-block; overflow: hidden; vertical-align: bottom; }
+.roll > span { display: inline-block; position: relative; transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.2, 1); }
+.roll > span::before { content: "→"; position: absolute; right: calc(100% + 0.6em); }
+@media (hover: hover) { a:hover .roll > span { transform: translateX(calc(100% + 0.6em)); } }
+@media (prefers-reduced-motion: reduce) { .roll > span { transition: none; } }
 
 /* ---------- Mobile: sidebar becomes a top bar ---------- */
 
@@ -658,13 +1090,12 @@ main p a, main li a, main dd a {
     padding: 0 0 0 16px;
     overflow: visible;
     background: var(--bg-elevated);
-    -webkit-backdrop-filter: saturate(180%) blur(16px);
-    backdrop-filter: saturate(180%) blur(16px);
-    border-bottom: 1px solid var(--hairline);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
   }
 
-  .wordmark { margin: 0 4px 0 0; flex: none; gap: 7px; font-size: 13.5px; }
-  .wordmark-mark { width: 22px; height: 22px; }
+  .wordmark { margin: 0 4px 0 0; flex: none; gap: 5px; font-size: 13.5px; }
+  .wordmark-mark { width: 15px; height: 15px; }
 
   .nav-scroll {
     display: flex;
@@ -673,18 +1104,20 @@ main p a, main li a, main dd a {
     min-width: 0;
     height: 100%;
     overflow-x: auto;
-    padding-right: 12px;
+    padding-right: 4px;
     scrollbar-width: none;
-    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 20px), transparent 100%);
-    mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 20px), transparent 100%);
   }
   .nav-scroll::-webkit-scrollbar { display: none; }
 
   .nav-group, .nav-group + .nav-group { display: contents; margin: 0; }
-  .nav-label, .nav-group.nav-resources { display: none; }
+  .nav-label { display: none; }
   .nav-sections { display: flex; flex: none; }
-  .sidebar li a { white-space: nowrap; padding: 4px 8px; }
-  .sidebar li a[aria-current="location"] { background: var(--nav-hover); }
+  /* 44pt tall: the bar's full height is the tap target */
+  .sidebar li a { white-space: nowrap; padding: 12px 8px; }
+  /* GitHub stays reachable, pinned to the bar's end; llms.txt is for agents, so desktop only */
+  .nav-group.nav-resources { display: flex; flex: none; margin-left: auto; }
+  .nav-resources li:has(a[href="llms.txt"]) { display: none; }
+  .sidebar li a.nav-icon { padding: 16px; }
 
   main {
     max-width: none;
@@ -693,8 +1126,64 @@ main p a, main li a, main dd a {
   }
   section { scroll-margin-top: 48px; padding-top: 44px; }
   h1 { margin-top: 28px; }
+
+  /* The setup prompt is a sentence: it wraps instead of scrolling under a fade */
+  .cmd.quote { align-items: flex-start; }
+  .cmd.quote code {
+    white-space: normal;
+    padding-right: 60px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  /* The wrapped prompt has no room for the label to slide over: copied shows just the blue check
+     (the live region still announces "Copied to clipboard") */
+  .cmd.quote .copy.is-copied .copy-done { grid-template-columns: 0fr; opacity: 0; }
+  .cmd.quote .copy.is-copied .copy-icons { margin-right: 0; }
+}
+/* Touch: copy buttons get the 44pt minimum */
+@media (pointer: coarse) {
+  .copy { min-width: 44px; height: 44px; padding: 0 13px; }
+  .cmd .copy { top: 4px; right: 4px; }
 }
 
 @media (max-width: 520px) {
   .install-bar { align-items: stretch; }
+}
+
+/* With the demo pane commented out of index.html, the column centers in the viewport (never under the sidebar). */
+@media (min-width: 1000px) {
+  body:not(:has(.preview-pane)) { --pane-w: 0px; }
+  body:not(:has(.preview-pane)) main { --main-left: max(var(--sidebar-w), calc((100vw - var(--col) - 48px) / 2)); }
+}
+
+/* ---------- Top nav at every width ---------- */
+/* The sidebar's links sit in a sticky bar above the column, as on mobile, with the resource links
+   on the right. No sidebar width to reserve, so the column centers in the viewport. */
+:root { --sidebar-w: 0px; }
+
+@media (min-width: 769px) {
+  .sidebar {
+    position: sticky;
+    bottom: auto;
+    width: auto;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    /* The bar spans the window; its contents line up with the text column below. */
+    padding: 0 max(24px, calc((100% - var(--col)) / 2));
+    overflow: visible;
+    background: var(--bg-elevated);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+  /* Balanced: wordmark left, page links centered in the bar, resource links right. */
+  .sidebar { display: grid; grid-template-columns: 1fr auto 1fr; }
+  .wordmark { margin: 0; justify-self: start; }
+  .nav-scroll, .nav-group, .nav-group + .nav-group { display: contents; margin: 0; }
+  .nav-label { display: none; }
+  .nav-sections, .nav-resources ul { display: flex; align-items: center; }
+  .nav-resources ul { justify-self: end; }
+  .sidebar li a { white-space: nowrap; padding: 4px 6px; }
+  section { scroll-margin-top: 56px; }
 }

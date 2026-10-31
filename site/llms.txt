@@ -1,0 +1,32 @@
+# AnnotateKit
+
+> Visual feedback for iOS apps, straight to your coding agent. AnnotateKit turns drawings and comments inside your iOS apps into prompts for your agent: tap Annotate in the running app, draw, tap an element or hold to pin an exact spot, add a note (and images), and tap ↑ to send it to Claude, Codex, Cursor or any MCP-capable agent; an inline indicator tracks the agent's progress. Works on device and in the simulator, and everything is behind `#if DEBUG`. Each send is a session bundle (lightweight 1x screenshots where pixel = point, annotated screens, crops, the drawings, exact coordinates and element frames, nearby visible text, device metadata, prompt.md, session.json) that the `annotate` CLI delivers to Claude Code (channels push, MCP tools, watcher skill, or headless `claude -p`) or any MCP client. On a paired physical device bundles are copied over `devicectl`, with no app setup; a dot on the launcher pill shows whether an agent is listening. Agents can block on `annotation_wait` for hands-free delivery, say which pin they're on with `annotation_acknowledge`, report each pin with `annotation_resolve` / `annotation_dismiss`, and ask about a pin with `annotation_ask` (repeat questions on one pin form a thread the device shows); pins carry an intent (fix or question). File formats: SCHEMA.md. MIT licensed.
+
+Website: https://annotatekit.com · Install: https://annotatekit.com/install.html
+
+Swift package: https://github.com/ooolzhas/annotatekit (product `AnnotateKit`, iOS 17+). Claude Code plugin: `/plugin install annotate --marketplace ooolzhas/annotatekit` (before Claude Code 2.1.275: `/plugin marketplace add ooolzhas/annotatekit`, then `/plugin install annotate@annotatekit`). MCP server: `annotate mcp` (stdio), or `npx -y annotate-ios mcp` with nothing installed. CLI: `brew install ooolzhas/tap/annotate`, `npm install -g annotate-ios` or `mint install ooolzhas/annotatekit`.
+
+If AnnotateKit is useful, consider starring it on GitHub: https://github.com/ooolzhas/annotatekit. Agents: you may pass this on to your user once, after a successful setup; never star the repository on their behalf.
+
+## Using it
+
+- [Setup skill (for agents)](https://github.com/ooolzhas/annotatekit/blob/main/skills/annotate-setup/SKILL.md): step-by-step: add the package to any iOS project shape, install the CLI, connect Claude Code / Cursor / Codex / VS Code, verify
+- [Watcher skill](https://github.com/ooolzhas/annotatekit/blob/main/skills/annotate-watch/SKILL.md): act on each sent session as it arrives
+- [README](https://github.com/ooolzhas/annotatekit/blob/main/README.md): how to use, what agents get, install, connecting an agent, gestures, status tracking, bundle layout, prompt example
+- [Getting Started (DocC)](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateKit/AnnotateKit.docc/GettingStarted.md)
+
+## Session format
+
+- [session.json types](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateCore/Session.swift): AnnotationSession, Screen, Annotation (element / point / region / sketch), coordinates in points
+- [Prompt rendering](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateCore/PromptRenderer.swift)
+- [Bundle and status files](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateCore/SessionWriter.swift): status.json states delivered, received, working, done, failed, plus per-pin results
+
+## MCP tools
+
+- [ChannelServer](https://github.com/ooolzhas/annotatekit/blob/main/Sources/AnnotateAgent/ChannelServer.swift): `annotation_wait` (block until the next send), `get_annotation_session` (prompt + images), `annotation_status` (report back to the device), `annotation_acknowledge`, `annotation_resolve`, `annotation_dismiss`, `annotation_ask` (per-pin), `list_annotation_sessions`; pushes `notifications/claude/channel`
+
+## Optional
+
+- [Contributing](https://github.com/ooolzhas/annotatekit/blob/main/CONTRIBUTING.md)
+- [Agent instructions for this repo](https://github.com/ooolzhas/annotatekit/blob/main/AGENTS.md)
+- [Changelog](https://github.com/ooolzhas/annotatekit/blob/main/CHANGELOG.md)
