@@ -364,22 +364,22 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 /* Dark mode: a deep blueprint blue (the accent mixed into near-black), with the grid and grain stepped
    down to suit the darker sheet. The sheet falls off into near-black away from the lamp's pool of light
-   (top center), and the grid fades with it, so the lit middle reads like a desk at night. */
+   (centered on the sheet), and the grid fades with it, so the lit middle reads like a desk at night. */
 @media (prefers-color-scheme: dark) {
   .hero-media {
     --grid-minor: rgba(255, 255, 255, 0.11);
     --grid-major: rgba(255, 255, 255, 0.22);
     background-color: color-mix(in srgb, var(--accent) 40%, #03060d);
-    background-image: radial-gradient(ellipse 70% 105% at 50% -8%, transparent 30%, rgba(0, 0, 0, 0.72) 100%);
+    background-image: radial-gradient(ellipse 55% 75% at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
   }
   .hero-media::before {
     -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
                   linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent),
-                  radial-gradient(ellipse 70% 105% at 50% -8%, #000 25%, rgba(0, 0, 0, 0.12) 100%);
+                  radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
     -webkit-mask-composite: source-in;
     mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
           linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent),
-          radial-gradient(ellipse 70% 105% at 50% -8%, #000 25%, rgba(0, 0, 0, 0.12) 100%);
+          radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
     mask-composite: intersect;
   }
   main .hero-media::after { opacity: 0.35; }   /* beats the base grain rule further down */
@@ -482,7 +482,7 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 /* Light on the desk. Light mode: late sun through a window, two slanted beams split by the window bar,
    coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves.
-   Dark mode: a warm desk lamp just above the top center; its pool flickers on once at load, like a
+   Dark mode: a warm desk lamp straight overhead, its pool centered on the sheet; it flickers on once at load, like a
    bulb catching, then holds. The layer lights the sheet and its grid, under the phone and terminal so
    their screens stay crisp, and under the grain. */
 .hero-light {
@@ -506,19 +506,19 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   .hero-light {
     inset: 0;
     /* Warm light tints the blue toward amber (a plain mix: screening amber over blue goes white). */
-    background: radial-gradient(ellipse 60% 95% at 50% -8%,
+    background: radial-gradient(ellipse 40% 62% at 50% 50%,
       rgba(255, 170, 90, 0.55) 0%, rgba(255, 150, 70, 0.3) 32%, rgba(255, 140, 60, 0.1) 60%, transparent 80%);
     mix-blend-mode: normal;
     opacity: 1;
     -webkit-mask: none;
     mask: none;
   }
-  /* The bulb's hot spot, brightest just under the lamp. */
+  /* The bulb's hot spot, brightest in the middle of the pool. */
   .hero-light::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 35% 50% at 50% -2%, rgba(255, 200, 130, 0.7), rgba(255, 170, 90, 0.2) 50%, transparent 75%);
+    background: radial-gradient(ellipse 24% 38% at 50% 50%, rgba(255, 200, 130, 0.7), rgba(255, 170, 90, 0.2) 50%, transparent 75%);
     mix-blend-mode: screen;
     opacity: 0.7;
   }
