@@ -326,16 +326,20 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   pointer-events: none;
 }
 /* A light-mode Claude terminal on the left and the phone on the right, centered as a group. The terminal prints
-   in step with the video (inline script in index.html). Below 769px the board is too narrow for both,
-   so the terminal hides and the phone stays centered. */
-@media (min-width: 769px) {
-  .hero-media { grid-template-columns: auto auto; justify-content: center; column-gap: 40px; }
+   in step with the video (inline script in index.html). Below 561px (phones) the board is too narrow for both
+   side by side, so the terminal slides in over the lower part of the phone instead (mobile block below). */
+@media (min-width: 561px) {
+  .hero-media { --term-w: 44cqw; --term-gap: 40px; grid-template-columns: auto auto; justify-content: center; column-gap: var(--term-gap); }
+}
+/* A tablet's narrower board: a wider terminal and a tighter gap, so its longest line still fits at 9px. */
+@media (min-width: 561px) and (max-width: 768px) {
+  .hero-media { --term-w: 48cqw; --term-gap: 24px; }
 }
 .hero-term {
   position: relative;
   z-index: 1;
   display: none;
-  width: 44cqw;
+  width: var(--term-w, 44cqw);
   aspect-ratio: 4 / 3;
   border-radius: 16px;
   corner-shape: round;
@@ -359,12 +363,24 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   box-shadow: 0 0 0 1px var(--term-ring), 0 24px 48px -18px rgba(0, 0, 0, 0.35), 0 8px 18px -8px rgba(0, 0, 0, 0.2);
 }
 /* Dark mode: a deep blueprint blue (the accent mixed into near-black), with the grid and grain stepped
-   down to suit the darker sheet. */
+   down to suit the darker sheet. The sheet falls off into near-black away from the lamp's pool of light
+   (centered on the sheet), and the grid fades with it, so the lit middle reads like a desk at night. */
 @media (prefers-color-scheme: dark) {
   .hero-media {
     --grid-minor: rgba(255, 255, 255, 0.11);
     --grid-major: rgba(255, 255, 255, 0.22);
-    background-color: color-mix(in srgb, var(--accent) 55%, #050a14);
+    background-color: color-mix(in srgb, var(--accent) 40%, #03060d);
+    background-image: radial-gradient(ellipse 55% 75% at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
+  }
+  .hero-media::before {
+    -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+                  linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+                  radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
+    -webkit-mask-composite: source-in;
+    mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+          linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+          radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
+    mask-composite: intersect;
   }
   main .hero-media::after { opacity: 0.35; }   /* beats the base grain rule further down */
 }
@@ -382,14 +398,14 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
     --term-str: #b5d68b;
   }
 }
-@media (min-width: 769px) { .hero-term { display: block; } }
+@media (min-width: 561px) { .hero-term { display: block; } }
 /* Until the terminal is needed (the script adds .is-split just before the send), the phone sits centered
    and the terminal waits past the board's left edge; it slides in from the left as the phone glides right
    into the side-by-side layout (terminal left, phone right), and back. */
-@media (min-width: 769px) {
+@media (min-width: 561px) {
   .hero-term { order: -1; }
   .hero-phone, .hero-term { transition: transform 0.7s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.45s ease; }
-  .hero-media:not(.is-split) .hero-phone { transform: translateX(calc(-20px - 22cqw)); }
+  .hero-media:not(.is-split) .hero-phone { transform: translateX(calc((var(--term-w) + var(--term-gap)) / -2)); }
   .hero-media:not(.is-split) .hero-term { transform: translateX(-60cqw); opacity: 0; }
 }
 /* A squircle where supported, at a larger radius so it reads as soft as the 16px circle it replaces. */
@@ -466,7 +482,7 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 /* Light on the desk. Light mode: late sun through a window, two slanted beams split by the window bar,
    coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves.
-   Dark mode: a warm desk lamp just off the top-right corner; its pool flickers on once at load, like a
+   Dark mode: a warm desk lamp straight overhead, its pool centered on the sheet; it flickers on once at load, like a
    bulb catching, then holds. The layer lights the sheet and its grid, under the phone and terminal so
    their screens stay crisp, and under the grain. */
 .hero-light {
@@ -490,19 +506,19 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   .hero-light {
     inset: 0;
     /* Warm light tints the blue toward amber (a plain mix: screening amber over blue goes white). */
-    background: radial-gradient(ellipse 80% 100% at 92% -8%,
+    background: radial-gradient(ellipse 40% 62% at 50% 50%,
       rgba(255, 170, 90, 0.55) 0%, rgba(255, 150, 70, 0.3) 32%, rgba(255, 140, 60, 0.1) 60%, transparent 80%);
     mix-blend-mode: normal;
     opacity: 1;
     -webkit-mask: none;
     mask: none;
   }
-  /* The bulb's hot spot, brightest just under the lamp. */
+  /* The bulb's hot spot, brightest in the middle of the pool. */
   .hero-light::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 45% 55% at 90% -2%, rgba(255, 200, 130, 0.7), rgba(255, 170, 90, 0.2) 50%, transparent 75%);
+    background: radial-gradient(ellipse 24% 38% at 50% 50%, rgba(255, 200, 130, 0.7), rgba(255, 170, 90, 0.2) 50%, transparent 75%);
     mix-blend-mode: screen;
     opacity: 0.7;
   }
@@ -541,9 +557,30 @@ main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
   .hero-media { --bleed: 8px; }
   main:has(.hero-media) { --hero-gap: 28px; }
 }
-/* On a phone a 3:2 board leaves the demo phone ~175pt tall; a square board gives it ~295pt. */
+/* On a phone a 3:2 board leaves the demo phone ~175pt tall. Held upright, the board turns 2:3 so the
+   recording fills most of the screen (~475pt on a 375pt phone); a narrow window that isn't portrait gets
+   a square. Tablets keep the 3:2 board. */
 @media (max-width: 560px) {
   .hero-media { aspect-ratio: 1 / 1; }
+}
+@media (max-width: 560px) and (orientation: portrait) {
+  .hero-media { aspect-ratio: 2 / 3; max-height: 85svh; }
+}
+/* Too narrow for side by side: the phone stays centered and, just before the send, the terminal slides in
+   from the left over the phone's lower part, sized to its lines, then back out as the loop restarts. */
+@media (max-width: 560px) {
+  .hero-phone, .hero-term { grid-area: 1 / 1; }
+  .hero-term {
+    display: block;
+    align-self: end;
+    width: calc(100cqw - 32px);
+    max-width: 420px;
+    aspect-ratio: auto;
+    margin-bottom: 16px;
+    font-size: clamp(9px, 2.9cqw, 12px);
+    transition: transform 0.7s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.45s ease;
+  }
+  .hero-media:not(.is-split) .hero-term { transform: translateX(-110cqw); opacity: 0; }
 }
 /* The headline opens the page; the install line follows the intro. */
 main > section:first-child h1 { margin-top: 0; }
@@ -798,7 +835,6 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 .code-block .copy {
   position: absolute;
   top: 10px; right: 10px;
-  background: var(--bg);
 }
 /* With a mouse, the copy button appears on hover or keyboard focus. */
 .tk-key { color: var(--tk-key); font-weight: 500; }
@@ -869,7 +905,7 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 }
 /* The copy button floats over the end of the field; the text fades out just before it, and a command
    longer than the field scrolls (its end padding lets the last characters clear the fade). */
-.cmd .copy { position: absolute; top: 8px; right: 8px; background: var(--bg); }
+.cmd .copy { position: absolute; top: 8px; right: 8px; }
 /* The setup prompt runs 16px past the column in Geist Mono; a hair of tracking keeps it on one line. */
 .cmd.quote code { letter-spacing: -0.32px; }
 /* The setup prompt wears the blue highlight of inline `code.hl`; its copy icon takes the same ink. */
@@ -955,7 +991,7 @@ html:not(.js) .copy { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .copy, .copy-icons, .copy-icons svg, .copy-done, .cmd code { transition: none; }
 }
-.copy svg { display: block; width: 18px; height: 18px; }
+.copy svg { display: block; width: 15px; height: 15px; }
 
 /* ---------- Delivery modes ---------- */
 
@@ -1127,18 +1163,6 @@ main .note a { color: inherit; }
   section { scroll-margin-top: 48px; padding-top: 44px; }
   h1 { margin-top: 28px; }
 
-  /* The setup prompt is a sentence: it wraps instead of scrolling under a fade */
-  .cmd.quote { align-items: flex-start; }
-  .cmd.quote code {
-    white-space: normal;
-    padding-right: 60px;
-    -webkit-mask-image: none;
-    mask-image: none;
-  }
-  /* The wrapped prompt has no room for the label to slide over: copied shows just the blue check
-     (the live region still announces "Copied to clipboard") */
-  .cmd.quote .copy.is-copied .copy-done { grid-template-columns: 0fr; opacity: 0; }
-  .cmd.quote .copy.is-copied .copy-icons { margin-right: 0; }
 }
 /* Touch: copy buttons get the 44pt minimum */
 @media (pointer: coarse) {
