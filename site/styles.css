@@ -326,8 +326,8 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   pointer-events: none;
 }
 /* A light-mode Claude terminal on the left and the phone on the right, centered as a group. The terminal prints
-   in step with the video (inline script in index.html). Below 769px the board is too narrow for both,
-   so the terminal hides and the phone stays centered. */
+   in step with the video (inline script in index.html). Below 769px the board is too narrow for both
+   side by side, so the terminal slides in over the lower part of the phone instead (mobile block below). */
 @media (min-width: 769px) {
   .hero-media { grid-template-columns: auto auto; justify-content: center; column-gap: 40px; }
 }
@@ -541,9 +541,30 @@ main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
   .hero-media { --bleed: 8px; }
   main:has(.hero-media) { --hero-gap: 28px; }
 }
-/* On a phone a 3:2 board leaves the demo phone ~175pt tall; a square board gives it ~295pt. */
+/* On a phone a 3:2 board leaves the demo phone ~175pt tall. Held upright, the board turns 2:3 so the
+   recording fills most of the screen (~500pt on a 390pt phone), capped so a tablet's stays on screen;
+   a narrow window that isn't portrait gets a square. */
 @media (max-width: 560px) {
   .hero-media { aspect-ratio: 1 / 1; }
+}
+@media (max-width: 768px) and (orientation: portrait) {
+  .hero-media { aspect-ratio: 2 / 3; max-height: 85svh; }
+}
+/* Too narrow for side by side: the phone stays centered and, just before the send, the terminal slides in
+   from the left over the phone's lower part, sized to its lines, then back out as the loop restarts. */
+@media (max-width: 768px) {
+  .hero-phone, .hero-term { grid-area: 1 / 1; }
+  .hero-term {
+    display: block;
+    align-self: end;
+    width: calc(100cqw - 32px);
+    max-width: 420px;
+    aspect-ratio: auto;
+    margin-bottom: 16px;
+    font-size: clamp(9px, 2.9cqw, 12px);
+    transition: transform 0.7s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.45s ease;
+  }
+  .hero-media:not(.is-split) .hero-term { transform: translateX(-110cqw); opacity: 0; }
 }
 /* The headline opens the page; the install line follows the intro. */
 main > section:first-child h1 { margin-top: 0; }
