@@ -15,6 +15,7 @@
 
 #if DEBUG && canImport(UIKit)
 import AnnotateCore
+import ImageIO
 import PhotosUI
 import SwiftUI
 
@@ -23,6 +24,8 @@ struct ComposerCard: View {
     let draft: AnnotateController.Draft
 
     @FocusState private var isFocused: Bool
+    /// Pixels per point, for sizing the tiles' thumbnails.
+    @Environment(\.displayScale) private var displayScale
     @State private var pickerItems: [PhotosPickerItem] = []
     /// The intent dropdown is open above the chip.
     @State private var isPickingIntent = false
@@ -88,12 +91,18 @@ struct ComposerCard: View {
             guard !items.isEmpty else { return }
             pickerItems = []
             let draftID = draft.annotation.id
+            let maxDimension = Self.maxImageDimension
+            let tilePixels = Self.thumbnailSize * displayScale
             Task {
-                var images: [UIImage] = []
+                var images: [AnnotateController.AttachedImage] = []
                 for item in items {
-                    if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
-                        images.append(Self.downscaled(image, maxDimension: Self.maxImageDimension))
-                    }
+                    guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                    // Detached: this Task inherits the main actor, where decoding and redrawing a
+                    // 12–48 MP photo froze the card for 100–400 ms
+                    let attached = await Task.detached(priority: .userInitiated) {
+                        ComposerCard.prepareAttachment(data, maxDimension: maxDimension, tilePixels: tilePixels)
+                    }.value
+                    if let attached { images.append(attached) }
                 }
                 // Loading outlives this card; images belong to the pin they were picked for
                 guard controller.draft?.annotation.id == draftID else { return }
@@ -422,7 +431,7 @@ struct ComposerCard: View {
     }
 
     private func thumbnail(_ image: AnnotateController.AttachedImage) -> some View {
-        Image(uiImage: image.image)
+        Image(uiImage: image.thumbnail)
             .resizable()
             .scaledToFill()
             .frame(width: Self.thumbnailSize, height: Self.thumbnailSize)
@@ -456,17 +465,37 @@ struct ComposerCard: View {
             }
     }
 
-    /// Fits `image` inside `maxDimension` on its longest side, keeping the aspect ratio. Renders
-    /// at scale 1 in 8-bit sRGB (BundleRenderer.format) so the size in points is the pixel size.
-    private static func downscaled(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
-        let longest = max(image.size.width, image.size.height) * image.scale
-        guard longest > maxDimension, longest > 0 else { return image }
-        let factor = maxDimension / longest
-        let size = CGSize(
-            width: (image.size.width * image.scale * factor).rounded(),
-            height: (image.size.height * image.scale * factor).rounded()
-        )
-        return UIGraphicsImageRenderer(size: size, format: BundleRenderer.format(scale: 1, opaque: true)).image { _ in
+    /// Decodes a picked photo straight to `maxDimension` on its longest side with ImageIO, which
+    /// never holds the full-size bitmap and applies the EXIF orientation, plus a copy whose shorter
+    /// side covers `tilePixels` for the tile. Scale 1, so the size in points is the pixel size.
+    /// Runs off the main actor.
+    nonisolated private static func prepareAttachment(
+        _ data: Data,
+        maxDimension: CGFloat,
+        tilePixels: CGFloat
+    ) -> AnnotateController.AttachedImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
+        let options = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
+        ] as [CFString: Any] as CFDictionary
+        guard let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { return nil }
+        let image = UIImage(cgImage: decoded)
+        return AnnotateController.AttachedImage(id: UUID(), image: image, thumbnail: tileThumbnail(of: image, tilePixels: tilePixels))
+    }
+
+    /// `image` scaled so its shorter side is `tilePixels` (the tile fills a square), or `image` itself
+    /// when it is already that small. Drawn from the decoded copy, not the photo, so it costs a
+    /// small redraw rather than a second decode.
+    nonisolated private static func tileThumbnail(of image: UIImage, tilePixels: CGFloat) -> UIImage {
+        let shorter = min(image.size.width, image.size.height)
+        guard shorter > tilePixels, tilePixels > 0 else { return image }
+        let factor = tilePixels / shorter
+        let size = CGSize(width: (image.size.width * factor).rounded(), height: (image.size.height * factor).rounded())
+        return UIGraphicsImageRenderer(size: size, format: BundleRenderer.format(scale: 1)).image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
         }
     }
