@@ -118,13 +118,24 @@ public struct AppInfo: Codable, Sendable, Equatable {
     /// build came from, so a device's Send reaches the agent working in that checkout. Optional,
     /// so bundles from older builds still decode.
     public var installFile: String?
+    /// UI framework the app is built with, detected at runtime: "react-native", or "expo" (which
+    /// implies React Native). nil for native apps and bundles from older builds.
+    public var framework: String?
 
-    public init(bundleID: String? = nil, name: String? = nil, version: String? = nil, build: String? = nil, installFile: String? = nil) {
+    public init(
+        bundleID: String? = nil,
+        name: String? = nil,
+        version: String? = nil,
+        build: String? = nil,
+        installFile: String? = nil,
+        framework: String? = nil
+    ) {
         self.bundleID = bundleID
         self.name = name
         self.version = version
         self.build = build
         self.installFile = installFile
+        self.framework = framework
     }
 }
 
@@ -336,7 +347,8 @@ extension Annotation {
 public struct ElementInfo: Codable, Sendable, Equatable {
     /// Normalized role: "button", "text", "image", "header", "textField", "toggle", "view"…
     public var role: String
-    /// UIKit class name, or the name passed to `.annotatable("Name")`.
+    /// UIKit class name, the JSX component for React Native views (`Text`, `View`…), or the name
+    /// passed to `.annotatable("Name")`.
     public var typeName: String?
     public var label: String?
     public var value: String?

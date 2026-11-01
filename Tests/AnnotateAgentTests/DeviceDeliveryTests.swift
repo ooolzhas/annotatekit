@@ -307,6 +307,37 @@ struct Checkout {
         #expect(BundleIDPattern.values(in: pbxproj) == ["com.example.Notes.dev", "com.example.$(TARGET_NAME)"])
         #expect(BundleIDPattern.values(in: "    PRODUCT_BUNDLE_IDENTIFIER: com.example.yml") == ["com.example.yml"])
     }
+
+    @Test func readsExpoBundleIdentifier() {
+        #expect(BundleIDPattern.expoBundleID(in: Data(#"{"expo": {"name": "Notes", "ios": {"bundleIdentifier": "com.example.notes"}}}"#.utf8)) == "com.example.notes")
+        // Expo also accepts the config without the "expo" wrapper
+        #expect(BundleIDPattern.expoBundleID(in: Data(#"{"ios": {"bundleIdentifier": "com.example.flat"}}"#.utf8)) == "com.example.flat")
+        #expect(BundleIDPattern.expoBundleID(in: Data(#"{"expo": {"name": "Notes", "android": {"package": "com.example"}}}"#.utf8)) == nil)
+        #expect(BundleIDPattern.expoBundleID(in: Data(#"{"expo": {"ios": {"bundleIdentifier": ""}}}"#.utf8)) == nil)
+        #expect(BundleIDPattern.expoBundleID(in: Data(#"{"expo": {"ios": "#.utf8)) == nil)
+        #expect(BundleIDPattern.expoBundleID(in: Data("[1, 2]".utf8)) == nil)
+    }
+
+    @Test func scanReadsExpoConfigsButNotNodeModules() throws {
+        let root = try AgentFixtures.tempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fm = FileManager.default
+        // An EAS cloud build: no ios/ folder, only the static config
+        let app = root.appendingPathComponent("apps/mobile")
+        try fm.createDirectory(at: app, withIntermediateDirectories: true)
+        try Data(#"{"expo": {"ios": {"bundleIdentifier": "com.example.mobile"}}}"#.utf8).write(to: app.appendingPathComponent("app.json"))
+        let web = root.appendingPathComponent("apps/web")
+        try fm.createDirectory(at: web, withIntermediateDirectories: true)
+        try Data(#"{"expo": {"name": "web"}}"#.utf8).write(to: web.appendingPathComponent("app.json"))
+        let broken = root.appendingPathComponent("apps/broken")
+        try fm.createDirectory(at: broken, withIntermediateDirectories: true)
+        try Data("{ not json".utf8).write(to: broken.appendingPathComponent("app.json"))
+        let dependency = root.appendingPathComponent("node_modules/some-lib")
+        try fm.createDirectory(at: dependency, withIntermediateDirectories: true)
+        try Data(#"{"expo": {"ios": {"bundleIdentifier": "com.vendor.example"}}}"#.utf8).write(to: dependency.appendingPathComponent("app.json"))
+
+        #expect(BundleIDPattern.scan(projectRoot: root) == ["com.example.mobile"])
+    }
 }
 
 @Suite struct HubLeaseTests {

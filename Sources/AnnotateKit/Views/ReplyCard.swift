@@ -7,7 +7,9 @@
 // whether the reply can be submitted; Return types a newline.
 
 #if DEBUG && canImport(UIKit)
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import SwiftUI
 
 struct ReplyCard: View {

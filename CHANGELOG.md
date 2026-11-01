@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- React Native and Expo apps (iOS only). The `annotate-ios` npm package now ships an
+  `AnnotateKit.podspec` that React Native / Expo autolinking picks up, and an Expo config plugin
+  (`"plugins": ["annotate-ios"]`) that adds the install call to the AppDelegate (Swift or Obj-C).
+  The pod compiles AnnotateCore and AnnotateKit into one `AnnotateKit` module, so AnnotateKit's
+  `import AnnotateCore` lines are now behind `#if canImport(AnnotateCore)`.
+- `AnnotateBridge.install(file:)` for Objective-C AppDelegates:
+  `[AnnotateBridge installWithFile:@__FILE__];`.
+- `AppInfo.framework` in session.json (`react-native` · `expo`, absent for native apps), detected
+  at runtime; the prompt then tells the agent to edit the JS/TS components.
+- Pins on React Native views report the JSX component (`Text`, `View`, `TextInput`…) as
+  `typeName`, for both the new and the old architecture; RN root, surface and react-native-screens
+  wrappers are skipped like UIKit plumbing.
+
+### Changed
+- Without a `.git`, the project root is the folder with `package.json` one or two levels above the
+  Xcode project, so a React Native app's sessions land next to its JS source, not in `ios/`.
+- The device mirror recognises Expo apps from `app.json` / `app.config.json`
+  (`ios.bundleIdentifier`), so a cloud-built development build with no local `ios/` folder isn't
+  polled on the slow schedule.
+- The npm package no longer restricts installs to macOS (`os`), so `npm ci` works on Linux CI for
+  apps that depend on it; the `annotate` launcher says it needs macOS instead.
+
 ## [0.4.1] - 2026-11-01
 
 ### Fixed

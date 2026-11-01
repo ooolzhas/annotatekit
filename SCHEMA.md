@@ -54,7 +54,7 @@ Session ids are sortable UTC timestamps plus a short suffix: `20261028-141502-a1
 | `schemaVersion` | Int | `1` |
 | `id` | String | the session id |
 | `createdAt` | Date | |
-| `app` | AppInfo | `bundleID`, `name`, `version`, `build`, `installFile` (the `Annotate.install()` source path on the Mac that built the app; routes device Sends to the right checkout) |
+| `app` | AppInfo | `bundleID`, `name`, `version`, `build`, `installFile` (the `Annotate.install()` source path on the Mac that built the app; routes device Sends to the right checkout), `framework` (optional: `"react-native"` or `"expo"`, detected in the app from linked ObjC classes; absent for native apps and older builds) |
 | `device` | DeviceInfo | `model`, `systemName`, `systemVersion`, `isSimulator`, `screen` (size), `scale`, `colorScheme`, `contentSize` ("L", "AX2"…), `orientation` |
 | `screens` | [Screen] | `index`, `capturedAt`, `size`, `image`, `annotatedImage`, `hiResImage` (paths relative to the session folder), `elements` (visible-text outline: `role`, `label`, `frame`) |
 | `annotations` | [Annotation] | one per pin (below) |
@@ -183,6 +183,12 @@ direction:
 
 A session is copied only if its `app.installFile` resolves to this checkout. Builds from before
 `installFile` existed fall back to the project's bundle ids.
+
+The project root is the nearest folder above the install file with `.git`. Without one, it's the nearest
+folder with `Package.swift`, an `.xcodeproj` or an `.xcworkspace`, unless a `package.json` sits one or two
+levels above it: in React Native and Expo apps the Xcode project is in `ios/` and the root is the JS
+project. The project's bundle ids come from `PRODUCT_BUNDLE_IDENTIFIER` in `.xcodeproj` / `project.yml`
+and `ios.bundleIdentifier` in Expo's `app.json` / `app.config.json` (`app.config.js`/`.ts` aren't read).
 
 ## Compatibility
 

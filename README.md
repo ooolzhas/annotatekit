@@ -50,6 +50,36 @@ brew install ooolzhas/tap/annotate   # or: npm install -g annotate-ios · mint i
 ```
 </details>
 
+## React Native and Expo
+
+iOS only. The `annotate-ios` npm package carries the pod, and autolinking picks it up.
+
+```sh
+npm install -D annotate-ios
+```
+
+**Expo:** add the plugin to `app.json`, then run a development build (`npx expo run:ios` or
+`expo-dev-client`). Expo Go can't load native code.
+
+```json
+{ "expo": { "plugins": ["annotate-ios"] } }
+```
+
+**Bare React Native:** add two lines to `ios/<App>/AppDelegate`, then `cd ios && pod install`.
+
+```swift
+import AnnotateKit                // Swift (RN 0.77+), at the top
+Annotate.install()                // first line of application(_:didFinishLaunchingWithOptions:)
+```
+
+```objc
+#import "AnnotateKit-Swift.h"                  // Obj-C (AppDelegate.mm), with the imports
+[AnnotateBridge installWithFile:@__FILE__];    // first line of application:didFinishLaunchingWithOptions:
+```
+
+The app's iOS deployment target must be 17.0 or later (Expo: `ios.deploymentTarget` in
+`expo-build-properties`). The `annotate` CLI works the same as for native apps.
+
 ## Usage
 
 1. Tap **Annotate** to freeze the screen
