@@ -87,6 +87,15 @@ struct ComposerCard: View {
         }
         .modifier(LeaveAfterKeyboard(leave: $leaving))
         .onAppear { isFocused = !opensWithoutKeyboard }
+        // The card outlives a move to another pin (OverlayRoot keeps it): reset what belonged to the
+        // last one, and bring the keyboard back if the move put it away
+        .onChange(of: draft.annotation.id) {
+            isPickingIntent = false
+            pickerItems = []
+            isFocused = !opensWithoutKeyboard
+        }
+        // A quote or attachment strip appearing or going grows the card smoothly rather than in a jump
+        .animation(.snappy(duration: 0.25), value: draft.annotation.id)
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             pickerItems = []
