@@ -261,9 +261,9 @@ private struct ActiveOverlay: View {
             // choice): one glow per palette, crossfading, so only one renders at rest
             ZStack {
                 if controller.isAgentWorking {
-                    ScreenGlow(palette: .working).transition(.opacity)
+                    ScreenGlow(palette: .working, size: bounds.size).transition(.opacity)
                 } else {
-                    ScreenGlow(palette: .idle).transition(.opacity)
+                    ScreenGlow(palette: .idle, size: bounds.size).transition(.opacity)
                 }
             }
             .frame(width: bounds.width, height: bounds.height)
@@ -428,11 +428,11 @@ private struct BottomFrost: View {
     private static let fadeEnd: CGFloat = 0.6
     private var blobs: [Blob] { [
         Blob(x: 0.2, y: 0.85, width: 0.95, height: 1.1, sway: 0.18, period: 11, phase: 0,
-             color: palette.main.opacity(0.42)),
+             color: palette.color.opacity(0.42)),
         Blob(x: 0.65, y: 0.95, width: 0.8, height: 0.9, sway: 0.22, period: 8, phase: 2,
-             color: palette.light.opacity(0.28)),
+             color: palette.color.opacity(0.28)),
         Blob(x: 0.9, y: 0.75, width: 0.7, height: 1.0, sway: 0.16, period: 14, phase: 4,
-             color: palette.deep.opacity(0.3))
+             color: palette.color.opacity(0.3))
     ] }
 
     var body: some View {
@@ -442,7 +442,7 @@ private struct BottomFrost: View {
                 let size = proxy.size
                 ZStack {
                     LinearGradient(
-                        colors: [palette.main.opacity(0), palette.main.opacity(Self.washOpacity)],
+                        colors: [palette.color.opacity(0), palette.color.opacity(Self.washOpacity)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -467,19 +467,15 @@ private struct BottomFrost: View {
     }
 }
 
-/// The colors the edge glow and the frost are mixed from: Accents/Blue with cyan and indigo passages
-/// normally, green with mint and teal while Claude works (design choice).
+/// The one color the edge glow and the frost are mixed from, varied by opacity only: Accents/Blue
+/// normally, the indicators' green while Claude works (owner request 2026-11-01: opacities, not
+/// cyan/indigo or mint/teal hues).
+@MainActor
 struct GlowPalette {
-    let main: Color
-    let light: Color
-    let deep: Color
+    let color: Color
 
-    static let idle = GlowPalette(
-        main: Color(uiColor: .systemBlue), light: Color(uiColor: .systemCyan), deep: Color(uiColor: .systemIndigo)
-    )
-    static let working = GlowPalette(
-        main: Color(uiColor: .systemGreen), light: Color(uiColor: .systemMint), deep: Color(uiColor: .systemTeal)
-    )
+    static let idle = GlowPalette(color: AnnotateStyle.action)
+    static let working = GlowPalette(color: ReviewHintLine.connectedColor)
 }
 
 /// Shared clock math for the fluid glow and frost.
@@ -628,12 +624,14 @@ private struct SelectionCorners: Shape {
 /// Blue glow along the screen's rounded edge while annotating (Figma 9257:13385: `rounded-[62px]`,
 /// `shadow-[inset_0_0_62px_0_rgba(0,136,255,0.5)]`), made fluid (design choice): rather than one even
 /// band, two edge bands of different depth are each lit by a slowly turning ring of uneven blues, in
-/// opposite directions, so the glow swells, thins and runs along the edge like liquid. SwiftUI has no
-/// inset shadow, so each band is a wide stroke blurred and masked back inside the screen shape. The
-/// bands never change; only the light behind them turns. Reduce Motion holds the light still.
+/// opposite directions, so the glow swells, thins and runs along the edge like liquid. Each band is an
+/// inset-shadow bitmap (`EdgeBandMask`). The bands never change; only the light behind them turns.
+/// Reduce Motion holds the light still.
 private struct ScreenGlow: View {
     /// Blue normally, green while Claude works.
     let palette: GlowPalette
+    /// The screen's size, for the edge masks.
+    let size: CGSize
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -644,27 +642,27 @@ private struct ScreenGlow: View {
     private static let nearPeriod: Double = 14
     private static let deepPeriod: Double = 9
 
-    /// Around the near band (Figma's 62pt glow): Accents/Blue swelling past Figma's 0.5 and thinning
-    /// well below it, with cyan and indigo passages. The ring wraps, so it ends where it starts.
+    /// Around the near band (Figma's 62pt glow): the palette color swelling past Figma's 0.5 and
+    /// thinning well below it. The ring wraps, so it ends where it starts.
     private var nearStops: [Gradient.Stop] { [
-        .init(color: palette.main.opacity(0.7), location: 0),
-        .init(color: palette.light.opacity(0.25), location: 0.13),
-        .init(color: palette.main.opacity(0.55), location: 0.27),
-        .init(color: palette.deep.opacity(0.18), location: 0.41),
-        .init(color: palette.main.opacity(0.75), location: 0.56),
-        .init(color: palette.light.opacity(0.35), location: 0.7),
-        .init(color: palette.main.opacity(0.2), location: 0.85),
-        .init(color: palette.main.opacity(0.7), location: 1)
+        .init(color: palette.color.opacity(0.7), location: 0),
+        .init(color: palette.color.opacity(0.25), location: 0.13),
+        .init(color: palette.color.opacity(0.55), location: 0.27),
+        .init(color: palette.color.opacity(0.18), location: 0.41),
+        .init(color: palette.color.opacity(0.75), location: 0.56),
+        .init(color: palette.color.opacity(0.35), location: 0.7),
+        .init(color: palette.color.opacity(0.2), location: 0.85),
+        .init(color: palette.color.opacity(0.7), location: 1)
     ] }
     /// Around the deep band: a few faint pools that reach further in, clear in between.
     private var deepStops: [Gradient.Stop] { [
-        .init(color: palette.main.opacity(0.3), location: 0),
+        .init(color: palette.color.opacity(0.3), location: 0),
         .init(color: .clear, location: 0.18),
-        .init(color: palette.deep.opacity(0.28), location: 0.37),
+        .init(color: palette.color.opacity(0.28), location: 0.37),
         .init(color: .clear, location: 0.55),
-        .init(color: palette.light.opacity(0.3), location: 0.72),
+        .init(color: palette.color.opacity(0.3), location: 0.72),
         .init(color: .clear, location: 0.88),
-        .init(color: palette.main.opacity(0.3), location: 1)
+        .init(color: palette.color.opacity(0.3), location: 1)
     ] }
 
     var body: some View {
@@ -672,9 +670,9 @@ private struct ScreenGlow: View {
             let time = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             ZStack {
                 Self.ring(deepStops, turn: -FluidMotion.angle(time, period: Self.deepPeriod))
-                    .mask(EdgeBand(width: Self.deepWidth))
+                    .mask(EdgeBand(width: Self.deepWidth, size: size))
                 Self.ring(nearStops, turn: FluidMotion.angle(time, period: Self.nearPeriod))
-                    .mask(EdgeBand(width: AnnotateStyle.glowBlur))
+                    .mask(EdgeBand(width: AnnotateStyle.glowBlur, size: size))
             }
         }
     }
@@ -685,19 +683,70 @@ private struct ScreenGlow: View {
 }
 
 /// A soft band just inside the screen's rounded edge, opaque at the edge and fading inward over about
-/// `width`: CSS `inset 0 0 <width>px`, as the area just outside the edge blurred inward (σ ≈ width / 2)
-/// and clipped to the screen. Used as a mask; it never changes, so it renders once into one layer.
+/// `width`: CSS `inset 0 0 <width>px`. Used as a mask.
 private struct EdgeBand: View {
     let width: CGFloat
+    let size: CGSize
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: AnnotateStyle.screenCornerRadius, style: .continuous)
-        shape
-            .inset(by: -width / 2)
-            .stroke(Color.white, lineWidth: width)
-            .blur(radius: width / 2)
-            .mask(shape)
-            .drawingGroup()
+        if let mask = EdgeBandMask.image(size: size, width: width) {
+            Image(decorative: mask, scale: 1).resizable()
+        }
+    }
+}
+
+/// The edge band drawn once per screen size with Core Graphics and cached. It used to be a SwiftUI
+/// blur (a band outside the edge, `blur(radius: width / 2)`, masked to the screen, `drawingGroup`):
+/// on the first open after an install, building that blur's offscreen pipeline held the main thread
+/// for ~250 ms, longer than the 0.3 s entrance, so the bar, dim and glow appeared already in place.
+/// The bitmap is the same band (filled outside the edge, its shadow blurred inward and clipped to the
+/// screen) at 1x: it is soft everywhere, so drawing it at the screen's scale would add nothing but
+/// time.
+@MainActor
+enum EdgeBandMask {
+    private struct Key: Hashable {
+        let width: CGFloat
+        let height: CGFloat
+        let band: CGFloat
+    }
+
+    private static var cache: [Key: CGImage] = [:]
+
+    static func image(size: CGSize, width: CGFloat) -> CGImage? {
+        let key = Key(width: size.width, height: size.height, band: width)
+        if let cached = cache[key] { return cached }
+        guard let made = render(size: size, width: width) else { return nil }
+        cache[key] = made
+        return made
+    }
+
+    /// White at the edge fading to clear inward; alpha carries the mask.
+    nonisolated static func render(size: CGSize, width: CGFloat) -> CGImage? {
+        let pixelWidth = Int(size.width.rounded(.up)), pixelHeight = Int(size.height.rounded(.up))
+        guard pixelWidth > 0, pixelHeight > 0, width > 0,
+              let context = CGContext(
+                  data: nil, width: pixelWidth, height: pixelHeight, bitsPerComponent: 8, bytesPerRow: 0,
+                  space: CGColorSpaceCreateDeviceRGB(),
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+        let screen = CGRect(origin: .zero, size: size)
+        let edge = UIBezierPath(roundedRect: screen, cornerRadius: AnnotateStyle.screenCornerRadius).cgPath
+        let outer = UIBezierPath(
+            roundedRect: screen.insetBy(dx: -width, dy: -width),
+            cornerRadius: AnnotateStyle.screenCornerRadius + width
+        ).cgPath
+        let band = CGMutablePath()
+        band.addPath(outer)
+        band.addPath(edge)
+        context.addPath(edge)
+        context.clip()
+        // A CG shadow's blur is about twice its Gaussian sigma, so `width` here is SwiftUI's
+        // `blur(radius: width / 2)`. The band itself lies outside the clip; only its shadow lands
+        context.setShadow(offset: .zero, blur: width, color: UIColor.white.cgColor)
+        context.setFillColor(UIColor.white.cgColor)
+        context.addPath(band)
+        context.fillPath(using: .evenOdd)
+        return context.makeImage()
     }
 }
 #endif

@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- The first time annotate mode opened after installing the app, the review bar, dim and edge glow
+  appeared already in place instead of sliding and fading in. Drawing the glow's blurred edge mask
+  held the main thread for ~250 ms, longer than the 0.3s entrance; the mask is now a small bitmap
+  drawn once with Core Graphics.
+
+### Changed
+- The edge glow and the frost behind the bottom bar are one color each, varied by opacity: the
+  accent blue normally and the indicators' green while the agent works (no more cyan/indigo or
+  mint/teal passages).
+
 ## [0.4.0] - 2026-11-01
 
 ### Changed
