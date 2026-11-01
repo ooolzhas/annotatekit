@@ -1,6 +1,6 @@
 {
   "name": "annotate",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Visual feedback for iOS apps, straight to your coding agent: tap, draw and comment on your running app (simulator or device), send it, and Claude gets lightweight screenshots, exact coordinates and your notes, then reports progress back to the device.",
   "author": {
     "name": "Olzhas Beisenbayev",
