@@ -326,16 +326,20 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   pointer-events: none;
 }
 /* A light-mode Claude terminal on the left and the phone on the right, centered as a group. The terminal prints
-   in step with the video (inline script in index.html). Below 769px the board is too narrow for both
+   in step with the video (inline script in index.html). Below 561px (phones) the board is too narrow for both
    side by side, so the terminal slides in over the lower part of the phone instead (mobile block below). */
-@media (min-width: 769px) {
-  .hero-media { grid-template-columns: auto auto; justify-content: center; column-gap: 40px; }
+@media (min-width: 561px) {
+  .hero-media { --term-w: 44cqw; --term-gap: 40px; grid-template-columns: auto auto; justify-content: center; column-gap: var(--term-gap); }
+}
+/* A tablet's narrower board: a wider terminal and a tighter gap, so its longest line still fits at 9px. */
+@media (min-width: 561px) and (max-width: 768px) {
+  .hero-media { --term-w: 48cqw; --term-gap: 24px; }
 }
 .hero-term {
   position: relative;
   z-index: 1;
   display: none;
-  width: 44cqw;
+  width: var(--term-w, 44cqw);
   aspect-ratio: 4 / 3;
   border-radius: 16px;
   corner-shape: round;
@@ -382,14 +386,14 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
     --term-str: #b5d68b;
   }
 }
-@media (min-width: 769px) { .hero-term { display: block; } }
+@media (min-width: 561px) { .hero-term { display: block; } }
 /* Until the terminal is needed (the script adds .is-split just before the send), the phone sits centered
    and the terminal waits past the board's left edge; it slides in from the left as the phone glides right
    into the side-by-side layout (terminal left, phone right), and back. */
-@media (min-width: 769px) {
+@media (min-width: 561px) {
   .hero-term { order: -1; }
   .hero-phone, .hero-term { transition: transform 0.7s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.45s ease; }
-  .hero-media:not(.is-split) .hero-phone { transform: translateX(calc(-20px - 22cqw)); }
+  .hero-media:not(.is-split) .hero-phone { transform: translateX(calc((var(--term-w) + var(--term-gap)) / -2)); }
   .hero-media:not(.is-split) .hero-term { transform: translateX(-60cqw); opacity: 0; }
 }
 /* A squircle where supported, at a larger radius so it reads as soft as the 16px circle it replaces. */
@@ -552,7 +556,7 @@ main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
 }
 /* Too narrow for side by side: the phone stays centered and, just before the send, the terminal slides in
    from the left over the phone's lower part, sized to its lines, then back out as the loop restarts. */
-@media (max-width: 768px) {
+@media (max-width: 560px) {
   .hero-phone, .hero-term { grid-area: 1 / 1; }
   .hero-term {
     display: block;
