@@ -13,6 +13,8 @@ final class FakeBridge: DeviceBridge, @unchecked Sendable {
     private let lock = NSLock()
     private var containers: [String: [String: (data: Data, modified: Date)]] = [:]
     private(set) var pushed: [String] = []
+    /// Apps listed through `files`, in call order.
+    private(set) var listed: [String] = []
     let deviceID = "device-1"
     let apps: [String]
 
@@ -54,6 +56,7 @@ final class FakeBridge: DeviceBridge, @unchecked Sendable {
     }
 
     func files(on device: String, app: String, path: String) async throws -> [RemoteFile] {
+        lock.withLock { listed.append(app) }
         let prefix = path + "/"
         let entries = container(app).filter { $0.key.hasPrefix(prefix) }
         guard !entries.isEmpty else { throw CocoaError(.fileNoSuchFile) }
@@ -139,6 +142,60 @@ struct Checkout {
         #expect(!prompt.contains("/var/mobile"))
         #expect(FileManager.default.fileExists(atPath: SessionInbox.sessionDirectory(id, in: checkout.output).appendingPathComponent("crops/1.png").path))
     }
+
+    @Test func coldBuildsThatNeverAnswerBackOff() async throws {
+        let checkout = try Checkout()
+        defer { checkout.remove() }
+        let bridge = FakeBridge(apps: ["com.cold.app"])
+        let mirror = Self.mirror(checkout, bridge)
+        let start = Date()
+        // 60 s, then 120 s after one miss, then 240 s after two
+        for offset in [0, 61, 121, 300, 362] as [TimeInterval] {
+            await mirror.tick(now: start.addingTimeInterval(offset))
+        }
+        #expect(bridge.listed == ["com.cold.app", "com.cold.app", "com.cold.app"])
+    }
+
+    @Test func repeatColdPollsGoOnePerTick() async throws {
+        let checkout = try Checkout()
+        defer { checkout.remove() }
+        let bridge = FakeBridge(apps: ["com.cold.one", "com.cold.two"])
+        let mirror = Self.mirror(checkout, bridge)
+        let start = Date()
+        await mirror.tick(now: start)
+        #expect(bridge.listed.count == 2) // every app's first listing, so a beacon is never kept waiting
+        await mirror.tick(now: start.addingTimeInterval(121))
+        #expect(bridge.listed.count == 3)
+        await mirror.tick(now: start.addingTimeInterval(122))
+        #expect(bridge.listed.count == 4)
+    }
+
+    @Test func prunesTheMacCopyPastTheHistoryWindow() async throws {
+        let checkout = try Checkout()
+        defer { checkout.remove() }
+        let old = Date().addingTimeInterval(-SessionInbox.historyWindow - 3600)
+        for minute in 0..<(DeviceMirror.keptSessions + 5) {
+            let id = SessionWriter.makeSessionID(date: old.addingTimeInterval(Double(minute) * 60))
+            try AgentFixtures.writeSession(id: id, to: checkout.output, withImages: false)
+        }
+        let bridge = FakeBridge(apps: [Self.app])
+        let id = try Self.deviceSession(installFile: checkout.installFile, in: bridge)
+
+        await Self.mirror(checkout, bridge).tick()
+
+        let kept = SessionInbox.sessionIDs(in: checkout.output)
+        #expect(kept.count == DeviceMirror.keptSessions)
+        #expect(kept.last == id)
+    }
+
+    #if os(macOS)
+    @Test func parsesDevicectlDatesWithAndWithoutFractions() {
+        let whole = DeviceCtlBridge.date("2026-10-28T22:14:30Z")
+        #expect(whole != nil)
+        #expect(DeviceCtlBridge.date("2026-10-28T22:14:30.000Z") == whole)
+        #expect(DeviceCtlBridge.date("yesterday") == nil)
+    }
+    #endif
 
     @Test func leavesAnotherCheckoutsSessionAlone() async throws {
         let mine = try Checkout()

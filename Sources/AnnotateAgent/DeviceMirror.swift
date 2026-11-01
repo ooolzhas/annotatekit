@@ -58,6 +58,13 @@ public actor DeviceMirror {
     static let warmInterval: TimeInterval = 8
     /// Polling for any other development build, in case it carries AnnotateKit too.
     static let coldInterval: TimeInterval = 60
+    /// A cold build whose listing keeps failing (no AnnotateKit, or it never sent) doubles its
+    /// interval per miss up to this many times: 60 s grows to 16 min. A phone carries dozens of
+    /// development builds and each listing is a devicectl round trip of half a second or more.
+    static let coldBackoffSteps = 4
+    /// Sessions kept in the Mac's folder past the history window, like the app's own default
+    /// (`AnnotateOptions.keepsSessions`): on a device the app prunes its container, not the Mac copy.
+    static let keptSessions = 30
     /// Re-list devices and their apps this often.
     static let discoveryInterval: TimeInterval = 20
     /// An app whose `app.json` hasn't changed in this long counts as closed.
@@ -86,6 +93,8 @@ public actor DeviceMirror {
         /// From `app.json`: nil until read, false when the build is from another checkout.
         var belongsHere: Bool?
         var lastPresencePush: Date = .distantPast
+        /// Failed listings in a row; backs off cold polling.
+        var misses = 0
     }
 
     struct Mirrored {
@@ -132,7 +141,21 @@ public actor DeviceMirror {
         if now.timeIntervalSince(lastDiscovery) >= Self.discoveryInterval {
             await discover(now: now)
         }
-        for target in targets.keys where isDue(target, now: now) {
+        // Open, project and never-listed apps first (the first listing is how an app's beacon gets
+        // read), then at most one cold build per tick: listings are serial, so a batch of cold ones
+        // coming due together would hold up a Send from the open app.
+        let due = targets.keys.filter { isDue($0, now: now) }
+        let (cold, warm) = due.reduce(into: ([Target](), [Target]())) { split, target in
+            if let state = targets[target], state.lastPolled != .distantPast, isCold(state, now: now) {
+                split.0.append(target)
+            } else {
+                split.1.append(target)
+            }
+        }
+        for target in warm {
+            await poll(target, now: now)
+        }
+        if let target = cold.min(by: { (targets[$0]?.lastPolled ?? .distantPast) < (targets[$1]?.lastPolled ?? .distantPast) }) {
             await poll(target, now: now)
         }
         await forwardStatuses(now: now)
@@ -177,7 +200,12 @@ public actor DeviceMirror {
     private func interval(for state: TargetState, now: Date) -> TimeInterval {
         if state.belongsHere == false { return Self.coldInterval }
         if isOpen(state, now: now) { return Self.hotInterval }
-        return state.isProjectApp || state.belongsHere == true ? Self.warmInterval : Self.coldInterval
+        if state.isProjectApp || state.belongsHere == true { return Self.warmInterval }
+        return Self.coldInterval * Double(1 << min(state.misses, Self.coldBackoffSteps))
+    }
+
+    private func isCold(_ state: TargetState, now: Date) -> Bool {
+        interval(for: state, now: now) >= Self.coldInterval
     }
 
     private func isOpen(_ state: TargetState, now: Date) -> Bool {
@@ -188,8 +216,12 @@ public actor DeviceMirror {
 
     private func poll(_ target: Target, now: Date) async {
         targets[target]?.lastPolled = now
-        // Fails while the app has never sent (no .annotate folder yet); it stays on its interval
-        guard let files = try? await bridge.files(on: target.device, app: target.app, path: Self.remoteRoot) else { return }
+        // Fails while the app has never sent (no .annotate folder yet); a cold one backs off
+        guard let files = try? await bridge.files(on: target.device, app: target.app, path: Self.remoteRoot) else {
+            targets[target]?.misses += 1
+            return
+        }
+        targets[target]?.misses = 0
 
         if let stamp = files.first(where: { $0.path == AgentPresenceFile.appFile })?.modified,
            targets[target]?.beaconStamp != stamp {
@@ -255,6 +287,8 @@ public actor DeviceMirror {
             try? Data("\(SessionWriter.sessionsFolder)/\(id)\n".utf8)
                 .write(to: outputDirectory.appendingPathComponent("latest"), options: .atomic)
             mirrored[id] = Mirrored(target: target, since: now)
+            // Consumers scan every session folder twice a second, so the Mac copy can't grow forever
+            SessionInbox.prune(keeping: Self.keptSessions, in: outputDirectory, now: now)
             if targets[target]?.belongsHere == nil { targets[target]?.belongsHere = true }
             log("annotate: session \(id) arrived from \(deviceNames[target.device] ?? target.device)")
         } catch {

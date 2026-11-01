@@ -43,7 +43,11 @@ public enum StopHook {
     /// Claimed sessions whose status isn't final, updated within `trackingLimit`, with no pin waiting
     /// on the user's answer.
     public static func openSessions(in output: URL, now: Date = Date()) -> [OpenSession] {
-        SessionInbox.sessionIDs(in: output).compactMap { id in
+        // Ids are send times and the app stops tracking an hour after the Send, so older folders
+        // can't be open: skip them without reading their status (twice the limit covers clock skew
+        // between the device and the Mac).
+        let since = SessionWriter.makeSessionID(date: now.addingTimeInterval(-2 * trackingLimit), suffix: "")
+        return SessionInbox.sessionIDs(in: output, since: since).compactMap { id in
             guard let status = SessionInbox.readStatus(id: id, in: output), !status.isFinal,
                   now.timeIntervalSince(status.updatedAt) <= trackingLimit,
                   !(status.pins ?? []).contains(where: { $0.state == .question }) else { return nil }
@@ -53,8 +57,13 @@ public enum StopHook {
 
     /// The reason to hand Claude when it should report before stopping, or nil to let it stop.
     public static func blockReason(open: [OpenSession], transcript: String, stopHookActive: Bool) -> String? {
+        blockReason(open: open, stopHookActive: stopHookActive) { transcript.contains($0) }
+    }
+
+    /// `mentions` says whether the transcript contains a session id.
+    public static func blockReason(open: [OpenSession], stopHookActive: Bool, mentions: (String) -> Bool) -> String? {
         guard !stopHookActive else { return nil }
-        let mine = open.filter { transcript.contains($0.id) }
+        let mine = open.filter { mentions($0.id) }
         guard !mine.isEmpty else { return nil }
         let list = mine.map { session in
             let message = session.message.map { ": \"\($0)\"" } ?? ""
@@ -75,12 +84,16 @@ public enum StopHook {
     /// let Claude stop). Any failure to read lets Claude stop: a hook must never trap a session.
     public static func run(input data: Data, explicitDirectory: String?, workingDirectory: String, now: Date = Date()) -> String? {
         let input = (try? JSONDecoder().decode(Input.self, from: data)) ?? Input()
+        // The second try always lets Claude stop, so settle it before touching the disk
+        guard input.stopHookActive != true else { return nil }
         let output = SessionFeed.outputDirectory(explicit: explicitDirectory, workingDirectory: input.cwd ?? workingDirectory)
         guard FileManager.default.fileExists(atPath: output.path) else { return nil }
         let open = openSessions(in: output, now: now)
+        // Mapped and searched as bytes: transcripts reach hundreds of MB, and decoding one into a
+        // String and running `contains` per open session made every stop wait seconds
         guard !open.isEmpty, let path = input.transcriptPath,
-              let transcript = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
-        guard let reason = blockReason(open: open, transcript: transcript, stopHookActive: input.stopHookActive ?? false) else {
+              let transcript = try? Data(contentsOf: URL(fileURLWithPath: path), options: .alwaysMapped) else { return nil }
+        guard let reason = blockReason(open: open, stopHookActive: false, mentions: { transcript.range(of: Data($0.utf8)) != nil }) else {
             return nil
         }
         let decision = ["decision": "block", "reason": reason]

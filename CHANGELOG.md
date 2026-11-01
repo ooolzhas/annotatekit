@@ -11,6 +11,18 @@ All notable changes to this project are documented here. The format is based on
   appeared already in place instead of sliding and fading in. Drawing the glow's blurred edge mask
   held the main thread for ~250 ms, longer than the 0.3s entrance; the mask is now a small bitmap
   drawn once with Core Graphics.
+- `annotate hook stop` took seconds on every Claude stop in long conversations (19 s with a 215 MB
+  transcript and three open Sends): it decoded the whole transcript into a String and searched it
+  once per open Send. It now maps the file and searches bytes (0.13 s), reads only Sends from the
+  app's tracking window, and returns before reading anything on the second stop.
+- Sends mirrored from a device were never pruned on the Mac, and every watcher re-read each
+  session's status.json twice a second, so idle CPU grew with every Send. The mirror now prunes
+  like the app does (newest 30, never inside the 48-hour history window), and the reply scan skips
+  sessions without replies.json before decoding anything.
+- The device mirror listed every development build on a paired phone once a minute forever, all
+  at the same moment. Builds that never answer now back off to 16 minutes, and repeat cold
+  listings go one per tick so they can't hold up a Send from the open app. devicectl dates no
+  longer build a formatter per listed file.
 
 ### Changed
 - The edge glow and the frost behind the bottom bar are one color each, varied by opacity: the

@@ -340,14 +340,17 @@ public enum SessionInbox {
 
     /// Replies to pins whose status is still `.question` and whose `at` >= that pin's `updatedAt`, oldest first.
     public static func unansweredReplies(id: String, in outputDirectory: URL) -> [PinReply] {
-        guard let pins = readStatus(id: id, in: outputDirectory)?.pins else { return [] }
+        // Replies first: consumers poll this for every session twice a second and most never get
+        // one, so a missing replies.json should cost one failed open, not a status decode
+        let replies = readReplies(id: id, in: outputDirectory)
+        guard !replies.isEmpty, let pins = readStatus(id: id, in: outputDirectory)?.pins else { return [] }
         let asked = Dictionary(
             pins.filter { $0.state == .question }.map { ($0.index, $0.updatedAt) },
             uniquingKeysWith: { first, _ in first }
         )
         guard !asked.isEmpty else { return [] }
         // A reply older than the question answers an earlier one (the agent re-asked), so skip it
-        return readReplies(id: id, in: outputDirectory)
+        return replies
             .filter { reply in asked[reply.index].map { reply.at >= $0 } ?? false }
             .enumerated()
             .sorted { ($0.element.at, $0.offset) < ($1.element.at, $1.offset) }
