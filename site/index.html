@@ -361,7 +361,8 @@
   // The terminal arrives showing only "AnnotateKit connected"; the prompt (17.75) and "Listening" (18.05)
   // print in quick succession, then the rest. The phone starts centered; the terminal slides in from the
   // left just before the send (17.3, in place
-  // by 18.0) and back out at 30.6, so each loop starts on the centered phone again.
+  // by 18.0) and back out at 27.4, as the app's overlay dismisses, so it's gone (~28.1) before the edits land on
+  // the phone (28.6) and each loop starts on the centered phone again.
   // Reduced motion: the video stays paused and the board shows the finished, side-by-side state.
   (function () {
     var video = document.querySelector('.hero-phone video'), board = document.querySelector('.hero-media');
@@ -372,7 +373,7 @@
         var until = l.dataset.until ? parseFloat(l.dataset.until) : Infinity;
         l.classList.toggle('is-on', t >= parseFloat(l.dataset.at) && t < until);
       });
-      board.classList.toggle('is-split', t >= 17.3 && t < 30.6);
+      board.classList.toggle('is-split', t >= 17.3 && t < 27.4);
     }
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       video.removeAttribute('autoplay');
