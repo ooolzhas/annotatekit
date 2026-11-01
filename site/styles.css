@@ -991,7 +991,7 @@ html:not(.js) .copy { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .copy, .copy-icons, .copy-icons svg, .copy-done, .cmd code { transition: none; }
 }
-.copy svg { display: block; width: 18px; height: 18px; }
+.copy svg { display: block; width: 15px; height: 15px; }
 
 /* ---------- Delivery modes ---------- */
 
