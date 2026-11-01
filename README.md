@@ -34,7 +34,7 @@ Works on device and in the simulator. Everything is hidden behind an `#if DEBUG`
 Agents find things by looking, so every note arrives as a specific component to check, not a
 description to interpret.
 
-- **Lightweight screenshots** to reduce back-and-forth
+- **Lightweight screenshots** to eliminate back-and-forth
 - **Drawings** to easily communicate ideas
 - **Coordinates & component trees** to edit with surgical precision
 - **Device metadata** to understand layouts
