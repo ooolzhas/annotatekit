@@ -9,7 +9,7 @@
 # All diagnostics go to stderr: stdout belongs to the MCP protocol.
 set -euo pipefail
 
-VERSION="0.4.0"
+VERSION="0.4.1"
 REPO="ooolzhas/annotatekit"
 # Physical path with every symlink followed: npm links this script into node_modules/.bin, which
 # is on PATH under npx, and comparing unresolved paths would find this script and exec it forever
