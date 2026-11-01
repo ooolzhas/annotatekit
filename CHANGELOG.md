@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- The stroke under the finger is drawn by a `CAShapeLayer` instead of a screen-sized SwiftUI
+  `Canvas`, which re-rendered through Metal on the main thread for every drag sample. On an iPhone 15
+  Pro at 120 Hz: 2.9 → 2.0 ms of main-thread time per sample with 8 pins, 2.3 → 1.75 ms with none.
 - The first time annotate mode opened after installing the app, the review bar, dim and edge glow
   appeared already in place instead of sliding and fading in. Drawing the glow's blurred edge mask
   held the main thread for ~250 ms, longer than the 0.3s entrance; the mask is now a small bitmap

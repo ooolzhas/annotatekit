@@ -505,11 +505,61 @@ private struct LiveStrokeLayer: View {
     let size: CGSize
 
     var body: some View {
-        if let live = controller.liveStroke {
-            SketchStrokes(strokes: [live])
-                .frame(width: size.width, height: size.height)
-                .allowsHitTesting(false)
-        }
+        LiveStrokeShape(stroke: controller.liveStroke)
+            .frame(width: size.width, height: size.height)
+            .allowsHitTesting(false)
+    }
+}
+
+/// Draws the live stroke with a `CAShapeLayer`, which the render server rasterizes. A screen-sized
+/// SwiftUI `Canvas` here re-rendered through Metal on the main thread for every drag sample (most of
+/// the drawing cost in a profile). Same path (`SketchPath`) and style as `SketchStrokes`, which
+/// still draws saved strokes: those don't change while the finger moves.
+private struct LiveStrokeShape: UIViewRepresentable {
+    let stroke: Stroke?
+
+    func makeUIView(context: Context) -> StrokeLayerView {
+        StrokeLayerView()
+    }
+
+    func updateUIView(_ view: StrokeLayerView, context: Context) {
+        view.show(stroke)
+    }
+}
+
+private final class StrokeLayerView: UIView {
+    private let shape = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        layer.addSublayer(shape)
+        shape.fillColor = nil
+        shape.strokeColor = UIColor(AnnotateStyle.marker).cgColor
+        shape.lineWidth = AnnotateStyle.sketchLineWidth
+        shape.lineCap = .round
+        shape.lineJoin = .round
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        withoutAnimation { shape.frame = bounds }
+    }
+
+    func show(_ stroke: Stroke?) {
+        withoutAnimation { shape.path = stroke.map { SketchPath.path(for: $0) } }
+    }
+
+    /// A sublayer animates property changes implicitly; the path must follow the finger exactly.
+    private func withoutAnimation(_ change: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        change()
+        CATransaction.commit()
     }
 }
 
