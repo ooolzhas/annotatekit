@@ -542,12 +542,12 @@ main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
   main:has(.hero-media) { --hero-gap: 28px; }
 }
 /* On a phone a 3:2 board leaves the demo phone ~175pt tall. Held upright, the board turns 2:3 so the
-   recording fills most of the screen (~500pt on a 390pt phone), capped so a tablet's stays on screen;
-   a narrow window that isn't portrait gets a square. */
+   recording fills most of the screen (~475pt on a 375pt phone); a narrow window that isn't portrait gets
+   a square. Tablets keep the 3:2 board. */
 @media (max-width: 560px) {
   .hero-media { aspect-ratio: 1 / 1; }
 }
-@media (max-width: 768px) and (orientation: portrait) {
+@media (max-width: 560px) and (orientation: portrait) {
   .hero-media { aspect-ratio: 2 / 3; max-height: 85svh; }
 }
 /* Too narrow for side by side: the phone stays centered and, just before the send, the terminal slides in
