@@ -4,10 +4,11 @@ Thanks for helping. Bug reports, device/OS quirks, and small focused PRs are all
 
 ## Ground rules
 
-- Be kind. This project follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+- Be kind.
 - Open an issue before large changes (new annotation kinds, schema changes, new delivery modes) so
   we can agree on the shape first.
-- Security problems go through [SECURITY.md](SECURITY.md), not public issues.
+- Report security problems [privately](https://github.com/ooolzhas/annotatekit/security/advisories/new),
+  not in public issues.
 
 ## Getting set up
 
