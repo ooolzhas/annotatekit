@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
 ### Changed
 - **Overlay design pass** (Figma SUNSET 9378:7192):
   - Pins are 28pt blue markers with a white number, a white spinner while the agent works, and a
@@ -37,8 +39,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 - Opening a pin no longer cuts straight from the review bar to the comment card: the bar and its
-  hint line shrink and fade while the card rises from below, the same motion as the Annotate pill
-  handing over to the bar. Closing the card grows the bar back the same way.
+  hint line shrink and fade in place while the card rises from below, the same motion as the
+  Annotate pill handing over to the bar.
 
 ## [0.3.0] - 2026-10-30
 
@@ -223,7 +225,8 @@ First release.
   tracking and the text outline all start on first use.
 - Send renders, encodes and writes off the main thread, in 8-bit sRGB.
 
-[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ooolzhas/annotatekit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ooolzhas/annotatekit/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/ooolzhas/annotatekit/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ooolzhas/annotatekit/compare/v0.1.1...v0.2.0
