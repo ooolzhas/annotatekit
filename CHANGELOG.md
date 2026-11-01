@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-02
+
 ### Fixed
 - Moving from one pin to another replayed the whole comment card: it shrank away and rose back in,
   and the keyboard dropped and came back. The card now stays where it is and only what differs
@@ -300,7 +302,8 @@ First release.
   tracking and the text outline all start on first use.
 - Send renders, encodes and writes off the main thread, in 8-bit sRGB.
 
-[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/ooolzhas/annotatekit/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/ooolzhas/annotatekit/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ooolzhas/annotatekit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ooolzhas/annotatekit/compare/v0.2.1...v0.3.0

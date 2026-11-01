@@ -1,6 +1,6 @@
 {
   "name": "annotate-ios",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "The annotate CLI for AnnotateKit: delivers visual feedback from your running iOS app to coding agents (MCP server, watcher, headless runner).",
   "homepage": "https://annotatekit.com",
   "repository": {
