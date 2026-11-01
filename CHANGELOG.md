@@ -40,6 +40,22 @@ All notable changes to this project are documented here. The format is based on
   launcher's chrome check backs off to 5 s and rests while annotating or in the background, delivery
   tracking reads status.json off the main thread, and closing annotate mode releases the frozen
   screen's full-resolution capture when it has no pins.
+- Typing a comment re-ran the whole overlay on every keystroke (frozen screen, every pin marker and
+  the bottom chrome), because the text lived on the open pin. It now has its own property, so only
+  the comment card updates: per 68-character comment with 8 pins, `ActiveOverlay` and
+  `BottomChrome` re-render 1–2 times instead of 69, and main-thread time drops from ~10.6 to
+  ~8.6 ms per keystroke (simulator).
+- With the comment keyboard up, a tap or a saved drawing compared the app's whole element outline
+  against the frozen screen, and if the app had moved for the keyboard, repeated that walk every
+  25 ms until it went away. The comparison now runs once per keyboard position and the wait wakes
+  on the keyboard's own notifications: 72 outline walks for 6 such taps become 6, with the same
+  tap-to-selection time. Screens whose accessibility node count never settles (UIKit-only) now keep
+  the warm-up's last walk as their reference instead of none.
+- Every DEBUG launch drew all of the app's windows 5 times a second, for up to 8 s on a screen that
+  never stops moving, before showing the Annotate pill. The pill's reveal now samples twice a second
+  and gives up after 3 s (at most 7 captures instead of 41, ~6.5 ms each): ~360 ms less main-thread
+  time in the first 10 s on an animated screen. `ANNOTATE=1` launch-time starts keep the full
+  settle.
 
 ### Changed
 - Annotate mode's moving color (the edge glow's turning rings and the frost's drifting blobs) now

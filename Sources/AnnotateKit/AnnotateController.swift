@@ -159,9 +159,29 @@ final class AnnotateController {
     // MARK: State
 
     private(set) var isActive = false
-    private(set) var annotations: [Annotation] = []
+    private(set) var annotations: [Annotation] = [] {
+        didSet { refreshChrome() }
+    }
     private(set) var selection: SelectionStack?
-    private(set) var draft: Draft?
+    private(set) var draft: Draft? {
+        didSet {
+            // Another pin opened, or none: its saved comment is the one being edited now
+            if draft?.annotation.id != oldValue?.annotation.id {
+                draftComment = draft?.annotation.comment ?? ""
+            }
+            refreshChrome()
+        }
+    }
+    /// The open pin's comment as typed. Kept out of `draft`, which the overlay, its markers and the
+    /// bottom chrome all read: there every keystroke re-ran them; here only the comment card reads
+    /// it. `saveDraft` writes it into the pin.
+    private var draftComment = "" {
+        didSet { refreshChrome() }
+    }
+    /// What the overlay shows: the reply card while answering a question, the comment card while a
+    /// pin is open, the review bar otherwise. Stored and reassigned only when it changes, so the views
+    /// that switch on it aren't invalidated by each keystroke of a comment or reply.
+    private(set) var chrome: OverlayChrome = .review(count: 0)
     /// The stroke under the finger, in screen points; joins a pin when the finger lifts.
     private(set) var liveStroke: Stroke?
     private(set) var toast: Toast?
@@ -202,7 +222,9 @@ final class AnnotateController {
     /// The pins of `lastSend` the agent said it started on, the most recent last (status.json).
     private(set) var acknowledgedPins: [Int] = []
     /// Non-nil while the user answers a question; the reply card replaces the other bottom chrome.
-    private(set) var replyDraft: ReplyDraft?
+    private(set) var replyDraft: ReplyDraft? {
+        didSet { refreshChrome() }
+    }
     /// A Send from the review bar keeps annotate mode open, and its pins stay drawn on the frozen
     /// screen with their progress (Figma 9276:28552); closing annotate mode drops them.
     private(set) var showsSentPins = false
@@ -251,6 +273,14 @@ final class AnnotateController {
     /// The outline the warm-up took, before any keyboard: the reference for "has the app moved".
     @ObservationIgnored private var frozenOutline: (screen: Int, elements: [ScreenElement])?
     @ObservationIgnored private var isKeyboardShown = false
+    /// While the keyboard moves (will-change until did-change, bounded by `keyboardTimeout`) the app
+    /// may be re-laying out under it, so scans wait.
+    @ObservationIgnored private var keyboardSettlesBy: Date?
+    /// Whether the app's labeled elements still sat where they froze, compared once per keyboard
+    /// position: the comparison is a full outline walk. Nil until asked or after anything moved.
+    @ObservationIgnored private var keyboardLayoutMatch: Bool?
+    /// Scans waiting for the keyboard to settle or go (`nextKeyboardEvent`).
+    @ObservationIgnored private var keyboardWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     @ObservationIgnored private var keyboardObservers: [NSObjectProtocol] = []
     /// A tap waiting for scans to match the frozen image; a newer interaction replaces it.
     @ObservationIgnored private var pendingTap: Task<Void, Never>?
@@ -369,9 +399,11 @@ final class AnnotateController {
         }
     }
 
-    /// Returns once the app's screen has settled (`LaunchSettle`) or the task is cancelled.
-    private func waitForSettledScreen() async {
-        var settle = LaunchSettle()
+    /// Returns once the app's screen has settled (`settle`, sampled every `interval` seconds) or the
+    /// task is cancelled. Each sample draws every app window, so callers that only need a rough
+    /// answer sample less often and give up sooner (`LaunchSettle.reveal`).
+    private func waitForSettledScreen(_ settle: LaunchSettle = LaunchSettle(), every interval: Double = LaunchSettle.interval) async {
+        var settle = settle
         var activeAge = 0.0
         var lastTick = Date()
         while !Task.isCancelled {
@@ -385,7 +417,7 @@ final class AnnotateController {
                 settle.interrupt()
             }
             lastTick = now
-            try? await Task.sleep(for: .seconds(LaunchSettle.interval))
+            try? await Task.sleep(for: .seconds(interval))
         }
     }
 
@@ -549,15 +581,14 @@ final class AnnotateController {
 
     // MARK: Draft editing
 
-    /// What the overlay shows: the reply card while answering a question, the comment card while a
-    /// pin is open, the review bar otherwise.
-    var chrome: OverlayChrome {
-        OverlayChrome.resolve(.init(
+    private func refreshChrome() {
+        let resolved = OverlayChrome.resolve(.init(
             isDraftOpen: draft != nil,
-            draftComment: draft?.annotation.comment ?? "",
+            draftComment: draftComment,
             pinCount: annotations.count,
             replyText: replyDraft?.text
         ))
+        if resolved != chrome { chrome = resolved }
     }
 
     /// The open pin's intent, from the card's chip. No pin open → nothing to set.
@@ -568,7 +599,7 @@ final class AnnotateController {
 
     /// Text of the open draft's comment.
     var commentText: String {
-        draft?.annotation.comment ?? ""
+        draftComment
     }
 
     /// Comment edits from the card opened for draft `id`. The keyboard delivers text out of
@@ -576,7 +607,7 @@ final class AnnotateController {
     /// instead of landing in the next pin's comment.
     func setComment(_ text: String, forDraft id: UUID) {
         guard draft?.annotation.id == id else { return }
-        draft?.annotation.comment = text
+        draftComment = text
     }
 
     /// Images already decoded and downscaled off the main actor (ComposerCard).
@@ -609,6 +640,7 @@ final class AnnotateController {
     func saveDraft() {
         guard var current = draft else { return }
         defer { clearDraft() }
+        current.annotation.comment = draftComment
 
         if current.strokes.isEmpty {
             current.annotation.sketch = nil
@@ -1186,11 +1218,13 @@ final class AnnotateController {
 
     /// Once, after the first real layout: wait for the app's first settled screen (past its launch
     /// screen and splash, like a launch-time start), place the pill against it, then let it fade in
-    /// (OverlayRoot animates the reveal), so it appears where it stays.
+    /// (OverlayRoot animates the reveal), so it appears where it stays. This runs on every DEBUG
+    /// launch, so it samples at `LaunchSettle.revealInterval` and gives up by `reveal`'s timeout; the
+    /// placement checks correct a pill revealed early.
     private func scheduleLauncherReveal() {
         guard !isLauncherRevealed, revealTask == nil, bounds.width > 0 else { return }
         revealTask = Task { [weak self] in
-            await self?.waitForSettledScreen()
+            await self?.waitForSettledScreen(.reveal, every: LaunchSettle.revealInterval)
             guard let self, !Task.isCancelled else { return }
             self.refreshLauncherPlacement()
             self.isLauncherRevealed = true
@@ -1379,7 +1413,18 @@ final class AnnotateController {
 
     /// Whether a live scan matches the frozen image right now.
     private var isScannable: Bool {
-        isTreeWarm && (!isKeyboardShown || liveLayoutMatchesFrozen())
+        isTreeWarm && keyboardAllowsScan()
+    }
+
+    /// No keyboard, or one at rest over an app whose labeled elements still sit where they froze.
+    /// The walk behind that runs at most once per keyboard position, not on every tap.
+    private func keyboardAllowsScan() -> Bool {
+        guard isKeyboardShown else { return true }
+        if let keyboardSettlesBy, Date() < keyboardSettlesBy { return false }
+        if let keyboardLayoutMatch { return keyboardLayoutMatch }
+        let matches = liveLayoutMatchesFrozen()
+        keyboardLayoutMatch = matches
+        return matches
     }
 
     /// With the keyboard up: the app's labeled elements are still where they were at freeze time.
@@ -1391,26 +1436,49 @@ final class AnnotateController {
         return !ScreenOutline.hasMoved(from: frozenOutline.elements, to: live)
     }
 
-    /// Waits (bounded) until a live scan matches the frozen image.
+    /// Waits (bounded) until a live scan matches the frozen image. Woken by the keyboard settling or
+    /// going away rather than polling: each poll was a full outline walk, 40 a second.
     private func untilScannable() async {
         await accessibilityWarmUp?.value
         guard isKeyboardShown else { return }
         let deadline = Date().addingTimeInterval(Self.keyboardTimeout)
-        while isKeyboardShown, !liveLayoutMatchesFrozen(), Date() < deadline, !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(25))
+        while !keyboardAllowsScan(), !Task.isCancelled {
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
+            await nextKeyboardEvent(within: remaining)
         }
         // One more beat for the app's layout pass once the keyboard is gone
         try? await Task.sleep(for: .milliseconds(30))
     }
 
+    /// Returns once the keyboard finishes a move or hides, or after `timeout`.
+    private func nextKeyboardEvent(within timeout: Double) async {
+        let id = UUID()
+        await withCheckedContinuation { continuation in
+            keyboardWaiters[id] = continuation
+            Task {
+                try? await Task.sleep(for: .seconds(timeout))
+                self.keyboardWaiters.removeValue(forKey: id)?.resume()
+            }
+        }
+    }
+
+    private func wakeKeyboardWaiters() {
+        let waiters = keyboardWaiters.values
+        keyboardWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+    }
+
     /// Right after the bootstrap SwiftUI has no accessibility nodes: the first query of a hosting
     /// view only schedules the build (they appear about 0.1 s later), so a first tap found nothing
-    /// but plumbing and fell back to a spot. Queries until the node count holds steady, then keeps
-    /// that walk as this screen's text outline, taken before any keyboard can move the app.
+    /// but plumbing and fell back to a spot. Queries until the node count holds steady (or the
+    /// timeout), then keeps that walk as this screen's text outline, taken before any keyboard can
+    /// move the app.
     private func warmUpAccessibility() {
         accessibilityWarmUp?.cancel()
         isTreeWarm = false
         frozenOutline = nil
+        keyboardLayoutMatch = nil
         let screen = currentScreen
         accessibilityWarmUp = Task { [weak self] in
             let started = Date()
@@ -1422,7 +1490,10 @@ final class AnnotateController {
                 let isSteady = !self.options.enablesAccessibilityTree
                     || (scan.accessibilityNodes > 0 && scan.accessibilityNodes == previousNodes)
                 if isSteady || Date().timeIntervalSince(started) > Self.warmUpTimeout {
-                    if isSteady { self.cacheOutline(scan.elements, for: screen) }
+                    // A count that never settles (UIKit-only screens) still leaves the last walk as
+                    // the reference; without one, every scan with the keyboard up waited it out.
+                    // Not once a keyboard is up: the app may already have moved for it
+                    if !self.isKeyboardShown { self.cacheOutline(scan.elements, for: screen) }
                     self.isTreeWarm = true
                     return
                 }
@@ -1436,6 +1507,7 @@ final class AnnotateController {
         guard index == currentScreen, let captured = screens[index] else { return }
         let normalized = ScreenOutline.normalized(outline, in: CGRect(origin: .zero, size: captured.image.size))
         frozenOutline = (index, normalized)
+        keyboardLayoutMatch = nil
         if captured.elements == nil { screens[index]?.elements = normalized }
     }
 
@@ -1450,8 +1522,11 @@ final class AnnotateController {
                 let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
                 MainActor.assumeIsolated { self?.keyboardFrameWillChange(to: end) }
             },
+            center.addObserver(forName: UIResponder.keyboardDidChangeFrameNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.keyboardFrameDidChange() }
+            },
             center.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.isKeyboardShown = false }
+                MainActor.assumeIsolated { self?.keyboardDidHide() }
             }
         ]
     }
@@ -1459,11 +1534,26 @@ final class AnnotateController {
     /// Only marks the keyboard as up for scan gating; where it sits comes from the layout guide
     /// (`updateKeyboardGuide`), because notifications can end on a stale frame.
     private func keyboardFrameWillChange(to screenFrame: CGRect?) {
+        keyboardSettlesBy = Date().addingTimeInterval(Self.keyboardTimeout)
+        keyboardLayoutMatch = nil
         guard let screenFrame, let window else { return }
         let frame = window.convert(screenFrame, from: window.screen.coordinateSpace)
         // Off screen or zero height: hidden, undocked or floating
         guard frame.height >= 1, frame.minY < bounds.maxY else { return }
         isKeyboardShown = true
+    }
+
+    /// The keyboard is at rest: the app's layout for it is done, so a waiting scan compares now.
+    private func keyboardFrameDidChange() {
+        keyboardSettlesBy = nil
+        wakeKeyboardWaiters()
+    }
+
+    private func keyboardDidHide() {
+        isKeyboardShown = false
+        keyboardSettlesBy = nil
+        keyboardLayoutMatch = nil
+        wakeKeyboardWaiters()
     }
 
     /// The keyboard's top edge from OverlayHostingController's keyboard layout guide, which sits on the
@@ -1483,7 +1573,7 @@ final class AnnotateController {
             NotificationCenter.default.removeObserver(observer)
         }
         keyboardObservers = []
-        isKeyboardShown = false
+        keyboardDidHide()
     }
 
     private func removeAnnotation(id: UUID) {

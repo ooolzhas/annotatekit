@@ -9,13 +9,17 @@ import Testing
     let splash = [UInt8](repeating: 255, count: 64)
     let home = [UInt8](repeating: 40, count: 64)
 
-    /// Feeds `frames` at `LaunchSettle.interval` spacing and returns the age it first said start.
-    private func startAge(_ settle: LaunchSettle, frames: (Double) -> [UInt8]?) -> Double? {
+    /// Feeds `frames` every `interval` seconds and returns the age it first said start.
+    private func startAge(
+        _ settle: LaunchSettle,
+        every interval: Double = LaunchSettle.interval,
+        frames: (Double) -> [UInt8]?
+    ) -> Double? {
         var settle = settle
         var age = 0.0
         while age < 20 {
             if settle.observe(frames(age), at: age) { return age }
-            age += LaunchSettle.interval
+            age += interval
         }
         return nil
     }
@@ -85,5 +89,37 @@ import Testing
         #expect(LaunchSettle.meanDifference([0, 10], [10, 0]) == 10)
         #expect(LaunchSettle.meanDifference([0], [0, 0]) == .infinity)
         #expect(LaunchSettle.meanDifference([], []) == .infinity)
+    }
+
+    // MARK: Launcher reveal
+
+    @Test func revealOnAStillScreenWaitsOnlyTheMinimumAge() throws {
+        let age = try #require(startAge(.reveal, every: LaunchSettle.revealInterval) { _ in home })
+        #expect(age >= 1.5 - 1e-9)
+        #expect(age < 1.5 + LaunchSettle.revealInterval)
+    }
+
+    @Test func revealGivesUpOnAMovingScreenByThreeSeconds() throws {
+        // Every sample differs: a spinner or shimmer the size of the screen
+        let frames: (Double) -> [UInt8]? = { age in
+            [UInt8](repeating: Int(age / LaunchSettle.revealInterval) % 2 == 0 ? 0 : 255, count: 64)
+        }
+        let age = try #require(startAge(.reveal, every: LaunchSettle.revealInterval, frames: frames))
+        #expect(age >= 3 - 1e-9)
+        #expect(age < 3 + LaunchSettle.revealInterval)
+        // 7 samples (0 … 3 s), where a launch-time start's pace would take 16 by then and 41 by its timeout
+        #expect(Int((age / LaunchSettle.revealInterval).rounded()) + 1 == 7)
+    }
+
+    @Test func revealStillWaitsOutASplashThatHoldsStill() throws {
+        // The launch-time case above, sampled at the reveal's pace: not revealed over the splash
+        let frames: (Double) -> [UInt8]? = { age in
+            if age < 1.2 { return splash }
+            if age < 1.6 { return [UInt8](repeating: UInt8(40 + Int(age * 100) % 100), count: 64) }
+            return home
+        }
+        let age = try #require(startAge(.reveal, every: LaunchSettle.revealInterval, frames: frames))
+        #expect(age >= 2.0 - 1e-9)
+        #expect(age <= 3 + 1e-9)
     }
 }
