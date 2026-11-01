@@ -153,13 +153,13 @@ The plugin's Stop hook keeps Claude from ending its turn while a send still show
 |---|---|
 | Enter annotate mode | **Annotate** pill, `Annotate.start()`, or launch with `ANNOTATE=1` |
 | Draw | Drag anywhere |
-| Select an element | Tap; `↑` / `↓` walks to its containers |
+| Select an element | Tap |
 | Pin an exact spot | Hold for half a second |
-| Save a note | Type, then ↑ |
-| Undo / redo | Card buttons or `⌘Z` / `⇧⌘Z` |
-| Send | **↑** on the bar or `⌘Return` |
-| Back out | `Esc` |
+| Save a note | Type, then **↑** on the card |
+| Undo / redo a stroke | The card's undo and redo buttons; **×** discards the note |
 | Review notes | Tap the note count on the bar |
+| Send | **↑** on the bar |
+| Leave annotate mode | **‹** on the bar (your notes are kept) |
 
 To annotate another screen, leave annotate mode, navigate, and come back. One send carries every
 screen.
