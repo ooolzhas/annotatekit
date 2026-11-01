@@ -482,17 +482,22 @@ final class AnnotateController {
         }
     }
 
+    /// The open card stays up, unchanged, until the next pin is found; then the open pin is saved and
+    /// the new one opens in the same update, so the card's content changes in place instead of the
+    /// card leaving and coming back (owner request).
     func tap(at point: CGPoint) {
-        finishDraft()
+        cancelPendingTap()
         guard isScannable else {
             pendingTap = Task { [weak self] in
-                await self?.untilScannable()
+                await self?.untilScannable(dismissingKeyboard: true)
                 guard let self, !Task.isCancelled, self.isActive else { return }
                 self.pendingTap = nil
+                self.finishDraft()
                 self.select(at: point)
             }
             return
         }
+        finishDraft()
         select(at: point)
     }
 
@@ -1438,11 +1443,19 @@ final class AnnotateController {
 
     /// Waits (bounded) until a live scan matches the frozen image. Woken by the keyboard settling or
     /// going away rather than polling: each poll was a full outline walk, 40 a second.
-    private func untilScannable() async {
+    /// `dismissingKeyboard`: a tap with the card still up. When the app has moved under the keyboard
+    /// the scan can't trust live positions, so the keyboard goes down (the card rides with it) rather
+    /// than the card closing, which used to be what put the keyboard away.
+    private func untilScannable(dismissingKeyboard: Bool = false) async {
         await accessibilityWarmUp?.value
         guard isKeyboardShown else { return }
         let deadline = Date().addingTimeInterval(Self.keyboardTimeout)
+        var dismissed = false
         while !keyboardAllowsScan(), !Task.isCancelled {
+            if dismissingKeyboard, !dismissed, keyboardLayoutMatch == false {
+                dismissed = true
+                window?.endEditing(true)
+            }
             let remaining = deadline.timeIntervalSinceNow
             guard remaining > 0 else { break }
             await nextKeyboardEvent(within: remaining)

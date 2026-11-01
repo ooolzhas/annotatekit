@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- Moving from one pin to another replayed the whole comment card: it shrank away and rose back in,
+  and the keyboard dropped and came back. The card now stays where it is and only what differs
+  changes (the quoted element, the text, the attachments). The open pin is saved and the new one
+  opens in the same update, once the new element is found. If the app moved under the keyboard, the
+  keyboard still goes down for the scan; the card rides with it instead of closing.
+- The notes sheet lagged when it opened: its default Liquid Glass background blurred the frozen
+  screen behind it on every frame. It now has a solid fill, the system's own sheet color.
+- The Annotate pill could stay missing after a launch while the device was locked, when the system
+  replaced the app's scene: the overlay window stayed on the old one. It now re-attaches to the
+  next scene that becomes active.
+
 ## [0.4.1] - 2026-11-01
 
 ### Fixed

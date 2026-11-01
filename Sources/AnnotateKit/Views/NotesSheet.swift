@@ -136,6 +136,9 @@ struct NotesSheet: View {
         }
         .presentationDetents([Self.compactDetent, .large], selection: $detent)
         .presentationDragIndicator(.visible)
+        // Solid, the system's own sheet color (owner request): the default Liquid Glass sheet blurred
+        // the frozen screen behind it on every frame of the open, which lagged visibly
+        .presentationBackground(Color(uiColor: .systemBackground))
     }
 
     // MARK: - Tags
