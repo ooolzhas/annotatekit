@@ -261,9 +261,9 @@ private struct ActiveOverlay: View {
             // choice): one glow per palette, crossfading, so only one renders at rest
             ZStack {
                 if controller.isAgentWorking {
-                    ScreenGlow(palette: .working, size: bounds.size).transition(.opacity)
+                    ScreenGlow(palette: .working).transition(.opacity)
                 } else {
-                    ScreenGlow(palette: .idle, size: bounds.size).transition(.opacity)
+                    ScreenGlow(palette: .idle).transition(.opacity)
                 }
             }
             .frame(width: bounds.width, height: bounds.height)
@@ -401,68 +401,43 @@ private struct ActiveOverlay: View {
 }
 
 /// The frost behind the bottom chrome, made fluid (design choice; Figma draws one even gradient,
-/// `from-[rgba(0,136,255,0)] to-[rgba(0,136,255,0.5)]`): a softer even wash plus a few soft blue blobs
+/// `from-[rgba(0,136,255,0)] to-[rgba(0,136,255,0.5)]`): a softer even wash plus a few soft blobs
 /// that drift sideways at their own pace, so the color pools and thins along the bottom like liquid.
-/// The whole thing fades to clear toward its top, as Figma's does. Blobs are elliptical gradients,
-/// not blurred shapes, so moving them costs no blur per frame.
+/// The whole thing fades to clear toward its top, as Figma's does. Drawn and moved by Core Animation
+/// (`FluidFrostView`), so it costs the app nothing per frame.
 private struct BottomFrost: View {
     /// Blue normally, green while Claude works.
     let palette: GlowPalette
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// One drifting pool of color: where it rests (fractions of the frost's size), how big it is,
-    /// how far and how fast it sways, and its color.
-    private struct Blob {
-        let x: CGFloat, y: CGFloat
-        let width: CGFloat, height: CGFloat
-        let sway: CGFloat
-        let period: Double
-        let phase: Double
-        let color: Color
-    }
-
     /// Strength of the even wash at the bottom edge; the blobs bring the peaks to about Figma's 0.5.
-    private static let washOpacity: Double = 0.28
+    private static let washOpacity: CGFloat = 0.28
     /// Where the frost reaches full strength, from its top (the top fades in, like Figma's gradient).
     private static let fadeEnd: CGFloat = 0.6
-    private var blobs: [Blob] { [
-        Blob(x: 0.2, y: 0.85, width: 0.95, height: 1.1, sway: 0.18, period: 11, phase: 0,
-             color: palette.color.opacity(0.42)),
-        Blob(x: 0.65, y: 0.95, width: 0.8, height: 0.9, sway: 0.22, period: 8, phase: 2,
-             color: palette.color.opacity(0.28)),
-        Blob(x: 0.9, y: 0.75, width: 0.7, height: 1.0, sway: 0.16, period: 14, phase: 4,
-             color: palette.color.opacity(0.3))
-    ] }
+    /// The drifting pools of color: where each rests and how big it is (fractions of the frost's
+    /// size), how far and how fast it sways, and how strong it is.
+    private static let blobs: [FluidFrostView.Blob] = [
+        .init(x: 0.2, y: 0.85, width: 0.95, height: 1.1, sway: 0.18, period: 11, phase: 0, opacity: 0.42),
+        .init(x: 0.65, y: 0.95, width: 0.8, height: 0.9, sway: 0.22, period: 8, phase: 2, opacity: 0.28),
+        .init(x: 0.9, y: 0.75, width: 0.7, height: 1.0, sway: 0.16, period: 14, phase: 4, opacity: 0.3)
+    ]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: FluidMotion.frameInterval, paused: reduceMotion)) { context in
-            let time = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            GeometryReader { proxy in
-                let size = proxy.size
-                ZStack {
-                    LinearGradient(
-                        colors: [palette.color.opacity(0), palette.color.opacity(Self.washOpacity)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    ForEach(blobs.indices, id: \.self) { index in
-                        let blob = blobs[index]
-                        let drift = blob.sway * CGFloat(sin(FluidMotion.angle(time, period: blob.period) + blob.phase))
-                        Rectangle()
-                            .fill(EllipticalGradient(colors: [blob.color, blob.color.opacity(0)]))
-                            .frame(width: size.width * blob.width, height: size.height * blob.height)
-                            .position(x: size.width * (blob.x + drift), y: size.height * blob.y)
-                    }
-                }
-                .mask(
-                    LinearGradient(
-                        stops: [.init(color: .clear, location: 0), .init(color: .white, location: Self.fadeEnd)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            }
+        FluidFrost(palette: palette, animates: !reduceMotion)
+    }
+
+    private struct FluidFrost: UIViewRepresentable {
+        let palette: GlowPalette
+        let animates: Bool
+
+        func makeUIView(context: Context) -> FluidFrostView {
+            FluidFrostView(blobs: BottomFrost.blobs, washOpacity: BottomFrost.washOpacity, fadeEnd: BottomFrost.fadeEnd)
+        }
+
+        func updateUIView(_ view: FluidFrostView, context: Context) {
+            view.color = palette.color
+            view.animates = animates
         }
     }
 }
@@ -472,22 +447,10 @@ private struct BottomFrost: View {
 /// cyan/indigo or mint/teal hues).
 @MainActor
 struct GlowPalette {
-    let color: Color
+    let color: UIColor
 
-    static let idle = GlowPalette(color: AnnotateStyle.action)
-    static let working = GlowPalette(color: ReviewHintLine.connectedColor)
-}
-
-/// Shared clock math for the fluid glow and frost.
-private enum FluidMotion {
-    /// They drift slowly, so 30 fps is plenty and halves the work of the display's full rate.
-    static let frameInterval: TimeInterval = 1.0 / 30
-
-    /// `time` as an angle in radians, one full turn per `period` seconds. Reduced first, so the
-    /// reference-date seconds don't lose precision in the trig.
-    static func angle(_ time: TimeInterval, period: Double) -> Double {
-        (time.truncatingRemainder(dividingBy: period) / period) * 2 * .pi
-    }
+    static let idle = GlowPalette(color: UIColor(AnnotateStyle.action))
+    static let working = GlowPalette(color: UIColor(ReviewHintLine.connectedColor))
 }
 
 private extension View {
@@ -623,74 +586,59 @@ private struct SelectionCorners: Shape {
 
 /// Blue glow along the screen's rounded edge while annotating (Figma 9257:13385: `rounded-[62px]`,
 /// `shadow-[inset_0_0_62px_0_rgba(0,136,255,0.5)]`), made fluid (design choice): rather than one even
-/// band, two edge bands of different depth are each lit by a slowly turning ring of uneven blues, in
+/// band, two edge bands of different depth are each lit by a slowly turning ring of uneven color, in
 /// opposite directions, so the glow swells, thins and runs along the edge like liquid. Each band is an
-/// inset-shadow bitmap (`EdgeBandMask`). The bands never change; only the light behind them turns.
-/// Reduce Motion holds the light still.
+/// inset-shadow bitmap (`EdgeBandMask`). The bands never change; only the light behind them turns,
+/// on Core Animation (`FluidRingsView`). Reduce Motion holds the light still.
 private struct ScreenGlow: View {
     /// Blue normally, green while Claude works.
     let palette: GlowPalette
-    /// The screen's size, for the edge masks.
-    let size: CGSize
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The deeper band reaches about twice Figma's 62pt into the screen, faintly.
-    private static let deepWidth: CGFloat = 140
-    /// Seconds per turn: the two rings turn at different paces and in opposite directions, so where
-    /// they overlap keeps changing instead of the whole pattern just spinning.
-    private static let nearPeriod: Double = 14
-    private static let deepPeriod: Double = 9
-
-    /// Around the near band (Figma's 62pt glow): the palette color swelling past Figma's 0.5 and
-    /// thinning well below it. The ring wraps, so it ends where it starts.
-    private var nearStops: [Gradient.Stop] { [
-        .init(color: palette.color.opacity(0.7), location: 0),
-        .init(color: palette.color.opacity(0.25), location: 0.13),
-        .init(color: palette.color.opacity(0.55), location: 0.27),
-        .init(color: palette.color.opacity(0.18), location: 0.41),
-        .init(color: palette.color.opacity(0.75), location: 0.56),
-        .init(color: palette.color.opacity(0.35), location: 0.7),
-        .init(color: palette.color.opacity(0.2), location: 0.85),
-        .init(color: palette.color.opacity(0.7), location: 1)
-    ] }
-    /// Around the deep band: a few faint pools that reach further in, clear in between.
-    private var deepStops: [Gradient.Stop] { [
-        .init(color: palette.color.opacity(0.3), location: 0),
-        .init(color: .clear, location: 0.18),
-        .init(color: palette.color.opacity(0.28), location: 0.37),
-        .init(color: .clear, location: 0.55),
-        .init(color: palette.color.opacity(0.3), location: 0.72),
-        .init(color: .clear, location: 0.88),
-        .init(color: palette.color.opacity(0.3), location: 1)
-    ] }
+    /// The rings, deep under near. Seconds per turn: they turn at different paces and in opposite
+    /// directions, so where they overlap keeps changing instead of the whole pattern just spinning.
+    private static let rings: [FluidRingsView.Ring] = [
+        // The deeper band reaches about twice Figma's 62pt into the screen: a few faint pools, clear
+        // in between
+        .init(stops: [
+            FluidStop(opacity: 0.3, location: 0),
+            FluidStop(opacity: 0, location: 0.18),
+            FluidStop(opacity: 0.28, location: 0.37),
+            FluidStop(opacity: 0, location: 0.55),
+            FluidStop(opacity: 0.3, location: 0.72),
+            FluidStop(opacity: 0, location: 0.88),
+            FluidStop(opacity: 0.3, location: 1)
+        ], period: 9, clockwise: false, band: 140),
+        // The near band (Figma's 62pt glow): the color swelling past Figma's 0.5 and thinning well
+        // below it. The ring wraps, so it ends where it starts
+        .init(stops: [
+            FluidStop(opacity: 0.7, location: 0),
+            FluidStop(opacity: 0.25, location: 0.13),
+            FluidStop(opacity: 0.55, location: 0.27),
+            FluidStop(opacity: 0.18, location: 0.41),
+            FluidStop(opacity: 0.75, location: 0.56),
+            FluidStop(opacity: 0.35, location: 0.7),
+            FluidStop(opacity: 0.2, location: 0.85),
+            FluidStop(opacity: 0.7, location: 1)
+        ], period: 14, clockwise: true, band: AnnotateStyle.glowBlur)
+    ]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: FluidMotion.frameInterval, paused: reduceMotion)) { context in
-            let time = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            ZStack {
-                Self.ring(deepStops, turn: -FluidMotion.angle(time, period: Self.deepPeriod))
-                    .mask(EdgeBand(width: Self.deepWidth, size: size))
-                Self.ring(nearStops, turn: FluidMotion.angle(time, period: Self.nearPeriod))
-                    .mask(EdgeBand(width: AnnotateStyle.glowBlur, size: size))
-            }
+        FluidRings(palette: palette, animates: !reduceMotion)
+    }
+
+    private struct FluidRings: UIViewRepresentable {
+        let palette: GlowPalette
+        let animates: Bool
+
+        func makeUIView(context: Context) -> FluidRingsView {
+            FluidRingsView(rings: ScreenGlow.rings)
         }
-    }
 
-    private static func ring(_ stops: [Gradient.Stop], turn: Double) -> some View {
-        AngularGradient(stops: stops, center: .center, angle: .radians(turn))
-    }
-}
-
-/// A soft band just inside the screen's rounded edge, opaque at the edge and fading inward over about
-/// `width`: CSS `inset 0 0 <width>px`. Used as a mask.
-private struct EdgeBand: View {
-    let width: CGFloat
-    let size: CGSize
-
-    var body: some View {
-        if let mask = EdgeBandMask.image(size: size, width: width) {
-            Image(decorative: mask, scale: 1).resizable()
+        func updateUIView(_ view: FluidRingsView, context: Context) {
+            view.color = palette.color
+            view.animates = animates
         }
     }
 }

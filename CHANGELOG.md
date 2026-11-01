@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format is based on
   drawn once with Core Graphics.
 
 ### Changed
+- Annotate mode's moving color (the edge glow's turning rings and the frost's drifting blobs) now
+  runs on Core Animation instead of a SwiftUI timeline redrawn at 30 fps on the main thread. With
+  annotate mode open and nothing happening, the app's CPU drops to its idle level (Simulator: ~1.2
+  to ~0.45 CPU-seconds per 10 s), and the motion is smoother at the display's own frame rate. Same
+  look, periods and Reduce Motion behavior.
 - The edge glow and the frost behind the bottom bar are one color each, varied by opacity: the
   accent blue normally and the indicators' green while the agent works (no more cyan/indigo or
   mint/teal passages).
