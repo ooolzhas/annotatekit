@@ -290,11 +290,7 @@ private struct ActiveOverlay: View {
                 PinMarker(annotation: draft.annotation, strokes: draft.strokes, bounds: bounds)
             }
 
-            if let live = controller.liveStroke {
-                SketchStrokes(strokes: [live])
-                    .frame(width: bounds.width, height: bounds.height)
-                    .allowsHitTesting(false)
-            }
+            LiveStrokeLayer(controller: controller, size: bounds.size)
 
             // One marker per pin, keyed by the pin: saving the open pin, reopening a saved one and
             // sending only change its face (Figma 9378:5659 + while new, 9378:5178 pencil while
@@ -497,6 +493,22 @@ extension Annotation {
                 dx: -AnnotateStyle.elementBoxOutset,
                 dy: -AnnotateStyle.elementBoxOutset
             )
+        }
+    }
+}
+
+/// The stroke under the finger. Its own view so it is the only reader of `liveStroke`: read in
+/// ActiveOverlay's body, every drag sample re-ran that whole body (every pin's sketch placement and
+/// badge) for one growing path.
+private struct LiveStrokeLayer: View {
+    let controller: AnnotateController
+    let size: CGSize
+
+    var body: some View {
+        if let live = controller.liveStroke {
+            SketchStrokes(strokes: [live])
+                .frame(width: size.width, height: size.height)
+                .allowsHitTesting(false)
         }
     }
 }

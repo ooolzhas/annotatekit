@@ -11,6 +11,32 @@ All notable changes to this project are documented here. The format is based on
   appeared already in place instead of sliding and fading in. Drawing the glow's blurred edge mask
   held the main thread for ~250 ms, longer than the 0.3s entrance; the mask is now a small bitmap
   drawn once with Core Graphics.
+- `annotate hook stop` took seconds on every Claude stop in long conversations (19 s with a 215 MB
+  transcript and three open Sends): it decoded the whole transcript into a String and searched it
+  once per open Send. It now maps the file and searches bytes (0.13 s), reads only Sends from the
+  app's tracking window, and returns before reading anything on the second stop.
+- Sends mirrored from a device were never pruned on the Mac, and every watcher re-read each
+  session's status.json twice a second, so idle CPU grew with every Send. The mirror now prunes
+  like the app does (newest 30, never inside the 48-hour history window), and the reply scan skips
+  sessions without replies.json before decoding anything.
+- The device mirror listed every development build on a paired phone once a minute forever, all
+  at the same moment. Builds that never answer now back off to 16 minutes, and repeat cold
+  listings go one per tick so they can't hold up a Send from the open app. devicectl dates no
+  longer build a formatter per listed file.
+- The status dot's breathing halo on the launcher pill was a SwiftUI `phaseAnimator`, so a DEBUG
+  build spent ~5% of a core re-rendering every frame for as long as the pill showed. It's now a
+  Core Animation layer (render server, ~0% app CPU idle) with the same breath.
+- Drawing re-ran the whole overlay on every touch sample (every pin's sketch placement and badge),
+  so a stroke got slower with each pin on screen. The live stroke now has its own view and grows in
+  place: 2.8 ms of main-thread time per sample whatever the pin count (was 5.3 ms with 8 pins and
+  7.6 ms with 16, simulator).
+- Picked photos were decoded and downscaled on the main thread (a visible freeze per 12–48 MP
+  photo); ImageIO now does it off the main thread, and the card's tiles show small thumbnails
+  instead of 2048 px images.
+- Idle work while annotate mode is closed: agent heartbeats no longer redraw the pill every 3 s, the
+  launcher's chrome check backs off to 5 s and rests while annotating or in the background, delivery
+  tracking reads status.json off the main thread, and closing annotate mode releases the frozen
+  screen's full-resolution capture when it has no pins.
 
 ### Changed
 - Annotate mode's moving color (the edge glow's turning rings and the frost's drifting blobs) now

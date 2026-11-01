@@ -114,13 +114,13 @@ public struct DeviceCtlBridge: DeviceBridge {
         return try Data(contentsOf: output)
     }
 
-    /// devicectl writes "2026-10-28T22:14:30.000Z".
+    /// devicectl writes "2026-10-28T22:14:30.000Z". Called for every file in a listing (hundreds,
+    /// every couple of seconds while an app is open), so no formatter is built per call.
     static func date(_ string: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: string) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: string)
+        (try? fractionalDate.parse(string)) ?? (try? wholeSecondDate.parse(string))
     }
+
+    private static let fractionalDate = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let wholeSecondDate = Date.ISO8601FormatStyle()
 }
 #endif
