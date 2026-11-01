@@ -146,8 +146,8 @@ private struct BottomChrome: View {
                 }
             case .composing:
                 if let draft = controller.draft {
+                    // No `.id` per pin: moving to another pin keeps the card and changes what changed
                     ComposerCard(controller: controller, draft: draft)
-                        .id(draft.annotation.id)
                         .padding(.horizontal, cardSides)
                         .padding(.bottom, belowCard)
                         .transition(swapTransition)
@@ -197,18 +197,18 @@ private struct BottomChrome: View {
         )
     }
 
-    /// Which chrome shows, for the swap animation: the case without its payload (a submit-state or
-    /// count change isn't a swap), plus the open pin, so moving to another pin swaps the card too.
+    /// Which chrome shows, for the swap animation: the case without its payload. A submit-state or
+    /// count change isn't a swap, and neither is moving to another pin: the card stays and updates.
     private var chromeKind: ChromeKind {
         switch controller.chrome {
         case .replying: .replying
-        case .composing: .composing(controller.draft?.annotation.id)
+        case .composing: .composing
         case .review: .review
         }
     }
 
     private enum ChromeKind: Hashable {
-        case replying, composing(UUID?), review
+        case replying, composing, review
     }
 
     /// Every swap between the bar and a card runs one way: the arriving piece rises into place from

@@ -20,19 +20,42 @@ final class OverlayInstaller {
     let controller = AnnotateController()
     private var window: OverlayWindow?
     private var observer: NSObjectProtocol?
+    private var disconnectObserver: NSObjectProtocol?
     private var isInstalled = false
 
     func install(options: AnnotateOptions, callerFile: String) {
         guard !isInstalled else { return }
         isInstalled = true
         controller.configure(options: options, callerFile: callerFile)
+        observeActivation()
+        // A window outlives a scene the system discards and replaces (seen on a device after a launch
+        // while it was locked): the pill then lived on a dead scene and never showed. Re-attach.
+        disconnectObserver = NotificationCenter.default.addObserver(
+            forName: UIScene.didDisconnectNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            let scene = notification.object as? UIScene
+            MainActor.assumeIsolated { self?.detach(ifOn: scene) }
+        }
+        // `install` often runs in App.init, before UIApplication has a scene; retry on the next turn
+        Task { @MainActor in self.attachIfPossible() }
+    }
+
+    private func observeActivation() {
+        guard observer == nil else { return }
         observer = NotificationCenter.default.addObserver(
             forName: UIScene.didActivateNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.attachIfPossible() }
         }
-        // `install` often runs in App.init, before UIApplication has a scene; retry on the next turn
-        Task { @MainActor in self.attachIfPossible() }
+    }
+
+    private func detach(ifOn scene: UIScene?) {
+        guard let window, scene == nil || window.windowScene == nil || window.windowScene === scene else { return }
+        window.isHidden = true
+        self.window = nil
+        controller.window = nil
+        observeActivation()
+        attachIfPossible()
     }
 
     /// Called by `Annotate.start()`: a hidden launcher means the window may not exist yet.

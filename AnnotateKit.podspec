@@ -15,7 +15,7 @@
 
 Pod::Spec.new do |s|
   s.name          = 'AnnotateKit'
-  s.version       = '0.4.1'
+  s.version       = '0.4.2'
   s.summary       = 'Visual feedback for iOS apps, straight to your coding agent.'
   s.description   = <<-DESC
     A DEBUG-only overlay for pinning comments and drawings onto a frozen screen of your running
