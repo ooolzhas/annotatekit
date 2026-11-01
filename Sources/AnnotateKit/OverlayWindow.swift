@@ -7,7 +7,9 @@
 // With the launcher hidden, no window exists until annotate mode first starts.
 
 #if DEBUG && canImport(UIKit)
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import SwiftUI
 import UIKit
 

@@ -35,6 +35,19 @@ jobs:
           xcodebuild build -scheme AnnotateKit -configuration Release \
             -destination 'generic/platform=iOS Simulator' | xcbeautify
 
+  podspec:
+    # The pod React Native / Expo apps autolink: AnnotateCore + AnnotateKit as one module.
+    # `pod lib lint` builds it for the iOS Simulator; the second run covers the DEBUG overlay.
+    name: AnnotateKit.podspec (CocoaPods)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - run: pod --version
+      - name: Lint (Release, stubs only)
+        run: pod lib lint AnnotateKit.podspec --allow-warnings
+      - name: Lint (Debug, overlay compiled in)
+        run: pod lib lint AnnotateKit.podspec --allow-warnings --configuration=Debug
+
   plugin:
     name: Claude Code plugin manifests
     runs-on: ubuntu-latest
@@ -44,5 +57,8 @@ jobs:
         with:
           node-version: 22
       - run: npx --yes @anthropic-ai/claude-code@2.1.312 plugin validate --strict .
+      - name: Expo config plugin tests
+        working-directory: packaging/npm
+        run: npm test
       - name: Launcher script parses
         run: bash -n bin/annotate

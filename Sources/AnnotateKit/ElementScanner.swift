@@ -2,14 +2,18 @@
 // Occlusion: only the touch-receiving window is scanned, and within it only the hit view's
 // ancestor chain (as containers), its subtree, and the accessibility children of both. That keeps
 // views hidden behind a sheet out of the results. SwiftUI content arrives as accessibility nodes
-// (see AccessibilityBootstrap); UIKit content arrives as UIViews.
+// (see AccessibilityBootstrap); UIKit content arrives as UIViews. So does React Native's: its host
+// views report the JSX component they render (`Text`, not `RCTParagraphComponentView`), and its
+// root and navigation wrappers count as plumbing (see ReactNativeViews).
 // `outline` lists every visible labeled element on the current screen (top presented controller,
 // plus its presenter when a sheet doesn't cover it) for the session's grep hints; `outlineScan`
 // also counts accessibility nodes, which tells the controller when SwiftUI's tree is built.
 // All frames are screen points.
 
 #if DEBUG && canImport(UIKit)
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import UIKit
 
 @MainActor
@@ -122,9 +126,10 @@ private final class OutlineCollector {
         guard frame.area > 0 else { return }
         var label = object.accessibilityLabel ?? ""
         if label.isEmpty, let text = (view as? UILabel)?.text { label = text }
-        if label.isEmpty, let value = object.accessibilityValue, view == nil || object.isAccessibilityElement { label = value }
-        guard !label.isEmpty else { return }
         let role = Walker.role(traits: object.accessibilityTraits, view: view)
+        // A toggle's value is its state ("1"), not text (see ElementInfo.textValue)
+        if label.isEmpty, role != "toggle", let value = object.accessibilityValue, view == nil || object.isAccessibilityElement { label = value }
+        guard !label.isEmpty else { return }
         results.append(ScreenElement(role: role, label: label, frame: AnnotationRect(frame)))
     }
 }
@@ -207,8 +212,8 @@ private final class Walker {
         return (0..<count).compactMap { object.accessibilityElement(at: $0) as? NSObject }
     }
 
-    /// Skips UIKit/SwiftUI plumbing views; keeps controls, text, images, cells, scroll views,
-    /// view-controller roots and app-defined UIView subclasses.
+    /// Skips UIKit/SwiftUI/React Native plumbing views; keeps controls, text, images, cells, scroll
+    /// views, view-controller roots and app-defined UIView subclasses.
     static func isMeaningful(_ view: UIView) -> Bool {
         if view.isAccessibilityElement || view is UIWindow { return true }
         switch view {
@@ -218,10 +223,14 @@ private final class Walker {
         default:
             break
         }
-        if let controller = view.next as? UIViewController {
-            return !className(of: controller).contains("Hosting")
-        }
         let name = className(of: view)
+        // Checked before the controller: RN's root view and each react-native-screens screen are
+        // view-controller roots too
+        if ReactNativeViews.isPlumbing(className: name) { return false }
+        if let controller = view.next as? UIViewController {
+            let controllerName = className(of: controller)
+            return !controllerName.contains("Hosting") && !ReactNativeViews.isPlumbing(className: controllerName)
+        }
         let plumbing = ["_", "UI", "SwiftUI", "CA", "NS"]
         return !plumbing.contains { name.hasPrefix($0) } && !name.contains("Hosting")
     }
@@ -234,6 +243,12 @@ private final class Walker {
                 typeName = className(of: controller)
             } else {
                 typeName = className(of: view)
+            }
+            // React Native host views go by their JSX name; a leaf component's UIKit backing view
+            // (the UISwitch inside a Switch) by its parent's
+            if let name = typeName, let component = ReactNativeViews.componentName(forClassName: name)
+                ?? view.superview.flatMap({ ReactNativeViews.componentName(forChildOf: className(of: $0)) }) {
+                typeName = component
             }
         }
         var label = object.accessibilityLabel

@@ -66,8 +66,13 @@ if [[ "$(uname -s)" == "Darwin" ]] && command -v curl >/dev/null; then
   fi
 fi
 
-# 4. Source build (a checkout or the plugin; the npm package ships no sources)
+# 4. Source build (a checkout or the plugin; the npm package ships no Package.swift)
 if [[ ! -f "$ROOT/Package.swift" ]] || ! command -v swift >/dev/null; then
+  # Linux CI installs the npm package too (as a React Native devDependency), so say why plainly
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    log "the annotate CLI runs on macOS only (this is $(uname -s))"
+    exit 1
+  fi
   log "can't find a release binary or a Swift toolchain. Install with: brew install ooolzhas/tap/annotate"
   exit 1
 fi

@@ -11,8 +11,8 @@
 **[AnnotateKit](https://annotatekit.com)** turns drawings and comments inside your iOS app into
 prompts for your coding agent. Tap, draw, and send to Claude, Codex, Cursor, or any MCP client.
 
-Works on device and in the simulator. Everything is behind `#if DEBUG`, so Release builds carry
-none of it.
+Works with SwiftUI, UIKit, [React Native and Expo](#react-native-and-expo), on device and in the
+simulator. Everything is behind `#if DEBUG`, so Release builds carry none of it.
 
 ## Install
 
@@ -21,7 +21,7 @@ Tell your agent:
 > Set up AnnotateKit from github.com/ooolzhas/annotatekit in this app.
 
 The [`annotate-setup` skill](skills/annotate-setup/SKILL.md) handles Xcode projects, XcodeGen,
-Tuist and SwiftPM. In Claude Code, one plugin brings the skill, the MCP server and the CLI:
+Tuist, SwiftPM, React Native and Expo. In Claude Code, one plugin brings the skill, the MCP server and the CLI:
 
 ```
 /plugin install annotate --marketplace ooolzhas/annotatekit
@@ -49,6 +49,36 @@ Add `.annotate/` to your `.gitignore`, then install the CLI (not needed with the
 brew install ooolzhas/tap/annotate   # or: npm install -g annotate-ios · mint install ooolzhas/annotatekit
 ```
 </details>
+
+## React Native and Expo
+
+iOS only. The `annotate-ios` npm package carries the pod, and autolinking picks it up.
+
+```sh
+npm install -D annotate-ios
+```
+
+**Expo:** add the plugin to `app.json`, then run a development build (`npx expo run:ios` or
+`expo-dev-client`). Expo Go can't load native code.
+
+```json
+{ "expo": { "plugins": ["annotate-ios"] } }
+```
+
+**Bare React Native:** add two lines to `ios/<App>/AppDelegate`, then `cd ios && pod install`.
+
+```swift
+import AnnotateKit                // Swift (RN 0.77+), at the top
+Annotate.install()                // first line of application(_:didFinishLaunchingWithOptions:)
+```
+
+```objc
+#import "AnnotateKit-Swift.h"                  // Obj-C (AppDelegate.mm), with the imports
+[AnnotateBridge installWithFile:@__FILE__];    // first line of application:didFinishLaunchingWithOptions:
+```
+
+The app's iOS deployment target must be 17.0 or later (Expo: `ios.deploymentTarget` in
+`expo-build-properties`). The `annotate` CLI works the same as for native apps.
 
 ## Usage
 

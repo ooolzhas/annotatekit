@@ -8,7 +8,9 @@
 import SwiftUI
 #endif
 #if DEBUG && canImport(UIKit)
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import Observation
 import UIKit
 #endif

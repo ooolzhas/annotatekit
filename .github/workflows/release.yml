@@ -31,6 +31,7 @@ jobs:
           grep -q "static let version = \"$VERSION\"" Sources/AnnotateAgent/ChannelServer.swift || { echo "ChannelServer.version != $VERSION"; exit 1; }
           grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG has no $VERSION section"; exit 1; }
           grep -q "\"version\": \"$VERSION\"" packaging/npm/package.json || { echo "npm package version != $VERSION"; exit 1; }
+          grep -q "s.version *= '$VERSION'" AnnotateKit.podspec || { echo "AnnotateKit.podspec version != $VERSION"; exit 1; }
       - name: Build (arm64 + x86_64)
         run: swift build -c release --product annotate --arch arm64 --arch x86_64
       - name: Package
@@ -87,4 +88,9 @@ jobs:
           mkdir -p packaging/npm/bin
           cp bin/annotate packaging/npm/bin/annotate
           cp LICENSE packaging/npm/LICENSE
+          # The CocoaPods pod for React Native / Expo autolinking: the podspec sits at the package
+          # root and its globs point at Sources/..., so copy the sources with their paths intact
+          cp AnnotateKit.podspec packaging/npm/AnnotateKit.podspec
+          mkdir -p packaging/npm/Sources
+          cp -R Sources/AnnotateCore Sources/AnnotateKit packaging/npm/Sources/
           cd packaging/npm && npm publish --access public

@@ -209,6 +209,12 @@ public enum SourceResolver {
 }
 
 extension ElementInfo {
+    /// `value` when it reads as text. A toggle's value is its state ("0"/"1"), which says nothing
+    /// as a name: an unlabeled switch (common in React Native) would otherwise be called "1".
+    public var textValue: String? {
+        role == "toggle" ? nil : value
+    }
+
     static func isGeneric(role: String) -> Bool {
         role == "view" || role == "element"
     }
@@ -223,7 +229,7 @@ extension ElementInfo {
 
     /// `Button "Get started"`, `Text "Light that follows…"`, `HeroCard`.
     public func displayName(maxLabelLength: Int = 40) -> String {
-        guard let label = (label.nonEmpty ?? value.nonEmpty) else { return title }
+        guard let label = (label.nonEmpty ?? textValue.nonEmpty) else { return title }
         return "\(title) \"\(label.truncated(to: maxLabelLength))\""
     }
 }
