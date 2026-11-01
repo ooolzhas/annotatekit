@@ -5,6 +5,9 @@
 // pause; a screen that never stops moving (spinner, shimmer) gives up at `timeout`. Ages count
 // only time the app is active: a permission alert at first launch makes it inactive, and apps often
 // hold their splash until they're active again, which looks settled but isn't (`interrupt`).
+// The idle launcher pill's first reveal waits for the same thing on every DEBUG launch, where each
+// sample (a draw of every app window) is pure overhead, so it samples less often and gives up
+// sooner (`reveal`).
 // Foundation only: the samples are plain gray bytes, captured by the overlay.
 
 import Foundation
@@ -12,6 +15,14 @@ import Foundation
 public struct LaunchSettle: Sendable, Equatable {
     /// Seconds between samples.
     public static let interval: Double = 0.2
+
+    /// Seconds between samples for `reveal`.
+    public static let revealInterval: Double = 0.5
+
+    /// When the launcher pill first fades in: the same splash rules, at most 3 s of sampling at
+    /// `revealInterval` (7 samples instead of up to 41). Not in Figma: a pill that shows a little
+    /// early only lands on the dock before the placement checks move it.
+    public static let reveal = LaunchSettle(timeout: 3)
 
     /// Never start earlier than this many seconds after the overlay attached.
     public var minimumAge: Double
