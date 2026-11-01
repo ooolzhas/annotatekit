@@ -126,9 +126,10 @@ private final class OutlineCollector {
         guard frame.area > 0 else { return }
         var label = object.accessibilityLabel ?? ""
         if label.isEmpty, let text = (view as? UILabel)?.text { label = text }
-        if label.isEmpty, let value = object.accessibilityValue, view == nil || object.isAccessibilityElement { label = value }
-        guard !label.isEmpty else { return }
         let role = Walker.role(traits: object.accessibilityTraits, view: view)
+        // A toggle's value is its state ("1"), not text (see ElementInfo.textValue)
+        if label.isEmpty, role != "toggle", let value = object.accessibilityValue, view == nil || object.isAccessibilityElement { label = value }
+        guard !label.isEmpty else { return }
         results.append(ScreenElement(role: role, label: label, frame: AnnotationRect(frame)))
     }
 }

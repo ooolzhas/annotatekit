@@ -336,7 +336,7 @@ extension Annotation {
     /// label, else its value, trimmed. Nil for spots, sketches, regions and elements with no text.
     public var quotedText: String? {
         guard kind == .element, let element else { return nil }
-        for candidate in [element.label, element.value] {
+        for candidate in [element.label, element.textValue] {
             let text = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !text.isEmpty { return text }
         }

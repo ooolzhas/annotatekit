@@ -20,6 +20,10 @@ All notable changes to this project are documented here. The format is based on
   `typeName`, for both the new and the old architecture; RN root, surface and react-native-screens
   wrappers are skipped like UIKit plumbing.
 
+### Fixed
+- An unlabeled switch was named by its state: the comment card quoted "1" and the screen outline
+  listed it as text "1". A toggle's value is no longer used as its text.
+
 ### Changed
 - Without a `.git`, the project root is the folder with `package.json` one or two levels above the
   Xcode project, so a React Native app's sessions land next to its JS source, not in `ios/`.
