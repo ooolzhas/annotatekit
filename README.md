@@ -11,8 +11,8 @@
 **[AnnotateKit](https://annotatekit.com)** turns drawings and comments inside your iOS app into
 prompts for your coding agent. Tap, draw, and send to Claude, Codex, Cursor, or any MCP client.
 
-Works on device and in the simulator. Everything is behind `#if DEBUG`, so Release builds carry
-none of it.
+Works with SwiftUI, UIKit, [React Native and Expo](#react-native-and-expo), on device and in the
+simulator. Everything is behind `#if DEBUG`, so Release builds carry none of it.
 
 ## Install
 
@@ -21,7 +21,7 @@ Tell your agent:
 > Set up AnnotateKit from github.com/ooolzhas/annotatekit in this app.
 
 The [`annotate-setup` skill](skills/annotate-setup/SKILL.md) handles Xcode projects, XcodeGen,
-Tuist and SwiftPM. In Claude Code, one plugin brings the skill, the MCP server and the CLI:
+Tuist, SwiftPM, React Native and Expo. In Claude Code, one plugin brings the skill, the MCP server and the CLI:
 
 ```
 /plugin install annotate --marketplace ooolzhas/annotatekit
