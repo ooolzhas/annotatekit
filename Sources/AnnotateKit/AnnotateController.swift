@@ -29,9 +29,11 @@
 // While a question is open the pill narrates `.question(pin:)`, and annotate mode opens on the notes
 // sheet.
 // The launcher is a pill docked above the home indicator (Figma 9289:1305), or above the keyboard
-// while one is up. While it idles undragged it keeps off the app's bottom chrome: every
-// `placementInterval` it re-reads the tab bars, toolbars, inputs and `.annotateAvoid()` views
-// there (`LauncherObstacles`) and `LauncherAvoidance` lifts it above them or moves it to a side.
+// while one is up. While it idles undragged it keeps off the app's bottom chrome: it re-reads the
+// tab bars, toolbars, inputs and `.annotateAvoid()` views there (`LauncherObstacles`) every
+// `placementInterval`, backing off to `placementMaxInterval` while they hold still and parked while
+// annotating or while the app isn't active, and `LauncherAvoidance` lifts it above them or moves it
+// to a side.
 // A drag moves it vertically and wins over avoidance; it fades in once the first layout settles.
 // The line above the review bar (`reviewHint`) opens on the gestures hint (`isIntro`), then settles on
 // the connection, connected or offline, and follows it from then on.
@@ -68,7 +70,11 @@ final class AnnotateController {
     /// costly, and an image never changes under its id.
     struct AttachedImage: Identifiable, Equatable {
         let id: UUID
+        /// What the bundle gets (up to ComposerCard's 2048 px longest side).
         let image: UIImage
+        /// Tile-sized copy for the card's 64pt thumbnail: drawing `image` there kept ~16 MB of
+        /// bitmap per tile alive for a few hundred visible pixels.
+        let thumbnail: UIImage
 
         static func == (lhs: AttachedImage, rhs: AttachedImage) -> Bool { lhs.id == rhs.id }
     }
@@ -153,9 +159,29 @@ final class AnnotateController {
     // MARK: State
 
     private(set) var isActive = false
-    private(set) var annotations: [Annotation] = []
+    private(set) var annotations: [Annotation] = [] {
+        didSet { refreshChrome() }
+    }
     private(set) var selection: SelectionStack?
-    private(set) var draft: Draft?
+    private(set) var draft: Draft? {
+        didSet {
+            // Another pin opened, or none: its saved comment is the one being edited now
+            if draft?.annotation.id != oldValue?.annotation.id {
+                draftComment = draft?.annotation.comment ?? ""
+            }
+            refreshChrome()
+        }
+    }
+    /// The open pin's comment as typed. Kept out of `draft`, which the overlay, its markers and the
+    /// bottom chrome all read: there every keystroke re-ran them; here only the comment card reads
+    /// it. `saveDraft` writes it into the pin.
+    private var draftComment = "" {
+        didSet { refreshChrome() }
+    }
+    /// What the overlay shows: the reply card while answering a question, the comment card while a
+    /// pin is open, the review bar otherwise. Stored and reassigned only when it changes, so the views
+    /// that switch on it aren't invalidated by each keystroke of a comment or reply.
+    private(set) var chrome: OverlayChrome = .review(count: 0)
     /// The stroke under the finger, in screen points; joins a pin when the finger lifts.
     private(set) var liveStroke: Stroke?
     private(set) var toast: Toast?
@@ -196,7 +222,9 @@ final class AnnotateController {
     /// The pins of `lastSend` the agent said it started on, the most recent last (status.json).
     private(set) var acknowledgedPins: [Int] = []
     /// Non-nil while the user answers a question; the reply card replaces the other bottom chrome.
-    private(set) var replyDraft: ReplyDraft?
+    private(set) var replyDraft: ReplyDraft? {
+        didSet { refreshChrome() }
+    }
     /// A Send from the review bar keeps annotate mode open, and its pins stay drawn on the frozen
     /// screen with their progress (Figma 9276:28552); closing annotate mode drops them.
     private(set) var showsSentPins = false
@@ -212,8 +240,9 @@ final class AnnotateController {
 
     @ObservationIgnored private var screens: [Int: CapturedScreen] = [:]
     /// Saved pins' reference images in pick order. Kept off `Annotation` so pins stay Codable and
-    /// cheap to compare; Send hands them to the bundle writer.
-    @ObservationIgnored private var attachmentImages: [UUID: [UIImage]] = [:]
+    /// cheap to compare; Send hands them to the bundle writer. Kept with their tile thumbnails, so a
+    /// reopened pin's card needn't redraw any.
+    @ObservationIgnored private var attachmentImages: [UUID: [AttachedImage]] = [:]
     @ObservationIgnored private var touch: TouchTrack?
     /// Fires the hold once a touch has stayed still for `PointerIntent.holdDuration`.
     @ObservationIgnored private var holdTask: Task<Void, Never>?
@@ -229,6 +258,10 @@ final class AnnotateController {
     @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var avoidance = LauncherAvoidance()
     @ObservationIgnored private var placementTask: Task<Void, Never>?
+    /// The bottom chrome the last placement check found, and how many checks in a row found it
+    /// unchanged with the pill staying put: the loop backs off while the app holds still.
+    @ObservationIgnored private var lastObstacles: [CGRect]?
+    @ObservationIgnored private var steadyPlacementChecks = 0
     @ObservationIgnored private var revealTask: Task<Void, Never>?
     /// Delivery stage haptics. Kept and prepared on Send: a fresh generator per stage can lag the
     /// change it marks, since the Taptic Engine spins down between stages.
@@ -240,6 +273,14 @@ final class AnnotateController {
     /// The outline the warm-up took, before any keyboard: the reference for "has the app moved".
     @ObservationIgnored private var frozenOutline: (screen: Int, elements: [ScreenElement])?
     @ObservationIgnored private var isKeyboardShown = false
+    /// While the keyboard moves (will-change until did-change, bounded by `keyboardTimeout`) the app
+    /// may be re-laying out under it, so scans wait.
+    @ObservationIgnored private var keyboardSettlesBy: Date?
+    /// Whether the app's labeled elements still sat where they froze, compared once per keyboard
+    /// position: the comparison is a full outline walk. Nil until asked or after anything moved.
+    @ObservationIgnored private var keyboardLayoutMatch: Bool?
+    /// Scans waiting for the keyboard to settle or go (`nextKeyboardEvent`).
+    @ObservationIgnored private var keyboardWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     @ObservationIgnored private var keyboardObservers: [NSObjectProtocol] = []
     /// A tap waiting for scans to match the frozen image; a newer interaction replaces it.
     @ObservationIgnored private var pendingTap: Task<Void, Never>?
@@ -289,6 +330,8 @@ final class AnnotateController {
         guard !isActive else { return }
         launchStart?.cancel()
         launchStart = nil
+        // Nothing moves the pill while annotating, so the chrome walk rests until `stop`
+        stopPlacementChecks()
         // Paid only once someone actually annotates, not on every DEBUG launch
         if options.enablesAccessibilityTree {
             AccessibilityBootstrap.enable()
@@ -322,6 +365,11 @@ final class AnnotateController {
         introTask = nil
         isIntro = false
         frozenImage = nil
+        // Screens without pins go now rather than at the next freeze, which drops them anyway (only
+        // a pinned screen can be matched on re-entry, and sent pins stop showing with the mode):
+        // otherwise the closed screen's full-resolution capture (~12 MB at 3x) lingers while idle
+        let pinned = Set(annotations.map(\.screen))
+        screens = screens.filter { pinned.contains($0.key) }
         accessibilityWarmUp?.cancel()
         pendingAttributions.forEach { $0.cancel() }
         pendingAttributions.removeAll()
@@ -329,7 +377,7 @@ final class AnnotateController {
         AnnotatableRegistry.shared.setCollecting(false)
         window?.deactivate()
         // The app may have changed under the frozen screen; place the returning pill against it
-        refreshLauncherPlacement()
+        resumePlacementChecks()
     }
 
     /// Launch-time start (`ANNOTATE=1`): freezes the first screen the app settles on instead of
@@ -351,9 +399,11 @@ final class AnnotateController {
         }
     }
 
-    /// Returns once the app's screen has settled (`LaunchSettle`) or the task is cancelled.
-    private func waitForSettledScreen() async {
-        var settle = LaunchSettle()
+    /// Returns once the app's screen has settled (`settle`, sampled every `interval` seconds) or the
+    /// task is cancelled. Each sample draws every app window, so callers that only need a rough
+    /// answer sample less often and give up sooner (`LaunchSettle.reveal`).
+    private func waitForSettledScreen(_ settle: LaunchSettle = LaunchSettle(), every interval: Double = LaunchSettle.interval) async {
+        var settle = settle
         var activeAge = 0.0
         var lastTick = Date()
         while !Task.isCancelled {
@@ -367,7 +417,7 @@ final class AnnotateController {
                 settle.interrupt()
             }
             lastTick = now
-            try? await Task.sleep(for: .seconds(LaunchSettle.interval))
+            try? await Task.sleep(for: .seconds(interval))
         }
     }
 
@@ -482,14 +532,12 @@ final class AnnotateController {
         }
     }
 
+    /// Appends in place: copying the stroke out, appending and writing it back left the points
+    /// buffer shared during the append, so every drag sample copied the whole stroke.
     private func appendToLiveStroke(_ location: CGPoint) {
-        guard var stroke = liveStroke else { return }
-        if let last = stroke.points.last?.cgPoint,
-           hypot(location.x - last.x, location.y - last.y) < Self.strokeSampleSpacing {
-            return
-        }
-        stroke.points.append(AnnotationPoint(location))
-        liveStroke = stroke
+        guard let last = liveStroke?.points.last?.cgPoint else { return }
+        guard hypot(location.x - last.x, location.y - last.y) >= Self.strokeSampleSpacing else { return }
+        liveStroke?.points.append(AnnotationPoint(location))
     }
 
     /// A finished stroke joins the open pin, or opens a new sketch pin when none is open.
@@ -533,15 +581,14 @@ final class AnnotateController {
 
     // MARK: Draft editing
 
-    /// What the overlay shows: the reply card while answering a question, the comment card while a
-    /// pin is open, the review bar otherwise.
-    var chrome: OverlayChrome {
-        OverlayChrome.resolve(.init(
+    private func refreshChrome() {
+        let resolved = OverlayChrome.resolve(.init(
             isDraftOpen: draft != nil,
-            draftComment: draft?.annotation.comment ?? "",
+            draftComment: draftComment,
             pinCount: annotations.count,
             replyText: replyDraft?.text
         ))
+        if resolved != chrome { chrome = resolved }
     }
 
     /// The open pin's intent, from the card's chip. No pin open → nothing to set.
@@ -552,7 +599,7 @@ final class AnnotateController {
 
     /// Text of the open draft's comment.
     var commentText: String {
-        draft?.annotation.comment ?? ""
+        draftComment
     }
 
     /// Comment edits from the card opened for draft `id`. The keyboard delivers text out of
@@ -560,14 +607,15 @@ final class AnnotateController {
     /// instead of landing in the next pin's comment.
     func setComment(_ text: String, forDraft id: UUID) {
         guard draft?.annotation.id == id else { return }
-        draft?.annotation.comment = text
+        draftComment = text
     }
 
-    func addAttachments(_ images: [UIImage]) {
+    /// Images already decoded and downscaled off the main actor (ComposerCard).
+    func addAttachments(_ images: [AttachedImage]) {
         guard let current = draft else { return }
         let room = Self.maxAttachments - current.images.count
         guard room > 0 else { return }
-        draft?.images.append(contentsOf: images.prefix(room).map { AttachedImage(id: UUID(), image: $0) })
+        draft?.images.append(contentsOf: images.prefix(room))
     }
 
     func removeAttachment(_ id: UUID) {
@@ -592,6 +640,7 @@ final class AnnotateController {
     func saveDraft() {
         guard var current = draft else { return }
         defer { clearDraft() }
+        current.annotation.comment = draftComment
 
         if current.strokes.isEmpty {
             current.annotation.sketch = nil
@@ -618,7 +667,7 @@ final class AnnotateController {
             if !current.isNew { removeAnnotation(id: id) }
             return
         }
-        attachmentImages[id] = hasImages ? current.images.map(\.image) : nil
+        attachmentImages[id] = hasImages ? current.images : nil
         if current.isNew {
             current.annotation.index = annotations.count + 1
             annotations.append(current.annotation)
@@ -642,7 +691,7 @@ final class AnnotateController {
             annotation: pin,
             isNew: false,
             history: StrokeHistory(opening: pin.sketchInScreenPoints),
-            images: (attachmentImages[id] ?? []).map { AttachedImage(id: UUID(), image: $0) }
+            images: attachmentImages[id] ?? []
         )
     }
 
@@ -884,7 +933,7 @@ final class AnnotateController {
             includesHiRes: options.includesHiResScreens,
             keepSessions: options.keepsSessions,
             cropPadding: Self.cropPadding,
-            attachments: attachmentImages.filter { outgoingIDs.contains($0.key) }
+            attachments: attachmentImages.filter { outgoingIDs.contains($0.key) }.mapValues { $0.map(\.image) }
         )
 
         // These pins are the ones the agent will report on; the previous Send's results are gone
@@ -995,10 +1044,13 @@ final class AnnotateController {
     /// Closest the pill gets to the screen's sides, Figma container 9289:1305 (`px-[34px]`): it caps
     /// the pill's width (a long agent message truncates against it) and places a side spot.
     static let launcherSideInset: CGFloat = 34
-    /// Seconds between re-checks of the app's bottom chrome while the pill idles. No Figma source:
-    /// soon enough after a screen change that a pill on a new tab bar isn't noticed, and the view
-    /// walk is cheap enough to go unnoticed itself.
+    /// Seconds between re-checks of the app's bottom chrome while the pill idles and something just
+    /// changed. No Figma source: soon enough after a screen change that a pill on a new tab bar isn't
+    /// noticed, and `LauncherAvoidance.settleChecks` settles at this pace.
     static let placementInterval: Double = 1
+    /// Longest wait between re-checks: the interval doubles while checks keep finding the same chrome,
+    /// since each one walks the app's views on the main thread. No Figma source.
+    static let placementMaxInterval: Double = 5
     /// Extra touch slop around the pill on every side, so a near miss still opens annotate mode.
     static let launcherHitSlop: CGFloat = 4
 
@@ -1104,6 +1156,9 @@ final class AnnotateController {
         let layout = launcherLayout
         let obstacles = LauncherObstacles.scan(band: layout.band, overlay: window)
         let spot = avoidance.update(layout, obstacles: obstacles)
+        // Any change (new chrome, the pill moving) brings the re-check back to its fastest
+        steadyPlacementChecks = obstacles == lastObstacles && spot == launcherSpot ? steadyPlacementChecks + 1 : 0
+        lastObstacles = obstacles
         if launcherSpot != spot { launcherSpot = spot }
     }
 
@@ -1125,24 +1180,51 @@ final class AnnotateController {
         isKeyboardUp ? chromeBottom - Self.launcherKeyboardGap : screenChromeBottom
     }
 
-    /// The re-check loop; `refreshLauncherPlacement` skips its ticks while there's nothing to do.
-    private func startPlacementChecks() {
+    /// The re-check loop while the pill idles in an active app: `start` and resigning active park it,
+    /// `stop` and becoming active resume it, and `refreshLauncherPlacement` still skips a tick with
+    /// nothing to do. `checkingFirst` is false when the caller has just checked.
+    private func startPlacementChecks(checkingFirst: Bool = true) {
         guard options.showsLauncher, placementTask == nil else { return }
         placementTask = Task { [weak self] in
+            var checks = checkingFirst
             while !Task.isCancelled {
-                self?.refreshLauncherPlacement()
-                try? await Task.sleep(for: .seconds(Self.placementInterval))
+                if checks { self?.refreshLauncherPlacement() }
+                checks = true
+                guard let delay = self?.placementDelay else { return }
+                try? await Task.sleep(for: .seconds(delay))
             }
         }
     }
 
+    private func stopPlacementChecks() {
+        placementTask?.cancel()
+        placementTask = nil
+    }
+
+    /// Checks at once and restarts the loop at its fastest: the screen may have changed while it was
+    /// parked.
+    private func resumePlacementChecks() {
+        guard !isActive else { return }
+        steadyPlacementChecks = 0
+        refreshLauncherPlacement()
+        startPlacementChecks(checkingFirst: false)
+    }
+
+    /// `placementInterval` after a change, doubling with each check that finds the same chrome, up to
+    /// `placementMaxInterval`.
+    private var placementDelay: Double {
+        min(Self.placementInterval * Double(1 << min(steadyPlacementChecks, 8)), Self.placementMaxInterval)
+    }
+
     /// Once, after the first real layout: wait for the app's first settled screen (past its launch
     /// screen and splash, like a launch-time start), place the pill against it, then let it fade in
-    /// (OverlayRoot animates the reveal), so it appears where it stays.
+    /// (OverlayRoot animates the reveal), so it appears where it stays. This runs on every DEBUG
+    /// launch, so it samples at `LaunchSettle.revealInterval` and gives up by `reveal`'s timeout; the
+    /// placement checks correct a pill revealed early.
     private func scheduleLauncherReveal() {
         guard !isLauncherRevealed, revealTask == nil, bounds.width > 0 else { return }
         revealTask = Task { [weak self] in
-            await self?.waitForSettledScreen()
+            await self?.waitForSettledScreen(.reveal, every: LaunchSettle.revealInterval)
             guard let self, !Task.isCancelled else { return }
             self.refreshLauncherPlacement()
             self.isLauncherRevealed = true
@@ -1331,7 +1413,18 @@ final class AnnotateController {
 
     /// Whether a live scan matches the frozen image right now.
     private var isScannable: Bool {
-        isTreeWarm && (!isKeyboardShown || liveLayoutMatchesFrozen())
+        isTreeWarm && keyboardAllowsScan()
+    }
+
+    /// No keyboard, or one at rest over an app whose labeled elements still sit where they froze.
+    /// The walk behind that runs at most once per keyboard position, not on every tap.
+    private func keyboardAllowsScan() -> Bool {
+        guard isKeyboardShown else { return true }
+        if let keyboardSettlesBy, Date() < keyboardSettlesBy { return false }
+        if let keyboardLayoutMatch { return keyboardLayoutMatch }
+        let matches = liveLayoutMatchesFrozen()
+        keyboardLayoutMatch = matches
+        return matches
     }
 
     /// With the keyboard up: the app's labeled elements are still where they were at freeze time.
@@ -1343,26 +1436,49 @@ final class AnnotateController {
         return !ScreenOutline.hasMoved(from: frozenOutline.elements, to: live)
     }
 
-    /// Waits (bounded) until a live scan matches the frozen image.
+    /// Waits (bounded) until a live scan matches the frozen image. Woken by the keyboard settling or
+    /// going away rather than polling: each poll was a full outline walk, 40 a second.
     private func untilScannable() async {
         await accessibilityWarmUp?.value
         guard isKeyboardShown else { return }
         let deadline = Date().addingTimeInterval(Self.keyboardTimeout)
-        while isKeyboardShown, !liveLayoutMatchesFrozen(), Date() < deadline, !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(25))
+        while !keyboardAllowsScan(), !Task.isCancelled {
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
+            await nextKeyboardEvent(within: remaining)
         }
         // One more beat for the app's layout pass once the keyboard is gone
         try? await Task.sleep(for: .milliseconds(30))
     }
 
+    /// Returns once the keyboard finishes a move or hides, or after `timeout`.
+    private func nextKeyboardEvent(within timeout: Double) async {
+        let id = UUID()
+        await withCheckedContinuation { continuation in
+            keyboardWaiters[id] = continuation
+            Task {
+                try? await Task.sleep(for: .seconds(timeout))
+                self.keyboardWaiters.removeValue(forKey: id)?.resume()
+            }
+        }
+    }
+
+    private func wakeKeyboardWaiters() {
+        let waiters = keyboardWaiters.values
+        keyboardWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+    }
+
     /// Right after the bootstrap SwiftUI has no accessibility nodes: the first query of a hosting
     /// view only schedules the build (they appear about 0.1 s later), so a first tap found nothing
-    /// but plumbing and fell back to a spot. Queries until the node count holds steady, then keeps
-    /// that walk as this screen's text outline, taken before any keyboard can move the app.
+    /// but plumbing and fell back to a spot. Queries until the node count holds steady (or the
+    /// timeout), then keeps that walk as this screen's text outline, taken before any keyboard can
+    /// move the app.
     private func warmUpAccessibility() {
         accessibilityWarmUp?.cancel()
         isTreeWarm = false
         frozenOutline = nil
+        keyboardLayoutMatch = nil
         let screen = currentScreen
         accessibilityWarmUp = Task { [weak self] in
             let started = Date()
@@ -1374,7 +1490,10 @@ final class AnnotateController {
                 let isSteady = !self.options.enablesAccessibilityTree
                     || (scan.accessibilityNodes > 0 && scan.accessibilityNodes == previousNodes)
                 if isSteady || Date().timeIntervalSince(started) > Self.warmUpTimeout {
-                    if isSteady { self.cacheOutline(scan.elements, for: screen) }
+                    // A count that never settles (UIKit-only screens) still leaves the last walk as
+                    // the reference; without one, every scan with the keyboard up waited it out.
+                    // Not once a keyboard is up: the app may already have moved for it
+                    if !self.isKeyboardShown { self.cacheOutline(scan.elements, for: screen) }
                     self.isTreeWarm = true
                     return
                 }
@@ -1388,6 +1507,7 @@ final class AnnotateController {
         guard index == currentScreen, let captured = screens[index] else { return }
         let normalized = ScreenOutline.normalized(outline, in: CGRect(origin: .zero, size: captured.image.size))
         frozenOutline = (index, normalized)
+        keyboardLayoutMatch = nil
         if captured.elements == nil { screens[index]?.elements = normalized }
     }
 
@@ -1402,8 +1522,11 @@ final class AnnotateController {
                 let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
                 MainActor.assumeIsolated { self?.keyboardFrameWillChange(to: end) }
             },
+            center.addObserver(forName: UIResponder.keyboardDidChangeFrameNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.keyboardFrameDidChange() }
+            },
             center.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.isKeyboardShown = false }
+                MainActor.assumeIsolated { self?.keyboardDidHide() }
             }
         ]
     }
@@ -1411,11 +1534,26 @@ final class AnnotateController {
     /// Only marks the keyboard as up for scan gating; where it sits comes from the layout guide
     /// (`updateKeyboardGuide`), because notifications can end on a stale frame.
     private func keyboardFrameWillChange(to screenFrame: CGRect?) {
+        keyboardSettlesBy = Date().addingTimeInterval(Self.keyboardTimeout)
+        keyboardLayoutMatch = nil
         guard let screenFrame, let window else { return }
         let frame = window.convert(screenFrame, from: window.screen.coordinateSpace)
         // Off screen or zero height: hidden, undocked or floating
         guard frame.height >= 1, frame.minY < bounds.maxY else { return }
         isKeyboardShown = true
+    }
+
+    /// The keyboard is at rest: the app's layout for it is done, so a waiting scan compares now.
+    private func keyboardFrameDidChange() {
+        keyboardSettlesBy = nil
+        wakeKeyboardWaiters()
+    }
+
+    private func keyboardDidHide() {
+        isKeyboardShown = false
+        keyboardSettlesBy = nil
+        keyboardLayoutMatch = nil
+        wakeKeyboardWaiters()
     }
 
     /// The keyboard's top edge from OverlayHostingController's keyboard layout guide, which sits on the
@@ -1435,7 +1573,7 @@ final class AnnotateController {
             NotificationCenter.default.removeObserver(observer)
         }
         keyboardObservers = []
-        isKeyboardShown = false
+        keyboardDidHide()
     }
 
     private func removeAnnotation(id: UUID) {
@@ -1466,7 +1604,13 @@ final class AnnotateController {
                     if self.delivery?.isFinal == false { self.delivery = nil }
                     return
                 }
-                guard let status = SessionInbox.readStatus(id: id, in: output) else {
+                // A file read and JSON decode, every second for up to an hour: off the main actor
+                let read = await Task.detached(priority: .utility) {
+                    SessionInbox.readStatus(id: id, in: output)
+                }.value
+                // A newer Send cancels this loop; a status read for the old one mustn't narrate over it
+                guard !Task.isCancelled else { return }
+                guard let status = read else {
                     // Nobody picked it up: say so briefly, then go back to idle. Polling goes on,
                     // because a watcher started late still claims the bundle.
                     if elapsed > self.options.unclaimedAfter, case .sent = self.delivery {
@@ -1566,7 +1710,9 @@ final class AnnotateController {
                     return (AgentPresenceFile.read(in: output), AgentPresenceFile.heartbeatAge(in: output))
                 }.value
                 guard let self, !Task.isCancelled else { return }
-                if self.agent != presence {
+                // Not `!=`: `updatedAt` moves with every heartbeat, so that reassigned `agent` every few
+                // seconds and redrew the pill, hint line and sheets while idle
+                if !Self.isSamePresence(self.agent, presence) {
                     self.agent = presence
                 }
                 let link = AgentLink.resolve(hasRead: true, presence: presence, heartbeatAge: age)
@@ -1576,6 +1722,14 @@ final class AnnotateController {
                 try? await Task.sleep(for: .seconds(AgentPresenceFile.interval))
             }
         }
+    }
+
+    /// Equal but for `updatedAt`, which nothing displays: freshness comes from the file's date
+    /// (`AgentPresenceFile.heartbeatAge`), not from it.
+    private static func isSamePresence(_ lhs: AgentPresence?, _ rhs: AgentPresence?) -> Bool {
+        guard let lhs, var rhs else { return lhs == nil && rhs == nil }
+        rhs.updatedAt = lhs.updatedAt
+        return lhs == rhs
     }
 
     /// Shows the gestures hint for `ReviewHint.introHold`, then lets the line settle on the connection.
@@ -1596,7 +1750,8 @@ final class AnnotateController {
     }
 
     /// Presence pauses in the background: nobody sees the dot, and on a device a stale `app.json`
-    /// is what tells the Mac to poll slowly. Becoming active re-checks the pill's placement.
+    /// is what tells the Mac to poll slowly. Placement checks rest while the app isn't active;
+    /// becoming active re-checks the pill's placement and resumes them.
     private func observeLifecycle() {
         guard lifecycleObservers.isEmpty else { return }
         let center = NotificationCenter.default
@@ -1609,7 +1764,11 @@ final class AnnotateController {
             },
             // Back from the app switcher or a system alert, the screen may have changed meanwhile
             center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.refreshLauncherPlacement() }
+                MainActor.assumeIsolated { self?.resumePlacementChecks() }
+            },
+            // Inactive or in the background, every check would be skipped: rest the loop instead
+            center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.stopPlacementChecks() }
             }
         ]
     }

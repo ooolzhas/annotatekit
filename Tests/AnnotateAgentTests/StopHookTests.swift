@@ -69,6 +69,28 @@ import Testing
         #expect(StopHook.openSessions(in: output).map(\.id) == [working])
     }
 
+    @Test("a Send from before the app's tracking window isn't read, even with a fresh status")
+    func openSessionsSkipOldSends() throws {
+        let output = try AgentFixtures.tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        let old = SessionWriter.makeSessionID(date: Date().addingTimeInterval(-3 * StopHook.trackingLimit))
+        try AgentFixtures.writeSession(id: old, to: output, withImages: false)
+        try SessionInbox.writeStatus(SessionStatus(state: .working), id: old, in: output)
+        let recent = try Self.session(output, state: .working)
+        #expect(StopHook.openSessions(in: output).map(\.id) == [recent])
+    }
+
+    @Test("the second stop goes through before the transcript is read")
+    func stopHookActiveSkipsTheTranscript() throws {
+        let output = try AgentFixtures.tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        let id = try Self.session(output, state: .working)
+        let transcript = output.appendingPathComponent("t.jsonl")
+        try "annotate status \(id) working".write(to: transcript, atomically: true, encoding: .utf8)
+        #expect(StopHook.run(input: Self.input(cwd: output, transcript: transcript, active: true),
+                             explicitDirectory: output.path, workingDirectory: output.path) == nil)
+    }
+
     @Test("no sessions folder or unreadable input lets Claude stop")
     func missingInputsNeverBlock() throws {
         let empty = try AgentFixtures.tempDir()

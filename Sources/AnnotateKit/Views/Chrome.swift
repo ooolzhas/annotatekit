@@ -882,23 +882,13 @@ struct StatusIndicator: View {
             .accessibilityHidden(true)
     }
 
-    @ViewBuilder
     private var halo: some View {
-        let wave = Circle()
-            .fill(color)
-            .opacity(Self.haloOpacity)
-            .frame(width: Self.haloSize, height: Self.haloSize)
-        if reduceMotion {
-            wave
-        } else {
-            wave.phaseAnimator([false, true]) { content, isSwollen in
-                content
-                    .scaleEffect(isSwollen ? 1 : Self.haloRestScale)
-                    .blur(radius: isSwollen ? Self.haloBlur : 0)
-            } animation: { _ in
-                .easeInOut(duration: Self.haloHalfPeriod)
-            }
-        }
+        // Core Animation, not a phaseAnimator: this sits on the idle launcher pill (StatusHalo.swift)
+        StatusHalo(
+            color: color, size: Self.haloSize, opacity: Self.haloOpacity, restScale: Self.haloRestScale,
+            halfPeriod: Self.haloHalfPeriod, blur: Self.haloBlur, animates: !reduceMotion
+        )
+        .frame(width: Self.haloSize, height: Self.haloSize)
     }
 }
 #endif

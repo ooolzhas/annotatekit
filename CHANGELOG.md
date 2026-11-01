@@ -6,13 +6,65 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-01
+
 ### Fixed
+- The stroke under the finger is drawn by a `CAShapeLayer` instead of a screen-sized SwiftUI
+  `Canvas`, which re-rendered through Metal on the main thread for every drag sample. On an iPhone 15
+  Pro at 120 Hz: 2.9 → 2.0 ms of main-thread time per sample with 8 pins, 2.3 → 1.75 ms with none.
 - The first time annotate mode opened after installing the app, the review bar, dim and edge glow
   appeared already in place instead of sliding and fading in. Drawing the glow's blurred edge mask
   held the main thread for ~250 ms, longer than the 0.3s entrance; the mask is now a small bitmap
   drawn once with Core Graphics.
+- `annotate hook stop` took seconds on every Claude stop in long conversations (19 s with a 215 MB
+  transcript and three open Sends): it decoded the whole transcript into a String and searched it
+  once per open Send. It now maps the file and searches bytes (0.13 s), reads only Sends from the
+  app's tracking window, and returns before reading anything on the second stop.
+- Sends mirrored from a device were never pruned on the Mac, and every watcher re-read each
+  session's status.json twice a second, so idle CPU grew with every Send. The mirror now prunes
+  like the app does (newest 30, never inside the 48-hour history window), and the reply scan skips
+  sessions without replies.json before decoding anything.
+- The device mirror listed every development build on a paired phone once a minute forever, all
+  at the same moment. Builds that never answer now back off to 16 minutes, and repeat cold
+  listings go one per tick so they can't hold up a Send from the open app. devicectl dates no
+  longer build a formatter per listed file.
+- The status dot's breathing halo on the launcher pill was a SwiftUI `phaseAnimator`, so a DEBUG
+  build spent ~5% of a core re-rendering every frame for as long as the pill showed. It's now a
+  Core Animation layer (render server, ~0% app CPU idle) with the same breath.
+- Drawing re-ran the whole overlay on every touch sample (every pin's sketch placement and badge),
+  so a stroke got slower with each pin on screen. The live stroke now has its own view and grows in
+  place: 2.8 ms of main-thread time per sample whatever the pin count (was 5.3 ms with 8 pins and
+  7.6 ms with 16, simulator).
+- Picked photos were decoded and downscaled on the main thread (a visible freeze per 12–48 MP
+  photo); ImageIO now does it off the main thread, and the card's tiles show small thumbnails
+  instead of 2048 px images.
+- Idle work while annotate mode is closed: agent heartbeats no longer redraw the pill every 3 s, the
+  launcher's chrome check backs off to 5 s and rests while annotating or in the background, delivery
+  tracking reads status.json off the main thread, and closing annotate mode releases the frozen
+  screen's full-resolution capture when it has no pins.
+- Typing a comment re-ran the whole overlay on every keystroke (frozen screen, every pin marker and
+  the bottom chrome), because the text lived on the open pin. It now has its own property, so only
+  the comment card updates: per 68-character comment with 8 pins, `ActiveOverlay` and
+  `BottomChrome` re-render 1–2 times instead of 69, and main-thread time drops from ~10.6 to
+  ~8.6 ms per keystroke (simulator).
+- With the comment keyboard up, a tap or a saved drawing compared the app's whole element outline
+  against the frozen screen, and if the app had moved for the keyboard, repeated that walk every
+  25 ms until it went away. The comparison now runs once per keyboard position and the wait wakes
+  on the keyboard's own notifications: 72 outline walks for 6 such taps become 6, with the same
+  tap-to-selection time. Screens whose accessibility node count never settles (UIKit-only) now keep
+  the warm-up's last walk as their reference instead of none.
+- Every DEBUG launch drew all of the app's windows 5 times a second, for up to 8 s on a screen that
+  never stops moving, before showing the Annotate pill. The pill's reveal now samples twice a second
+  and gives up after 3 s (at most 7 captures instead of 41, ~6.5 ms each): ~360 ms less main-thread
+  time in the first 10 s on an animated screen. `ANNOTATE=1` launch-time starts keep the full
+  settle.
 
 ### Changed
+- Annotate mode's moving color (the edge glow's turning rings and the frost's drifting blobs) now
+  runs on Core Animation instead of a SwiftUI timeline redrawn at 30 fps on the main thread. With
+  annotate mode open and nothing happening, the app's CPU drops to its idle level (Simulator: ~1.2
+  to ~0.45 CPU-seconds per 10 s), and the motion is smoother at the display's own frame rate. Same
+  look, periods and Reduce Motion behavior.
 - The edge glow and the frost behind the bottom bar are one color each, varied by opacity: the
   accent blue normally and the indicators' green while the agent works (no more cyan/indigo or
   mint/teal passages).
@@ -236,7 +288,8 @@ First release.
   tracking and the text outline all start on first use.
 - Send renders, encodes and writes off the main thread, in 8-bit sRGB.
 
-[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/ooolzhas/annotatekit/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ooolzhas/annotatekit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ooolzhas/annotatekit/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/ooolzhas/annotatekit/compare/v0.2.0...v0.2.1
