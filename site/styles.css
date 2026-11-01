@@ -835,7 +835,6 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 .code-block .copy {
   position: absolute;
   top: 10px; right: 10px;
-  background: var(--bg);
 }
 /* With a mouse, the copy button appears on hover or keyboard focus. */
 .tk-key { color: var(--tk-key); font-weight: 500; }
@@ -906,7 +905,7 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
 }
 /* The copy button floats over the end of the field; the text fades out just before it, and a command
    longer than the field scrolls (its end padding lets the last characters clear the fade). */
-.cmd .copy { position: absolute; top: 8px; right: 8px; background: var(--bg); }
+.cmd .copy { position: absolute; top: 8px; right: 8px; }
 /* The setup prompt runs 16px past the column in Geist Mono; a hair of tracking keeps it on one line. */
 .cmd.quote code { letter-spacing: -0.32px; }
 /* The setup prompt wears the blue highlight of inline `code.hl`; its copy icon takes the same ink. */
