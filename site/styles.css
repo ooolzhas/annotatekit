@@ -226,10 +226,13 @@ h2 {
   letter-spacing: -0.08px;
 }
 /* Hand-drawn rule: an uneven path stretched to the heading's width; non-scaling-stroke keeps the
-   line the same thickness at any length. */
+   line the same thickness at any length. It rests on the text baseline: centered in the 22px line its
+   midline sits ~0.3em above Geist's baseline, so it drops by that. (An empty flex item has no baseline
+   of its own, so align-self: baseline would pin it to the top instead.) */
 h2::after {
   content: "";
   flex: 1;
+  translate: 0 0.3em;
   height: 8px;
   background: var(--text-faint);
   opacity: 0.55;
@@ -832,9 +835,11 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   border-radius: 14px;
   background: var(--code-bg);
 }
+/* Same inset as .cmd .copy, so every copy button lines up: its center lands on the first line's
+   center (16px padding + half the 20px line = 26px = 8px + half the 36px button). */
 .code-block .copy {
   position: absolute;
-  top: 10px; right: 10px;
+  top: 8px; right: 8px;
 }
 /* With a mouse, the copy button appears on hover or keyboard focus. */
 .tk-key { color: var(--tk-key); font-weight: 500; }
@@ -1167,7 +1172,7 @@ main .note a { color: inherit; }
 /* Touch: copy buttons get the 44pt minimum */
 @media (pointer: coarse) {
   .copy { min-width: 44px; height: 44px; padding: 0 13px; }
-  .cmd .copy { top: 4px; right: 4px; }
+  .cmd .copy, .code-block .copy { top: 4px; right: 4px; }
 }
 
 @media (max-width: 520px) {
