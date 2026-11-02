@@ -211,14 +211,14 @@ screen_items.append(rect(0, 0, 402, 874, 0, BG, name="Screen bg")[0])
 def status_bar():
     out = []
     out.append(text(62, 32, "10:09", 17, 600, name="Clock", ox=0.5)[0].replace('x="62"', 'x="77"'))
-    # cellular bars
-    for i, h in enumerate((4, 6, 8.5, 11)):
-        out.append(rect(300 + i * 4.4, 38 - h, 3, h, 1, "FF000000", name="Bar")[0])
-    # wifi: three arcs approximated by a small filled wedge
-    out.append(poly([(325, 29.5), (332.5, 29.5), (329, 37)], None, 0, closed=True, fill="FF000000", name="Wifi")[0])
-    # battery
-    out.append(rect(346, 27, 25, 12, 3.8, None, stroke="66000000", sw=1, name="Battery")[0])
-    out.append(rect(348, 29, 21, 8, 2.2, "FF000000", name="Charge")[0])
+    # Figma "Levels" frame: cellular, wifi and battery at x 277.3 / 303.6 / 327.3 (State coords), 12.3pt tall, bottom at 38.3
+    for i, h in enumerate((4.5, 6.5, 9.0, 12.3)):
+        out.append(rect(277.3 + i * 5.45, 38.3 - h, 3, h, 1, "FF000000", name="Bar")[0])
+    fan = [(312 + 11.5 * math.cos(math.radians(a)), 38.3 + 11.5 * math.sin(math.radians(a))) for a in range(-135, -44, 10)]
+    out.append(poly([(312, 38.3)] + [(round(x, 2), round(y, 2)) for x, y in fan], None, 0, closed=True, fill="FF000000", name="Wifi")[0])
+    out.append(rect(327.3, 25.7, 24.5, 12.6, 4, None, stroke="59000000", sw=1, name="Battery")[0])
+    out.append(rect(329, 27.4, 21.2, 9.2, 2.6, "FF000000", name="Charge")[0])
+    out.append(rect(352.6, 29.8, 1.8, 4.6, 0.9, "59000000", name="Battery cap")[0])
     return out
 
 screen_items.extend(status_bar())
@@ -245,9 +245,9 @@ stat2_sub, stat2_sub_id = rect(156, 54, 48, 12, 6, SKEL, name="Stat 2 sub")
 act_items.append(stat2_sub)
 bars = [(16, 56, 24), (64.9, 29, 51), (113.7, 47, 33), (162.6, 39, 41), (211.4, 65, 15), (260.3, 53, 27)]
 for bx, by, bh in bars:
-    act_items.append(rect(16 + bx + 4 - 16, 90 + by, 44.9, bh, 12, SKEL, name="Bar")[0])
-tall_gray, tall_gray_id = rect(16 + 309.1 + 4 - 16, 90, 44.9, 80, 12, SKEL, name="Tall bar")
-tall_blue, tall_blue_id = rect(16 + 309.1 + 4 - 16, 90, 44.9, 80, 12, BLUE, name="Tall bar blue", opacity=0)
+    act_items.append(rect(16 + bx, 90 + by, 44.9, bh, 12, SKEL, name="Bar")[0])
+tall_gray, tall_gray_id = rect(16 + 309.1, 90, 44.9, 80, 12, SKEL, name="Tall bar")
+tall_blue, tall_blue_id = rect(16 + 309.1, 90, 44.9, 80, 12, BLUE, name="Tall bar blue", opacity=0)
 act_items.append(tall_gray)
 act_items.append(tall_blue)
 act_node, act_id = node(act_items, 0, 222, name="Activity")
@@ -258,15 +258,14 @@ list_items = [rect(16, 0, 370, 128, 28, CARD, name="List card")[0]]
 for ry, w1, w2 in ((0, 128, 58), (64, 96, 90)):
     list_items.append(ellipse(36 + 16, ry + 32, 32, 32, SKEL, name="Avatar")[0])
     list_items.append(rect(16 + 68, ry + 24, w1, 16, 8, SKEL, name="Row text")[0])
-    list_items.append(rect(16 + (212 if ry == 0 else 180), ry + 24, w2, 16, 8, SKEL, name="Row meta")[0])
     list_items.append(rect(16 + 286, ry + 24, 64, 16, 8, SKEL, name="Row value")[0])
 list_items.append(rect(16 + 68, 64, 302, 1, 0, "FFF0F0F0", name="Divider")[0])
 list_node, list_id = node(list_items, 0, 432, name="List")
 screen_items.append(list_node)
 
 # primary button (y 584): gray, with a blue copy that fades in
-btn_items = [rect(16, 0, 370, 64, 32, BTN, name="Button")[0], rect(16 + 105, 20, 128, 24, 6, BTN_IN, name="Button label")[0]]
-btn_blue = [rect(16, 0, 370, 64, 32, BLUE, name="Button blue")[0], rect(16 + 105, 20, 128, 24, 6, "FF40A6FF", name="Button label blue")[0]]
+btn_items = [rect(16, 0, 370, 64, 32, BTN, name="Button")[0], rect(16 + 121, 20, 128, 24, 6, BTN_IN, name="Button label")[0]]
+btn_blue = [rect(16, 0, 370, 64, 32, BLUE, name="Button blue")[0], rect(16 + 121, 20, 128, 24, 6, "FF40A6FF", name="Button label blue")[0]]
 btn_gray_node, btn_gray_id = node(btn_items, 0, 584, name="Button group")
 btn_blue_node, btn_blue_id = node(btn_blue, 0, 584, name="Button group blue", opacity=0)
 screen_items.append(btn_gray_node)
@@ -459,6 +458,8 @@ card.append(poly([(396, ROW + 8), (396, ROW - 2), (402, ROW - 8), (412, ROW - 8)
 card.append(poly([(406, ROW - 13), (413, ROW - 8), (406, ROW - 3)], "FF111111", 2.6, name="Redo head")[0])
 # paperclip: a long capsule outline with an inner hook
 card.append(poly([(60, ROW + 9), (72, ROW - 3), (75, ROW - 12), (68, ROW - 14), (56, ROW - 2), (54, ROW + 6), (59, ROW + 13), (67, ROW + 12), (78, ROW + 1)], "FF111111", 2.4, radius=4, name="Clip")[0])
+card.append(poly([(478, ROW + 9), (478, ROW - 9)], "40000000", 3, name="Dim stem")[0])
+card.append(poly([(478 - 9, ROW - 1), (478, ROW - 10), (478 + 9, ROW - 1)], "40000000", 3, name="Dim head")[0])
 card_send_blue = ellipse(478, ROW, 66, 66, BLUE, name="Card send blue", opacity=0)
 card.append(card_send_blue[0])
 card.append(node([poly([(478, ROW + 9), (478, ROW - 9)], "FFFFFFFF", 3, name="Stem")[0],
