@@ -563,9 +563,10 @@ main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
 /* On a phone a 3:2 board leaves the demo phone ~175pt tall. Held upright, the board turns 2:3 so the
    recording fills most of the screen (~475pt on a 375pt phone). Anything else under tablet width (a
    narrow window, a phone on its side) gets a full-width square. 440px is the widest iPhone. Tablets keep
-   the 3:2 board. */
+   the 3:2 board. Below tablet width the corners halve too: 32px reads as a pill edge on a board this
+   narrow. (edge.js traces the boiling edge from the computed radius, so it follows.) */
 @media (max-width: 560px) {
-  .hero-media { aspect-ratio: 1 / 1; }
+  .hero-media { aspect-ratio: 1 / 1; border-radius: 16px; }
 }
 @media (max-width: 440px) and (orientation: portrait) {
   .hero-media { aspect-ratio: 2 / 3; max-height: 85svh; }
