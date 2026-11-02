@@ -24,14 +24,17 @@
 
 /* ---------- Glass ----------
    Figma's Liquid Glass, per shape. Its stacked fills (black 25%, white 25%, #444 60% plus-lighter, #F8F8F8 20%
-   luminosity) come out, measured against Figma's own render, as the backdrop lifted linearly (x 1.115 + 37), which
-   contrast(.792) then brightness(1.408) reproduce on the blurred backdrop itself, so no blend modes are needed. The rim and inner shadows are the component's
+   luminosity) come out, measured against Figma's own render, as the backdrop lifted linearly (x 1.115 + 37). The
+   recording is transparent outside the phone, where there's no backdrop to lift, so 30% of that is a light fill
+   (which is what shows over the site's board) and the rest is contrast(1.344) brightness(1.185) on the blurred
+   backdrop: 0.7 * (1.593x - 52) + 0.3 * 245 = 1.115x + 37. The rim and inner shadows are the component's
    (light at the top and bottom edges), and the darker bands near the ends stand in for its refraction. --k is the
    component's scale (the card is the 1.5x variant). */
 .reel-glass, .reel-glass-rim { position: absolute; }
 .reel-glass {
-  -webkit-backdrop-filter: blur(12px) contrast(.792) brightness(1.46) saturate(.6);
-  backdrop-filter: blur(12px) contrast(.792) brightness(1.46) saturate(.6);
+  -webkit-backdrop-filter: blur(12px) contrast(1.344) brightness(1.185) saturate(.6);
+  backdrop-filter: blur(12px) contrast(1.344) brightness(1.185) saturate(.6);
+  background: rgba(245, 245, 245, .3);
   box-shadow: 0 calc(12px * var(--k)) calc(22.5px * var(--k)) rgba(0, 0, 0, .02);
 }
 .reel-glass-rim {
@@ -43,7 +46,10 @@
     inset calc(-18px * var(--k)) 0 calc(14px * var(--k)) calc(-10px * var(--k)) rgba(0, 0, 0, .07);
 }
 
-/* the working pins' spinners (Figma draws them as a static conic fade): eight spokes, stepped like iOS's */
-.reel-spin { transform-box: fill-box; transform-origin: center; animation: reel-spin .9s steps(8) infinite; }
+/* the working pins' spinners: the system's ProgressView (Chrome.swift:253), eight spokes stepping round once a second */
+.reel-spin { transform-box: fill-box; transform-origin: center; animation: reel-spin 1s steps(8) infinite; }
+/* the status dot's halo breathes: scale 0.5 <-> 1, half period 1 s, ease-in-out (StatusHalo.swift:137-174) */
+.reel-halo { transform-box: fill-box; transform-origin: center; animation: reel-halo 1s ease-in-out infinite alternate; }
+@keyframes reel-halo { from { transform: scale(.5); } to { transform: scale(1); } }
 @keyframes reel-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .reel-spin { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .reel-spin, .reel-halo { animation: none; } }

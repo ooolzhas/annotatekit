@@ -17,7 +17,7 @@ import re
 from xml.dom import minidom
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "..", "site", "reel-layers.js")
+OUT = os.path.join(HERE, "page", "reel-layers.js")
 DOCS = {k: minidom.parse(os.path.join(HERE, "figma", f"{k}.svg")) for k in ("f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8")}
 WIDE = {"f3", "f4"}   # exported 546 wide (card overhang); the rest are 418 wide
 
@@ -106,6 +106,7 @@ def layer(name, frame, nodes, clip=True, glass=False):
         svg = svg.replace(f'id="{i}"', f'id="{p}-{i}"').replace(f"url(#{i})", f"url(#{p}-{i})").replace(f'href="#{i}"', f'href="#{p}-{i}"')
     svg = re.sub(r'\s(id)="[^"]*-(?:[^"]*[^\x00-\x7f][^"]*)"', "", svg)          # drop mojibake layer-name ids
     svg = re.sub(r">\s+<", "><", svg)
+    svg = re.sub(r'(<g id="[^"]*-Pulsing Wave)"', r'\1" class="reel-halo"', svg)   # the status dot's breathing halo
     # Figma draws the spinner's conic fade as a clipped <foreignObject>; Chrome mis-places it once the pin has a
     # filter, and the spokes are drawn again right after it anyway, so keep the plain spokes only
     def spokes(m):   # the clip path is the spinner's eight spokes: draw them as a plain white shape that CSS spins
@@ -145,17 +146,58 @@ for f in ("f3", "f5", "f6", "f7"):
 for f in ("f2", "f5", "f6", "f7"):
     add(layer(f"hint{f[1]}", f, [in1027(f, "HStack")]))
 for f in ("f2", "f5", "f6"):
-    add(layer(f"toolbar{f[1]}", f, [in1027(f, "Interactive")], glass=True))
-# the beats of frame 2 one by one: the title loop, the bar's selection and the two pins
+    tb = in1027(f, "Interactive").cloneNode(True)
+    if f == "f2":   # "2 notes" appears with the second pin (the count text animates on its own, snappy 0.2)
+        count = [p for p in tb.getElementsByTagName("path") if p.getAttribute("id") == "2 notes"][0]
+        add(layer("count2", f, [count.cloneNode(True)]))
+        count.parentNode.removeChild(count)
+    add(layer(f"toolbar{f[1]}", f, [tb], glass=True))
+# Marks. Selections and the loop come from frames 2 and 3 with their pins taken out; every pin is cut per state
+# (f2/f3 number or "+", f6 spinner, f7 check) into its disc and its glyph, so a state change can crossfade the disc
+# and scale the glyph the way the overlay does (PinBadge: glyph scale 0.5 + opacity, snappy 0.25).
+PIN_AT = {1: (171, 166), 2: (370, 348), 3: (137, 616)}   # pin centres in phone-frame coordinates
+
+
+def is_marker(n):
+    return n.nodeType == 1 and n.tagName == "g" and (n.getAttribute("id") or "").startswith("Marker")
+
+
+def without_markers(node):
+    n = node.cloneNode(True)
+    for m in [g for g in n.getElementsByTagName("g") if is_marker(g)]:
+        m.parentNode.removeChild(m)
+    return n
+
+
+def pin_of(marker, frame):
+    d = marker.getElementsByTagName("path")[0].getAttribute("d")
+    x, y = map(float, re.match(r"M([\d.]+) ([\d.]+)", d).groups())
+    x -= 64 if frame in WIDE else 0
+    cx, cy = x + 14, y
+    return min(PIN_AT, key=lambda k: (PIN_AT[k][0] - cx) ** 2 + (PIN_AT[k][1] - cy) ** 2)
+
+
+def is_glyph(c):
+    return c.nodeType == 1 and (c.getAttribute("fill") == "white" or "angular" in (c.getAttribute("clip-path") or ""))
+
+
+f1027 = lambda f: child(screen_group(DOCS[f]), "Frame 1027")
 add(layer("loop", "f2", [in1027("f2", "Ellipse 1")]))
-add(layer("sel2", "f2", [in1027("f2", "Selection 1")]))
-add(layer("pin1", "f2", [in1027("f2", "Marker 1")]))
-add(layer("pin2", "f2", [in1027("f2", "Marker 2")]))
-# frame 3's new mark (the button's selection and its "+" pin), then whole mark sets per frame
-f3new = [n for n in marks("f3") if (n.getAttribute("id") or "") in ("Selection 2", "Marker 2_2")]
-add(layer("sel3", "f3", f3new))
-for f in ("f5", "f6", "f7"):
-    add(layer(f"marks{f[1]}", f, marks(f)))
+add(layer("sel2", "f2", [without_markers(in1027("f2", "Selection 1"))]))
+add(layer("sel3", "f3", [without_markers(in1027("f3", "Selection 2"))]))
+for f in ("f2", "f3", "f6", "f7"):
+    for m in [g for g in f1027(f).getElementsByTagName("g") if is_marker(g)]:
+        n = pin_of(m, f)
+        if f == "f3" and n != 3:
+            continue
+        disc = m.cloneNode(True)
+        for c in [c for c in disc.childNodes if is_glyph(c)]:
+            disc.removeChild(c)
+        glyph = DOCS[f].createElement("g")
+        for c in [c for c in m.childNodes if is_glyph(c)]:
+            glyph.appendChild(c.cloneNode(True))
+        add(layer(f"pin{n}s{f[1]}disc", f, [disc]))
+        add(layer(f"pin{n}s{f[1]}glyph", f, [glyph]))
 # the glass card: placeholder (f3) and typed (f4); the typed text on its own so it can be revealed letter by letter
 card3 = by_id(DOCS["f3"], "HStack", "Frame 1044")
 card4 = by_id(DOCS["f4"], "HStack", "Frame 1044")

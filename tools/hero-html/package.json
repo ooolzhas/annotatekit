@@ -1,0 +1,8 @@
+{
+  "name": "annotatekit-hero-reel",
+  "private": true,
+  "description": "Records tools/hero-html/page to frames for site/demo.mov and site/demo.webm",
+  "type": "module",
+  "scripts": { "record": "node record.mjs" },
+  "devDependencies": { "puppeteer-core": "24.10.0" }
+}

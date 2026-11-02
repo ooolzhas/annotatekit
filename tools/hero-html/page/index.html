@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- The hero reel's source: the Figma storyboard as live layers on a fixed 546 x 890pt stage (the 418 x 890 phone plus
+     64pt each side for the overhanging glass card), recorded in a 546 x 970 frame so the phone's shadow has 40pt of room
+     above and below. record.mjs seeks it frame by frame and screenshots it with a
+     transparent background; it never ships in site/. Open it with any static server to watch it play. -->
+<meta charset="utf-8">
+<title>Hero reel</title>
+<link rel="stylesheet" href="reel.css">
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  .hero-phone { position: relative; width: 546px; height: 890px; margin-top: 40px; }
+  body { height: 970px; }
+  body.preview { background: #2f6fe0; }   /* ?preview: a stand-in for the site's blueprint board */
+</style>
+<div class="hero-phone"></div>
+<script>
+  if (location.search.includes("preview")) document.body.classList.add("preview");
+  if (location.search.includes("record")) window.reelPaused = true;
+</script>
+<script src="reel-layers.js"></script>
+<script src="reel.js"></script>

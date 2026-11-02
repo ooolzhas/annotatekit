@@ -282,18 +282,20 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   background-color: var(--accent);
   isolation: isolate;   /* the grain's screen blend stays inside the sheet */
 }
-/* The iPhone demo, centered with 32px above and below: reel.js draws the Figma storyboard on a 546 x 890pt stage, the
-   418 x 890 phone plus 64pt each side where the glass card overhangs it, scaled to this box's height. The negative
-   margins keep the layout the size of the phone alone, so the overhang bleeds into the gap beside it. */
+/* The iPhone demo, centered with 32px above and below. demo.webm / demo.mov are transparent recordings of the whole
+   phone (bezel, shadow and screen) in Figma points (--u is one point): the 418 x 890 phone sits in a 546 x 970 clip,
+   with 64pt each side where the glass card overhangs it and 40pt above and below for its shadow (tools/hero-html).
+   The negative margins keep the layout the size of the phone alone, so the overhang bleeds into the gap beside it. */
 .hero-media { container-type: size; display: grid; place-items: center; }
 .hero-phone {
   --u: calc((100cqh - 64px) / 890);
   position: relative;
   z-index: 1;   /* above the paper grain */
-  height: calc(890 * var(--u));
-  aspect-ratio: 546 / 890;
-  margin: 0 calc(-64 * var(--u));
+  height: calc(970 * var(--u));
+  aspect-ratio: 546 / 970;
+  margin: calc(-40 * var(--u)) calc(-64 * var(--u));
 }
+.hero-phone video { display: block; width: 100%; height: 100%; }
 /* Static grid, centered: each 1px line sits mid-tile and the tiles are centered on the sheet, so a
    major line runs through the exact middle both ways and the grid is symmetric. It fades out over
    the outer 24px, so no line runs along an edge. */
