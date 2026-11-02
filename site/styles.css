@@ -226,10 +226,13 @@ h2 {
   letter-spacing: -0.08px;
 }
 /* Hand-drawn rule: an uneven path stretched to the heading's width; non-scaling-stroke keeps the
-   line the same thickness at any length. */
+   line the same thickness at any length. It rests on the text baseline: centered in the 22px line its
+   midline sits ~0.3em above Geist's baseline, so it drops by that. (An empty flex item has no baseline
+   of its own, so align-self: baseline would pin it to the top instead.) */
 h2::after {
   content: "";
   flex: 1;
+  translate: 0 0.3em;
   height: 8px;
   background: var(--text-faint);
   opacity: 0.55;
@@ -558,12 +561,14 @@ main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
   main:has(.hero-media) { --hero-gap: 28px; }
 }
 /* On a phone a 3:2 board leaves the demo phone ~175pt tall. Held upright, the board turns 2:3 so the
-   recording fills most of the screen (~475pt on a 375pt phone); a narrow window that isn't portrait gets
-   a square. Tablets keep the 3:2 board. */
+   recording fills most of the screen (~475pt on a 375pt phone). Anything else under tablet width (a
+   narrow window, a phone on its side) gets a full-width square. 440px is the widest iPhone. Tablets keep
+   the 3:2 board. Below tablet width the corners halve too: 32px reads as a pill edge on a board this
+   narrow. (edge.js traces the boiling edge from the computed radius, so it follows.) */
 @media (max-width: 560px) {
-  .hero-media { aspect-ratio: 1 / 1; }
+  .hero-media { aspect-ratio: 1 / 1; border-radius: 16px; }
 }
-@media (max-width: 560px) and (orientation: portrait) {
+@media (max-width: 440px) and (orientation: portrait) {
   .hero-media { aspect-ratio: 2 / 3; max-height: 85svh; }
 }
 /* Too narrow for side by side: the phone stays centered and, just before the send, the terminal slides in
@@ -644,6 +649,9 @@ h1 + h2 { margin-top: 40px; }
   --ul-1: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M1.3 2.9C60.6 1.8 118.1 3.8 176.2 2.8S260.1 2.3 296.3 3.2' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M5.7 8.4C68.5 7 130.5 9.2 196.3 7.5S271.9 7 295.4 8.2' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
   --ul-2: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M3.7 3.6C61.6 1.8 118.4 3.8 178.1 2.5S260.8 2.4 296.9 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M4.1 7.7C70.8 7.1 130.1 9 195.4 7.2S271.1 7.5 294.6 8.5' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
   padding-bottom: 7px;
+  /* The phrase stays whole (~226px, inside even a 320pt phone's column): balance alone splits it in
+     Safari, which leaves half an underline on each line. */
+  white-space: nowrap;
   /* Two page-colored covers over the drawn lines (top half, bottom half) shrink toward the right
      one after the other on load, so line 1 draws, then line 2. At rest the covers are 0 wide. */
   background:
@@ -832,9 +840,11 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   border-radius: 14px;
   background: var(--code-bg);
 }
+/* Same inset as .cmd .copy, so every copy button lines up: its center lands on the first line's
+   center (16px padding + half the 20px line = 26px = 8px + half the 36px button). */
 .code-block .copy {
   position: absolute;
-  top: 10px; right: 10px;
+  top: 8px; right: 8px;
 }
 /* With a mouse, the copy button appears on hover or keyboard focus. */
 .tk-key { color: var(--tk-key); font-weight: 500; }
@@ -1167,7 +1177,7 @@ main .note a { color: inherit; }
 /* Touch: copy buttons get the 44pt minimum */
 @media (pointer: coarse) {
   .copy { min-width: 44px; height: 44px; padding: 0 13px; }
-  .cmd .copy { top: 4px; right: 4px; }
+  .cmd .copy, .code-block .copy { top: 4px; right: 4px; }
 }
 
 @media (max-width: 520px) {
