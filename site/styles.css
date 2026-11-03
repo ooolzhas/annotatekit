@@ -271,16 +271,17 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
    It overhangs the text by up to 128px a side, never closer than 16px to the window edge. */
 .hero-media {
   --bleed: min(128px, calc((100vw - var(--col)) / 2 - 16px));
-  --grid-minor: rgba(255, 255, 255, 0.14);
-  --grid-major: rgba(255, 255, 255, 0.28);
+  --grid-minor: rgba(10, 132, 255, 0.10);
+  --grid-major: rgba(10, 132, 255, 0.20);
   position: relative;
   overflow: hidden;
   aspect-ratio: 3 / 2;
   margin: 0 calc(-1 * var(--bleed)) var(--hero-gap);
   border-radius: 32px;
-  /* Blueprint: an accent-blue sheet with a white grid and white-ish grain. */
-  background-color: var(--accent);
-  isolation: isolate;   /* the grain's screen blend stays inside the sheet */
+  /* Blueprint lines and grain drawn straight on the page: no fill of its own. The sheet takes the page's colour
+     because the edge mask renders it as its own group, and the grain needs something inside it to blend with. */
+  background-color: var(--bg);
+  isolation: isolate;
 }
 /* The iPhone demo, centered with 32px above and below. demo.webm / demo.mov are transparent recordings of the whole
    phone (bezel, shadow and screen) in Figma points (--u is one point): the 418 x 890 phone sits in a 546 x 970 clip,
@@ -354,15 +355,12 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   overflow: hidden;
   /* No ring or shadow: the window sits flat on the sheet, set off by its own fill alone. */
 }
-/* Dark mode: a deep blueprint blue (the accent mixed into near-black), with the grid and grain stepped
-   down to suit the darker sheet. The sheet falls off into near-black away from the lamp's pool of light
-   (centered on the sheet), and the grid fades with it, so the lit middle reads like a desk at night. */
+/* Dark mode: white lines and light grain on the dark page, stepped down to suit it. The grid fades away from
+   the lamp's pool of light (centered on the sheet), so the lit middle reads like a desk at night. */
 @media (prefers-color-scheme: dark) {
   .hero-media {
     --grid-minor: rgba(255, 255, 255, 0.11);
     --grid-major: rgba(255, 255, 255, 0.22);
-    background-color: color-mix(in srgb, var(--accent) 40%, #03060d);
-    background-image: radial-gradient(ellipse 55% 75% at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
   }
   .hero-media::before {
     -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
@@ -374,7 +372,20 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
           radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
     mask-composite: intersect;
   }
-  main .hero-media::after { opacity: 0.35; }   /* beats the base grain rule further down */
+  /* Beats the base grain rule further down; masked like the grid, falling off away from the lamp */
+  main .hero-media::after {
+    opacity: 0.5;
+    mix-blend-mode: screen;
+    filter: brightness(0.4) contrast(4);
+    -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+                  linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+                  radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
+    -webkit-mask-composite: source-in;
+    mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+          linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+          radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
+    mask-composite: intersect;
+  }
 }
 @media (prefers-color-scheme: dark) {
   .hero-term {
@@ -451,14 +462,23 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 @keyframes term-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes term-rot { to { transform: rotate(360deg); } }
-/* Rough paper grain over the grid: screen-blended, so only its light flecks show, white on blue. */
+/* Rough paper grain over the grid, with no tint of its own: multiplied on the light page and pushed light
+   (brightness/contrast) so the paper stays the page's colour and only the darkest flecks show; dark mode screens
+   it, pushed dark, for light flecks only. It fades at the edges like the grid, so the sheet has no box edge. */
 .hero-media::after {
   content: "";
   position: absolute;
   inset: 0;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E") center / 150px 150px;   /* half scale: 300px tiles drawn at 150px */
-  opacity: 0.45;
-  mix-blend-mode: screen;
+  opacity: 0.6;
+  mix-blend-mode: multiply;
+  filter: brightness(2.4) contrast(1.4);
+  -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+                linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  -webkit-mask-composite: source-in;
+  mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+        linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-composite: intersect;
   pointer-events: none;
 }
 /* The grain cuts between three takes every 200ms (hard cuts, no tweens), the same cadence as the
