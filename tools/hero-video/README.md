@@ -8,7 +8,9 @@ grid, the phone and the Claude terminal, the same as the site, at a 16:9 aspect.
 2. `npm install`, then `node capture.mjs` (needs Google Chrome). It loads the real `site/index.html`, keeps only
    the hero, and fills a 960 × 540 viewport drawn at 2×. Every frame is pinned to its own time: the phone frame,
    the terminal's cues and slide, the line fades, the grid's boil and the live dot. So the capture is frame-exact at
-   60 fps, however long each frame takes to draw. It writes `out/frames/f0000.png …` in sRGB.
+   60 fps, however long each frame takes to draw. It writes `out/frames/f0000.png …` in sRGB. The sheet is full
+   bleed: there's no hand-drawn edge and no edge fade, and the grid sits half a cell off center (`--grid-shift-x`,
+   read by `site/grid.js`), so no line runs along the frame's edge.
 3. `./encode.sh` writes `out/annotatekit-hero-1080p60.mp4`: H.264 High 4.2, 4:2:0, tagged BT.709 with limited
    range, a 2 s closed GOP and faststart.
 

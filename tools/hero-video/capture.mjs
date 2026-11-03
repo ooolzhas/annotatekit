@@ -53,9 +53,17 @@ await page.evaluate(async (phoneBase) => {
   // Only the hero, filling the frame edge to edge
   document.body.replaceChildren(hero);
   const css = document.createElement("style");
+  // Full bleed: no hand-drawn sheet edge (edge.js) and no edge fade on the grid, so the lines run to the frame's
+  // edges; the grid keeps its three hand-drawn takes and their boil. 960px is exactly 40 cells, so the grid is
+  // shifted half a cell: a centered grid would put its outermost lines on the frame edges, where their wobble
+  // slips them in and out of view. The boil is set per frame in __step, not by the site's keyframes: Chrome resolves
+  // var() inside an animation's keyframes once, so they kept the takes traced before the sheet went full bleed.
   css.textContent = `
     html, body { margin: 0; overflow: hidden; background: var(--bg); }
-    .hero-media { width: 100vw; height: 100vh; aspect-ratio: auto; margin: 0; border-radius: 0; }
+    .hero-media, .hero-media.has-edge { --grid-shift-x: 12px; width: 100vw; height: 100vh; aspect-ratio: auto; margin: 0; border-radius: 0;
+      -webkit-mask: none !important; mask: none !important; animation: none !important; }
+    .hero-media.has-grid::before { -webkit-mask: var(--grid-take) 0 0 / 100% 100% no-repeat; mask: var(--grid-take) 0 0 / 100% 100% no-repeat;
+      animation: none; }
     .hero-phone img { display: block; width: 100%; height: 100%; }`;
   document.head.appendChild(css);
   const video = hero.querySelector(".hero-phone video");
@@ -80,6 +88,8 @@ await page.evaluate((split) => {
       l.classList.toggle("is-on", t >= parseFloat(l.dataset.at) && t < until);
     });
     board.classList.toggle("is-split", t >= split[0] && t < split[1]);
+    // The site's boil: a hard cut to the next take every 200ms
+    board.style.setProperty("--grid-take", board.style.getPropertyValue("--grid-" + (Math.floor(t / 0.2 + 1e-6) % 3)));
     getComputedStyle(board).transform;   // flush, so class changes start their transitions now
     for (const a of document.getAnimations()) {
       a.pause();
