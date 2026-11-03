@@ -1,0 +1,7 @@
+{
+  "name": "hero-video",
+  "private": true,
+  "type": "module",
+  "description": "Renders the annotatekit.com hero (grid, phone, terminal) as a 16:9 video",
+  "dependencies": { "puppeteer-core": "23.11.1" }
+}

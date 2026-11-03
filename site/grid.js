@@ -47,12 +47,15 @@
   function trace() {
     var w = board.clientWidth, h = board.clientHeight;
     if (!w || !h) return;
-    var key = w + " " + h;
+    // --grid-shift-x (px, optional) moves the grid off center; a full-bleed render uses it so no line sits on
+    // the frame's edge. The site leaves it unset.
+    var shift = parseFloat(getComputedStyle(board).getPropertyValue("--grid-shift-x")) || 0;
+    var key = w + " " + h + " " + shift;
     if (key === traced) return;
     traced = key;
 
     // Every line's own shape, shared by the three takes
-    var lines = [], random = rand(20261103), cx = w / 2, cy = h / 2;
+    var lines = [], random = rand(20261103), cx = w / 2 + shift, cy = h / 2;
     function wavesOf(list) { return list.map(function (wv) { return { l: wv[0] * (0.8 + 0.4 * random()), a: wv[1], p: random() * 6.283 }; }); }
     for (var k = -Math.ceil(cx / MINOR); cx + k * MINOR <= w; k++) {
       var x = cx + k * MINOR;
