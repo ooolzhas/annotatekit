@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-03
+
+First stable release: the public API (`Annotate.install`, `AnnotateOptions`, `AnnotateBridge`, the CLI
+commands and the session bundle described in SCHEMA.md) now follows Semantic Versioning.
+SwiftPM requirements written as `from: "0.x"` stop below 1.0; change them to `from: "1.0.0"`.
+
 ### Added
 - React Native and Expo apps (iOS only). The `annotate-ios` npm package now ships an
   `AnnotateKit.podspec` that React Native / Expo autolinking picks up, and an Expo config plugin
@@ -329,7 +335,8 @@ First release.
   tracking and the text outline all start on first use.
 - Send renders, encodes and writes off the main thread, in 8-bit sRGB.
 
-[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/ooolzhas/annotatekit/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ooolzhas/annotatekit/compare/v0.4.2...v1.0.0
 [0.4.2]: https://github.com/ooolzhas/annotatekit/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/ooolzhas/annotatekit/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ooolzhas/annotatekit/compare/v0.3.0...v0.4.0
