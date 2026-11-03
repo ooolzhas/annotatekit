@@ -271,15 +271,16 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
    It overhangs the text by up to 128px a side, never closer than 16px to the window edge. */
 .hero-media {
   --bleed: min(128px, calc((100vw - var(--col)) / 2 - 16px));
-  --grid-minor: rgba(10, 132, 255, 0.10);
-  --grid-major: rgba(10, 132, 255, 0.20);
+  --grid-ink: rgba(0, 0, 0, 0.5);
+  --grid-major: var(--grid-ink);
+  --grid-minor: rgba(0, 0, 0, 0.25);
   position: relative;
   overflow: hidden;
   aspect-ratio: 3 / 2;
   margin: 0 calc(-1 * var(--bleed)) var(--hero-gap);
   border-radius: 32px;
-  /* Blueprint lines and grain drawn straight on the page: no fill of its own. The sheet takes the page's colour
-     because the edge mask renders it as its own group, and the grain needs something inside it to blend with. */
+  /* Blueprint lines drawn straight on the page: no fill of its own. The sheet takes the page's colour because
+     the edge mask renders it as its own group, and the desk light's blend needs something inside it to land on. */
   background-color: var(--bg);
   isolation: isolate;
 }
@@ -291,7 +292,7 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 .hero-phone {
   --u: calc((100cqh - 64px) / 890);
   position: relative;
-  z-index: 1;   /* above the paper grain */
+  z-index: 1;   /* above the grid and the desk light */
   height: calc(970 * var(--u));
   aspect-ratio: 546 / 970;
   margin: calc(-40 * var(--u)) calc(-64 * var(--u));
@@ -309,7 +310,7 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
     linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--grid-major) calc(50% - 0.5px), var(--grid-major) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
     linear-gradient(to right, transparent calc(50% - 0.5px), var(--grid-minor) calc(50% - 0.5px), var(--grid-minor) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
     linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--grid-minor) calc(50% - 0.5px), var(--grid-minor) calc(50% + 0.5px), transparent calc(50% + 0.5px));
-  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
   background-position: center;
   -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
                 linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
@@ -318,6 +319,23 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
         linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
   mask-composite: intersect;
   pointer-events: none;
+}
+/* Hand-drawn grid (grid.js): three traced, inked takes of the grid used as a mask over the line ink, cut
+   between on the marks' 200ms beat like the sheet's edge. The straight grid above is the fallback. */
+.hero-media.has-grid::before {
+  background: var(--grid-ink);
+  -webkit-mask: var(--grid-0) 0 0 / 100% 100% no-repeat, linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  -webkit-mask-composite: source-in;
+  mask: var(--grid-0) 0 0 / 100% 100% no-repeat, linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-composite: intersect;
+}
+@keyframes grid-boil {
+  0% { -webkit-mask-image: var(--grid-0), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: var(--grid-0), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+  33.333% { -webkit-mask-image: var(--grid-1), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: var(--grid-1), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+  66.667%, 100% { -webkit-mask-image: var(--grid-2), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: var(--grid-2), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-media.has-grid::before { animation: grid-boil 0.6s step-end infinite; }
 }
 /* A light-mode Claude terminal on the left and the phone on the right, centered as a group. The terminal prints
    in step with the video (inline script in index.html). Below 561px (phones) the board is too narrow for both
@@ -353,14 +371,16 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   font-size: clamp(9px, 1.45cqw, 12px);
   line-height: 1.6;
   overflow: hidden;
-  /* No ring or shadow: the window sits flat on the sheet, set off by its own fill alone. */
+  /* A drop shadow, no ring: lit from above like the phone, a tight contact shadow under the window and a soft,
+     offset one below it, so it lifts off the sheet without a halo round its sides. */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 10px -2px rgba(0, 0, 0, 0.08), 0 18px 36px -12px rgba(0, 0, 0, 0.22);
 }
-/* Dark mode: white lines and light grain on the dark page, stepped down to suit it. The grid fades away from
-   the lamp's pool of light (centered on the sheet), so the lit middle reads like a desk at night. */
+/* Dark mode: white lines on the dark page. The grid fades away from the lamp's pool of light (centered on the
+   sheet), so the lit middle reads like a desk at night. */
 @media (prefers-color-scheme: dark) {
   .hero-media {
-    --grid-minor: rgba(255, 255, 255, 0.11);
-    --grid-major: rgba(255, 255, 255, 0.22);
+    --grid-ink: rgba(255, 255, 255, 0.5);
+    --grid-minor: rgba(255, 255, 255, 0.25);
   }
   .hero-media::before {
     -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
@@ -372,23 +392,25 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
           radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
     mask-composite: intersect;
   }
-  /* Beats the base grain rule further down; masked like the grid, falling off away from the lamp */
-  main .hero-media::after {
-    opacity: 0.5;
-    mix-blend-mode: screen;
-    filter: brightness(0.4) contrast(4);
-    -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
-                  linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent),
-                  radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
+  .hero-media.has-grid::before {
+    -webkit-mask: var(--grid-0) 0 0 / 100% 100% no-repeat, linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
     -webkit-mask-composite: source-in;
-    mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
-          linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent),
-          radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
+    mask: var(--grid-0) 0 0 / 100% 100% no-repeat, linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
     mask-composite: intersect;
   }
 }
+@keyframes grid-boil-dark {
+  0% { -webkit-mask-image: var(--grid-0), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); mask-image: var(--grid-0), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); }
+  33.333% { -webkit-mask-image: var(--grid-1), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); mask-image: var(--grid-1), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); }
+  66.667%, 100% { -webkit-mask-image: var(--grid-2), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); mask-image: var(--grid-2), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); }
+}
+@media (prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark) {
+  .hero-media.has-grid::before { animation-name: grid-boil-dark; }
+}
 @media (prefers-color-scheme: dark) {
   .hero-term {
+    /* The page is near-black, so the shadow has to be deeper to read */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 10px -2px rgba(0, 0, 0, 0.35), 0 18px 36px -12px rgba(0, 0, 0, 0.6);
     --term-bg: #1c1c1e;
     --term-text: #e7e7ea;
     --term-title: rgba(255, 255, 255, 0.55);
@@ -462,40 +484,11 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 @keyframes term-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes term-rot { to { transform: rotate(360deg); } }
-/* Rough paper grain over the grid, with no tint of its own: multiplied on the light page and pushed light
-   (brightness/contrast) so the paper stays the page's colour and only the darkest flecks show; dark mode screens
-   it, pushed dark, for light flecks only. It fades at the edges like the grid, so the sheet has no box edge. */
-.hero-media::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E") center / 150px 150px;   /* half scale: 300px tiles drawn at 150px */
-  opacity: 0.6;
-  mix-blend-mode: multiply;
-  filter: brightness(2.4) contrast(1.4);
-  -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
-                linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
-  -webkit-mask-composite: source-in;
-  mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
-        linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
-  mask-composite: intersect;
-  pointer-events: none;
-}
-/* The grain cuts between three takes every 200ms (hard cuts, no tweens), the same cadence as the
-   headline's hand-drawn marks, so the sheet feels alive. */
-@keyframes paper-grain {
-  0% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
-  33.333% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='17' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
-  66.667%, 100% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='29' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .hero-media::after { animation: paper-grain 0.6s step-end infinite; }
-}
 /* Light on the desk. Light mode: late sun through a window, two slanted beams split by the window bar,
    coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves.
    Dark mode: a warm desk lamp straight overhead, its pool centered on the sheet; it flickers on once at load, like a
    bulb catching, then holds. The layer lights the sheet and its grid, under the phone and terminal so
-   their screens stay crisp, and under the grain. */
+   their screens stay crisp. */
 .hero-light {
   --sun: rgba(255, 238, 200, 0.95);
   position: absolute;
