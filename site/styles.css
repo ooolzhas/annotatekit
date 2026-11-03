@@ -279,10 +279,7 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   aspect-ratio: 3 / 2;
   margin: 0 calc(-1 * var(--bleed)) var(--hero-gap);
   border-radius: 32px;
-  /* Blueprint lines drawn straight on the page: no fill of its own. The sheet takes the page's colour because
-     the edge mask renders it as its own group, and the desk light's blend needs something inside it to land on. */
-  background-color: var(--bg);
-  isolation: isolate;
+  /* Blueprint lines drawn straight on the page: no fill of its own. */
 }
 /* The iPhone demo, centered with 32px above and below. demo.webm / demo.mov are transparent recordings of the whole
    phone (bezel, shadow and screen) in Figma points (--u is one point): the 418 x 890 phone sits in a 546 x 970 clip,
@@ -292,7 +289,7 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 .hero-phone {
   --u: calc((100cqh - 64px) / 890);
   position: relative;
-  z-index: 1;   /* above the grid and the desk light */
+  z-index: 1;   /* above the grid */
   height: calc(970 * var(--u));
   aspect-ratio: 546 / 970;
   margin: calc(-40 * var(--u)) calc(-64 * var(--u));
@@ -483,32 +480,6 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 @keyframes term-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes term-rot { to { transform: rotate(360deg); } }
-/* Light on the desk (light mode only): late sun through a window, two slanted beams split by the window bar,
-   coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves. The layer
-   lights the sheet and its grid, under the phone and terminal so their screens stay crisp. */
-.hero-light {
-  --sun: rgba(255, 238, 200, 0.95);
-  position: absolute;
-  inset: -6%;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(118deg,
-    transparent 14%, var(--sun) 19%, var(--sun) 33%, transparent 35.5%,
-    transparent 37%, var(--sun) 39.5%, var(--sun) 51%, transparent 56%);
-  mix-blend-mode: soft-light;
-  -webkit-mask: radial-gradient(ellipse 115% 105% at 0% 0%, #000 25%, transparent 88%);
-  mask: radial-gradient(ellipse 115% 105% at 0% 0%, #000 25%, transparent 88%);
-}
-@keyframes sun-drift {
-  from { transform: translateX(-1.5%) rotate(-0.4deg); }
-  to { transform: translateX(1.5%) rotate(0.4deg); }
-}
-@media (prefers-color-scheme: dark) {
-  .hero-light { display: none; }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .hero-light { animation: sun-drift 18s ease-in-out infinite alternate; }
-}
 /* Boiling edge: edge.js traces three slightly wobbly takes of the sheet's outline (--edge-0..2, sized
    to the sheet) and the mask cuts between them on the marks' 200ms beat. */
 .hero-media.has-edge {
