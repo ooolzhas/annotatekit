@@ -14,6 +14,7 @@
   --text-muted: #737373;
   --text-faint: #a3a3a3;
   --hairline: rgba(0, 0, 0, 0.08);
+  --rule-ink: #000;   /* the hand-drawn section rules, drawn at 10% */
   --code-bg: rgba(0, 0, 0, 0.035);
   --code-border: rgba(0, 0, 0, 0.06);
   --nav-hover: rgba(0, 0, 0, 0.04);
@@ -27,6 +28,14 @@
 
   --sidebar-w: 208px;
   --col: 560px;
+  /* Marker ink. Every hand-drawn mark's SVG (this rule, the underline takes, the rays' filters in
+     index.html) carries the same filter: slow turbulence roughens the edges by under a pixel, ~1px
+     noise speckles the ink where it skips, and very slow noise thins and thickens it along the stroke.
+     The grain is sized to read at 1x and 2x, not just on phones. It lives inside the SVGs, not as a CSS
+     filter on the elements, so text is never filtered and Safari renders it at full resolution. Each
+     take gets its own seed, so the texture boils with the line. */
+  /* The hand-drawn section rule (h2::after, .footer::before). */
+  --hand-rule: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cfilter id='i' x='-5%' y='-50%' width='110%' height='200%' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='2' seed='3'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='1.4' xChannelSelector='R' yChannelSelector='G' result='r'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' seed='10'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.8 0 0 0 2.6'/%3E%3CfeComposite in='r' operator='in' result='g'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02' seed='16'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.2 0 0 0 1.5'/%3E%3CfeComposite in='g' operator='in'/%3E%3C/filter%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='1' stroke-linecap='round' vector-effect='non-scaling-stroke' filter='url(%23i)'/%3E%3C/svg%3E");
 
   color-scheme: light dark;
 }
@@ -40,6 +49,7 @@
     --text-muted: #8e8e93;
     --text-faint: #636366;
     --hairline: rgba(255, 255, 255, 0.09);
+    --rule-ink: #fff;
     --code-bg: rgba(255, 255, 255, 0.045);
     --code-border: rgba(255, 255, 255, 0.07);
     --nav-hover: rgba(255, 255, 255, 0.06);
@@ -226,15 +236,18 @@ h2 {
   letter-spacing: -0.08px;
 }
 /* Hand-drawn rule: an uneven path stretched to the heading's width; non-scaling-stroke keeps the
-   line the same thickness at any length. */
+   line the same thickness at any length. It rests on the text baseline: centered in the 22px line its
+   midline sits ~0.3em above Geist's baseline, so it drops by that. (An empty flex item has no baseline
+   of its own, so align-self: baseline would pin it to the top instead.) */
 h2::after {
   content: "";
   flex: 1;
+  translate: 0 0.3em;
   height: 8px;
-  background: var(--text-faint);
-  opacity: 0.55;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='0.625' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='0.625' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  background: var(--rule-ink);
+  opacity: 0.1;
+  -webkit-mask: var(--hand-rule) center / 100% 100% no-repeat;
+  mask: var(--hand-rule) center / 100% 100% no-repeat;
 }
 
 h3 {
@@ -260,49 +273,30 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
    It overhangs the text by up to 128px a side, never closer than 16px to the window edge. */
 .hero-media {
   --bleed: min(128px, calc((100vw - var(--col)) / 2 - 16px));
-  --grid-minor: rgba(255, 255, 255, 0.14);
-  --grid-major: rgba(255, 255, 255, 0.28);
+  --grid-ink: rgba(0, 0, 0, 0.1);
+  --grid-major: var(--grid-ink);
+  --grid-minor: rgba(0, 0, 0, 0.05);
   position: relative;
   overflow: hidden;
   aspect-ratio: 3 / 2;
   margin: 0 calc(-1 * var(--bleed)) var(--hero-gap);
   border-radius: 32px;
-  /* Blueprint: an accent-blue sheet with a white grid and white-ish grain. */
-  background-color: var(--accent);
-  isolation: isolate;   /* the grain's screen blend stays inside the sheet */
+  /* Blueprint lines drawn straight on the page: no fill of its own. */
 }
-/* The iPhone demo, centered with 32px above and below, in demo.css's 244 x 511.7 frame (an 8px black
-   bezel around a 228px screen), scaled by --u. The screen corner is the one baked into demo.mp4: a
-   circular 93px arc on its 590px-wide frame, i.e. 35.9 at 228, so the screen stays round. The device's
-   outer edge is a squircle; a squircle can't be parallel to a circle, so its radius (76.9) is the one that
-   keeps the bezel closest to 8 through the corner (7.1 to 8.9). Where corner-shape is unsupported
-   (Safari) the edge is the concentric circle instead (35.9 + 8 = 43.9). */
+/* The iPhone demo, centered with 32px above and below. demo.webm / demo.mov are transparent recordings of the whole
+   phone (bezel, shadow and screen) in Figma points (--u is one point): the 418 x 890 phone sits in a 546 x 970 clip,
+   with 64pt each side where the glass card overhangs it and 40pt above and below for its shadow (tools/hero-figma).
+   The negative margins keep the layout the size of the phone alone, so the overhang bleeds into the gap beside it. */
 .hero-media { container-type: size; display: grid; place-items: center; }
 .hero-phone {
-  --u: calc((100cqh - 64px) / 511.7);
+  --u: calc((100cqh - 64px) / 890);
   position: relative;
-  z-index: 1;   /* above the paper grain */
-  height: calc(511.7 * var(--u));
-  aspect-ratio: 244 / 511.7;
-  padding: calc(8 * var(--u));
-  border-radius: calc(43.9 * var(--u));
-  corner-shape: round;
-  background: #000;
-  box-shadow: 0 calc(24 * var(--u)) calc(48 * var(--u)) calc(-18 * var(--u)) rgba(0, 0, 0, .35),
-              0 calc(8 * var(--u)) calc(18 * var(--u)) calc(-8 * var(--u)) rgba(0, 0, 0, .25);
+  z-index: 1;   /* above the grid */
+  height: calc(970 * var(--u));
+  aspect-ratio: 546 / 970;
+  margin: calc(-40 * var(--u)) calc(-64 * var(--u));
 }
-@supports (corner-shape: squircle) {
-  .hero-phone { border-radius: calc(76.9 * var(--u)); corner-shape: squircle; }
-}
-.hero-phone video {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: calc(35.9 * var(--u));
-  corner-shape: round;
-  background: #000;
-}
+.hero-phone video { display: block; width: 100%; height: 100%; }
 /* Static grid, centered: each 1px line sits mid-tile and the tiles are centered on the sheet, so a
    major line runs through the exact middle both ways and the grid is symmetric. It fades out over
    the outer 24px, so no line runs along an edge. */
@@ -315,7 +309,7 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
     linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--grid-major) calc(50% - 0.5px), var(--grid-major) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
     linear-gradient(to right, transparent calc(50% - 0.5px), var(--grid-minor) calc(50% - 0.5px), var(--grid-minor) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
     linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--grid-minor) calc(50% - 0.5px), var(--grid-minor) calc(50% + 0.5px), transparent calc(50% + 0.5px));
-  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
   background-position: center;
   -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
                 linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
@@ -324,6 +318,23 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
         linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
   mask-composite: intersect;
   pointer-events: none;
+}
+/* Hand-drawn grid (grid.js): three traced, inked takes of the grid used as a mask over the line ink, cut
+   between on the marks' 200ms beat like the sheet's edge. The straight grid above is the fallback. */
+.hero-media.has-grid::before {
+  background: var(--grid-ink);
+  -webkit-mask: var(--grid-0) 0 0 / 100% 100% no-repeat, linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  -webkit-mask-composite: source-in;
+  mask: var(--grid-0) 0 0 / 100% 100% no-repeat, linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-composite: intersect;
+}
+@keyframes grid-boil {
+  0% { -webkit-mask-image: var(--grid-0), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: var(--grid-0), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+  33.333% { -webkit-mask-image: var(--grid-1), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: var(--grid-1), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+  66.667%, 100% { -webkit-mask-image: var(--grid-2), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: var(--grid-2), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-media.has-grid::before { animation: grid-boil 0.6s step-end infinite; }
 }
 /* A light-mode Claude terminal on the left and the phone on the right, centered as a group. The terminal prints
    in step with the video (inline script in index.html). Below 561px (phones) the board is too narrow for both
@@ -346,7 +357,6 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   /* Light by default; the dark-mode set is right below. */
   --term-bg: #fff;
   --term-text: #1d1d1f;
-  --term-ring: rgba(0, 0, 0, 0.08);
   --term-title: rgba(0, 0, 0, 0.55);
   --term-dim: rgba(0, 0, 0, 0.45);
   --term-bold: #000;
@@ -360,17 +370,15 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   font-size: clamp(9px, 1.45cqw, 12px);
   line-height: 1.6;
   overflow: hidden;
-  box-shadow: 0 0 0 1px var(--term-ring), 0 24px 48px -18px rgba(0, 0, 0, 0.35), 0 8px 18px -8px rgba(0, 0, 0, 0.2);
+  /* A drop shadow, no ring: lit from above like the phone, a tight contact shadow under the window and a soft,
+     offset one below it, so it lifts off the sheet without a halo round its sides. */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 10px -2px rgba(0, 0, 0, 0.08), 0 18px 36px -12px rgba(0, 0, 0, 0.22);
 }
-/* Dark mode: a deep blueprint blue (the accent mixed into near-black), with the grid and grain stepped
-   down to suit the darker sheet. The sheet falls off into near-black away from the lamp's pool of light
-   (centered on the sheet), and the grid fades with it, so the lit middle reads like a desk at night. */
+/* Dark mode: white lines on the dark page, fading out from the middle of the sheet toward its edges. */
 @media (prefers-color-scheme: dark) {
   .hero-media {
-    --grid-minor: rgba(255, 255, 255, 0.11);
-    --grid-major: rgba(255, 255, 255, 0.22);
-    background-color: color-mix(in srgb, var(--accent) 40%, #03060d);
-    background-image: radial-gradient(ellipse 55% 75% at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
+    --grid-ink: rgba(255, 255, 255, 0.1);
+    --grid-minor: rgba(255, 255, 255, 0.05);
   }
   .hero-media::before {
     -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
@@ -382,13 +390,27 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
           radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
     mask-composite: intersect;
   }
-  main .hero-media::after { opacity: 0.35; }   /* beats the base grain rule further down */
+  .hero-media.has-grid::before {
+    -webkit-mask: var(--grid-0) 0 0 / 100% 100% no-repeat, linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
+    -webkit-mask-composite: source-in;
+    mask: var(--grid-0) 0 0 / 100% 100% no-repeat, linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%);
+    mask-composite: intersect;
+  }
+}
+@keyframes grid-boil-dark {
+  0% { -webkit-mask-image: var(--grid-0), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); mask-image: var(--grid-0), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); }
+  33.333% { -webkit-mask-image: var(--grid-1), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); mask-image: var(--grid-1), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); }
+  66.667%, 100% { -webkit-mask-image: var(--grid-2), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); mask-image: var(--grid-2), linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent), linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent), radial-gradient(ellipse 55% 75% at 50% 50%, #000 25%, rgba(0, 0, 0, 0.06) 100%); }
+}
+@media (prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark) {
+  .hero-media.has-grid::before { animation-name: grid-boil-dark; }
 }
 @media (prefers-color-scheme: dark) {
   .hero-term {
+    /* The page is near-black, so the shadow has to be deeper to read */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 10px -2px rgba(0, 0, 0, 0.35), 0 18px 36px -12px rgba(0, 0, 0, 0.6);
     --term-bg: #1c1c1e;
     --term-text: #e7e7ea;
-    --term-ring: rgba(255, 255, 255, 0.09);
     --term-title: rgba(255, 255, 255, 0.55);
     --term-dim: rgba(255, 255, 255, 0.45);
     --term-bold: #fff;
@@ -460,83 +482,6 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 @keyframes term-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes term-rot { to { transform: rotate(360deg); } }
-/* Rough paper grain over the grid: screen-blended, so only its light flecks show, white on blue. */
-.hero-media::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E") center / 150px 150px;   /* half scale: 300px tiles drawn at 150px */
-  opacity: 0.45;
-  mix-blend-mode: screen;
-  pointer-events: none;
-}
-/* The grain cuts between three takes every 200ms (hard cuts, no tweens), the same cadence as the
-   headline's hand-drawn marks, so the sheet feels alive. */
-@keyframes paper-grain {
-  0% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
-  33.333% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='17' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
-  66.667%, 100% { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='5' seed='29' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)'/%3E%3C/svg%3E"); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .hero-media::after { animation: paper-grain 0.6s step-end infinite; }
-}
-/* Light on the desk. Light mode: late sun through a window, two slanted beams split by the window bar,
-   coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves.
-   Dark mode: a warm desk lamp straight overhead, its pool centered on the sheet; it flickers on once at load, like a
-   bulb catching, then holds. The layer lights the sheet and its grid, under the phone and terminal so
-   their screens stay crisp, and under the grain. */
-.hero-light {
-  --sun: rgba(255, 238, 200, 0.95);
-  position: absolute;
-  inset: -6%;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(118deg,
-    transparent 14%, var(--sun) 19%, var(--sun) 33%, transparent 35.5%,
-    transparent 37%, var(--sun) 39.5%, var(--sun) 51%, transparent 56%);
-  mix-blend-mode: soft-light;
-  -webkit-mask: radial-gradient(ellipse 115% 105% at 0% 0%, #000 25%, transparent 88%);
-  mask: radial-gradient(ellipse 115% 105% at 0% 0%, #000 25%, transparent 88%);
-}
-@keyframes sun-drift {
-  from { transform: translateX(-1.5%) rotate(-0.4deg); }
-  to { transform: translateX(1.5%) rotate(0.4deg); }
-}
-@media (prefers-color-scheme: dark) {
-  .hero-light {
-    inset: 0;
-    /* Warm light tints the blue toward amber (a plain mix: screening amber over blue goes white). */
-    background: radial-gradient(ellipse 40% 62% at 50% 50%,
-      rgba(255, 170, 90, 0.55) 0%, rgba(255, 150, 70, 0.3) 32%, rgba(255, 140, 60, 0.1) 60%, transparent 80%);
-    mix-blend-mode: normal;
-    opacity: 1;
-    -webkit-mask: none;
-    mask: none;
-  }
-  /* The bulb's hot spot, brightest in the middle of the pool. */
-  .hero-light::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 24% 38% at 50% 50%, rgba(255, 200, 130, 0.7), rgba(255, 170, 90, 0.2) 50%, transparent 75%);
-    mix-blend-mode: screen;
-    opacity: 0.7;
-  }
-}
-@keyframes lamp-on {
-  0%, 6% { opacity: 0; }
-  9% { opacity: 0.7; }
-  12% { opacity: 0.1; }
-  18% { opacity: 0.9; }
-  22% { opacity: 0.35; }
-  40%, 100% { opacity: 1; }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .hero-light { animation: sun-drift 18s ease-in-out infinite alternate; }
-}
-@media (prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark) {
-  .hero-light { animation: lamp-on 1.6s linear 0.3s both; }
-}
 /* Boiling edge: edge.js traces three slightly wobbly takes of the sheet's outline (--edge-0..2, sized
    to the sheet) and the mask cuts between them on the marks' 200ms beat. */
 .hero-media.has-edge {
@@ -551,20 +496,30 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .hero-media.has-edge { animation: edge-boil 0.6s step-end infinite; }
 }
-/* The space above the header media matches the space below it, between it and the headline. */
-main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
+/* The header media opens the page with no top padding; --hero-gap is the space below it, before the headline. */
+main:has(.hero-media) { --hero-gap: 40px; padding-top: 0; }
 @media (max-width: 768px) {
   .hero-media { --bleed: 8px; }
   main:has(.hero-media) { --hero-gap: 28px; }
 }
 /* On a phone a 3:2 board leaves the demo phone ~175pt tall. Held upright, the board turns 2:3 so the
-   recording fills most of the screen (~475pt on a 375pt phone); a narrow window that isn't portrait gets
-   a square. Tablets keep the 3:2 board. */
+   recording fills most of the screen (~475pt on a 375pt phone). Anything else under tablet width (a
+   narrow window, a phone on its side) gets a full-width square. 440px is the widest iPhone. Tablets keep
+   the 3:2 board. Below tablet width the corners halve too: 32px reads as a pill edge on a board this
+   narrow. (edge.js traces the boiling edge from the computed radius, so it follows.) */
 @media (max-width: 560px) {
-  .hero-media { aspect-ratio: 1 / 1; }
+  .hero-media { aspect-ratio: 1 / 1; border-radius: 16px; }
 }
-@media (max-width: 560px) and (orientation: portrait) {
-  .hero-media { aspect-ratio: 2 / 3; max-height: 85svh; }
+@media (max-width: 440px) and (orientation: portrait) {
+  /* At most 85svh tall, capped through the width: a max-height would narrow the 2:3 board through its ratio
+     but leave it on the left (iOS Safari with both toolbars), so the phone sat off center. The margins center
+     whatever width wins, and give back the bleed when the column's width does. */
+  .hero-media {
+    --board-w: min(calc(100% + 2 * var(--bleed)), calc(85svh * 2 / 3));
+    aspect-ratio: 2 / 3;
+    width: var(--board-w);
+    margin-inline: calc((100% - var(--board-w)) / 2);
+  }
 }
 /* Too narrow for side by side: the phone stays centered and, just before the send, the terminal slides in
    from the left over the phone's lower part, sized to its lines, then back out as the loop restarts. */
@@ -605,7 +560,7 @@ h1 + h2 { margin-top: 40px; }
 .rays path {
   fill: none;
   stroke: var(--accent);
-  stroke-width: 1.75;
+  stroke-width: 2.5;
   stroke-linecap: round;
   stroke-dasharray: 1;
   stroke-dashoffset: 0;
@@ -622,6 +577,10 @@ h1 + h2 { margin-top: 40px; }
    200ms each, while drawing and after. Every take draws on the same schedule, so the cut never
    changes how much is drawn. Hard cuts, not tweens: it reads as drawn several times, still alive. */
 .rays .boil-1, .rays .boil-2 { visibility: hidden; }
+/* Each take is inked with its own grain (filters in index.html), so the texture boils with the line. */
+.rays .boil-0 { filter: url(#ink-0); }
+.rays .boil-1 { filter: url(#ink-1); }
+.rays .boil-2 { filter: url(#ink-2); }
 @keyframes boil-frame { 0% { visibility: visible; } 33.333%, 100% { visibility: hidden; } }
 @keyframes underline-boil {
   0% { background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(var(--bg), var(--bg)), var(--ul-0); }
@@ -640,10 +599,13 @@ h1 + h2 { margin-top: 40px; }
   .rays .boil-2 { animation: boil-frame 0.6s step-end 0.4s infinite; }
 }
 .underlined {
-  --ul-0: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M2 3.2C60 2.2 118 3.9 178 2.8S262 2.4 298 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 8.1C70 7.2 130 8.8 196 7.6S270 7.4 294 8.4' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
-  --ul-1: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M1.3 2.9C60.6 1.8 118.1 3.8 176.2 2.8S260.1 2.3 296.3 3.2' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M5.7 8.4C68.5 7 130.5 9.2 196.3 7.5S271.9 7 295.4 8.2' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
-  --ul-2: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%230A84FF' stroke-width='1.75' stroke-linecap='round'%3E%3Cpath d='M3.7 3.6C61.6 1.8 118.4 3.8 178.1 2.5S260.8 2.4 296.9 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M4.1 7.7C70.8 7.1 130.1 9 195.4 7.2S271.1 7.5 294.6 8.5' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
+  --ul-0: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cfilter id='i' x='-5%' y='-50%' width='110%' height='200%' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='2' seed='5'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='1.4' xChannelSelector='R' yChannelSelector='G' result='r'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' seed='12'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.8 0 0 0 2.6'/%3E%3CfeComposite in='r' operator='in' result='g'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02' seed='18'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.2 0 0 0 1.5'/%3E%3CfeComposite in='g' operator='in'/%3E%3C/filter%3E%3Cg filter='url(%23i)' fill='none' stroke='%230A84FF' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M2 3.2C60 2.2 118 3.9 178 2.8S262 2.4 298 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 8.1C70 7.2 130 8.8 196 7.6S270 7.4 294 8.4' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
+  --ul-1: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cfilter id='i' x='-5%' y='-50%' width='110%' height='200%' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='2' seed='11'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='1.4' xChannelSelector='R' yChannelSelector='G' result='r'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' seed='18'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.8 0 0 0 2.6'/%3E%3CfeComposite in='r' operator='in' result='g'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02' seed='24'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.2 0 0 0 1.5'/%3E%3CfeComposite in='g' operator='in'/%3E%3C/filter%3E%3Cg filter='url(%23i)' fill='none' stroke='%230A84FF' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M1.3 2.9C60.6 1.8 118.1 3.8 176.2 2.8S260.1 2.3 296.3 3.2' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M5.7 8.4C68.5 7 130.5 9.2 196.3 7.5S271.9 7 295.4 8.2' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
+  --ul-2: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cfilter id='i' x='-5%' y='-50%' width='110%' height='200%' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='2' seed='17'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='1.4' xChannelSelector='R' yChannelSelector='G' result='r'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' seed='24'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.8 0 0 0 2.6'/%3E%3CfeComposite in='r' operator='in' result='g'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02' seed='30'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.2 0 0 0 1.5'/%3E%3CfeComposite in='g' operator='in'/%3E%3C/filter%3E%3Cg filter='url(%23i)' fill='none' stroke='%230A84FF' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M3.7 3.6C61.6 1.8 118.4 3.8 178.1 2.5S260.8 2.4 296.9 3.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M4.1 7.7C70.8 7.1 130.1 9 195.4 7.2S271.1 7.5 294.6 8.5' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
   padding-bottom: 7px;
+  /* The phrase stays whole (~226px, inside even a 320pt phone's column): balance alone splits it in
+     Safari, which leaves half an underline on each line. */
+  white-space: nowrap;
   /* Two page-colored covers over the drawn lines (top half, bottom half) shrink toward the right
      one after the other on load, so line 1 draws, then line 2. At rest the covers are 0 wide. */
   background:
@@ -832,9 +794,11 @@ pre.wrap { overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; 
   border-radius: 14px;
   background: var(--code-bg);
 }
+/* Same inset as .cmd .copy, so every copy button lines up: its center lands on the first line's
+   center (16px padding + half the 20px line = 26px = 8px + half the 36px button). */
 .code-block .copy {
   position: absolute;
-  top: 10px; right: 10px;
+  top: 8px; right: 8px;
 }
 /* With a mouse, the copy button appears on hover or keyboard focus. */
 .tk-key { color: var(--tk-key); font-weight: 500; }
@@ -1062,10 +1026,10 @@ details > p:first-of-type { margin-top: 2px; }
   left: 0;
   right: 0;
   height: 8px;
-  background: var(--text-faint);
-  opacity: 0.55;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='0.625' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 8' preserveAspectRatio='none'%3E%3Cpath d='M1 4.6C34 3.1 61 5.4 97 4.2S152 2.6 190 4.4 255 5.9 291 3.9 360 3.2 399 4.8' fill='none' stroke='black' stroke-width='0.625' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  background: var(--rule-ink);
+  opacity: 0.1;
+  -webkit-mask: var(--hand-rule) center / 100% 100% no-repeat;
+  mask: var(--hand-rule) center / 100% 100% no-repeat;
 }
 .footer p { margin: 0; }
 /* "love" in Geist's true italic. Google Fonts serves Geist upright only, so the italic is self-hosted
@@ -1167,7 +1131,7 @@ main .note a { color: inherit; }
 /* Touch: copy buttons get the 44pt minimum */
 @media (pointer: coarse) {
   .copy { min-width: 44px; height: 44px; padding: 0 13px; }
-  .cmd .copy { top: 4px; right: 4px; }
+  .cmd .copy, .code-block .copy { top: 4px; right: 4px; }
 }
 
 @media (max-width: 520px) {
