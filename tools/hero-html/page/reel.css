@@ -16,11 +16,72 @@
 .reel-svg, .reel-svg svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 /* the phone's own shadow, under the bezel */
 .reel-bezel { filter: drop-shadow(0 24px 30px rgba(0, 0, 0, .28)) drop-shadow(0 6px 10px rgba(0, 0, 0, .18)); }
-/* the hand-drawn loop is revealed clockwise round its centre */
-.reel-loop .reel-svg {
-  -webkit-mask: conic-gradient(from -20deg at 170px 189px, #000 var(--sweep, 0deg), transparent 0);
-  mask: conic-gradient(from -20deg at 170px 189px, #000 var(--sweep, 0deg), transparent 0);
+/* palette instances blend by addition inside their own group, so a crossfade is an exact mix (reel.js) */
+.reel-mix { position: absolute; inset: 0; isolation: isolate; }
+.reel-mix > .reel-layer { mix-blend-mode: plus-lighter; }
+
+/* ---------- Live text ----------
+   SF Pro as Figma sets it (Medium 15/20 for the hint line, Medium 17/22 for the bar and the launcher, Semibold 15 for a
+   pin's number), with ligatures off as in the export. No letter-spacing: Figma's -0.23 / -0.43 are SF's own tracking
+   for those sizes, which the system font already applies here (adding them again set every line 3-8pt short). */
+.reel-hint-line, .reel-count, .reel-launcher-title, .reel-pin-number {
+  position: absolute;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", system-ui, sans-serif;
+  font-feature-settings: "liga" 0, "clig" 0;
+  -webkit-font-smoothing: antialiased;
+  white-space: nowrap;
 }
+.reel-hint-line {
+  left: 0;
+  width: 546px;
+  height: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .25);   /* ReviewHintLine: Figma text-shadow 0 2 4 25% */
+}
+.reel-digits { display: inline-grid; font-feature-settings: "liga" 0, "clig" 0, "tnum" 1, "lnum" 1; }
+.reel-digit { grid-area: 1 / 1; display: inline-block; text-align: center; }
+.reel-count {
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 500;
+  color: #000;
+}
+.reel-count > span { grid-area: 1 / 1; }
+.reel-launcher { position: absolute; }
+.reel-launcher-titles { position: absolute; inset: 0; overflow: hidden; border-radius: 22px; }
+.reel-launcher-title {
+  left: 32px;
+  top: 11px;
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 500;
+  color: #000;
+}
+.reel-pin-number {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+/* StatusIndicator: an 8pt dot in its 16pt halo (opacity 0.25, blur 3) */
+.reel-hint-dot { position: relative; flex: none; width: 16px; height: 16px; margin-right: 6px; }
+.reel-launcher-dot { position: absolute; left: 16px; top: 18px; width: 8px; height: 8px; }
+.reel-dot, .reel-dot-halo { position: absolute; border-radius: 50%; background: #34c759; }
+.reel-dot { left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; }
+.reel-dot-halo { left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; opacity: .25; filter: blur(3px);
+  animation: reel-halo 1s ease-in-out infinite alternate; }
 
 /* ---------- Glass ----------
    Figma's Liquid Glass, per shape. Its stacked fills (black 25%, white 25%, #444 60% plus-lighter, #F8F8F8 20%
@@ -52,4 +113,4 @@
 .reel-halo { transform-box: fill-box; transform-origin: center; animation: reel-halo 1s ease-in-out infinite alternate; }
 @keyframes reel-halo { from { transform: scale(.5); } to { transform: scale(1); } }
 @keyframes reel-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .reel-spin, .reel-halo { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .reel-spin, .reel-halo, .reel-dot-halo { animation: none; } }

@@ -12,6 +12,7 @@ is listed in GLASS for reel.js to draw with backdrop-filter instead.
 usage: python3 build.py   (writes ../../site/reel-layers.js)
 """
 import json
+import math
 import os
 import re
 from xml.dom import minidom
@@ -109,13 +110,29 @@ def layer(name, frame, nodes, clip=True, glass=False):
     svg = re.sub(r'(<g id="[^"]*-Pulsing Wave)"', r'\1" class="reel-halo"', svg)   # the status dot's breathing halo
     # Figma draws the spinner's conic fade as a clipped <foreignObject>; Chrome mis-places it once the pin has a
     # filter, and the spokes are drawn again right after it anyway, so keep the plain spokes only
-    def spokes(m):   # the clip path is the spinner's eight spokes: draw them as a plain white shape that CSS spins
+    def spokes(m):   # the clip path is the spinner's eight spokes: draw them as plain white spokes that CSS spins
         d = re.search(r'<clipPath id="%s"><path d="([^"]+)"' % re.escape(m.group(1)), svg)
-        return f'<path class="reel-spin" d="{d.group(1)}" fill="white"/>' if d else ""
+        return f'<g class="reel-spin">{graded_spokes(d.group(1))}</g>' if d else ""
     svg = re.sub(r'<g clip-path="url\(#([^)]*angular[^)]*)\)" data-figma-skip-parse="true">.*?</foreignObject></g></g>', spokes, svg)
     # Figma's export writes WebKit-only blend modes into its filters; Chrome rejects the whole value
     svg = svg.replace('mode="plus-lighter"', 'mode="screen"').replace('mode="plus-darker"', 'mode="multiply"')
+    # Figma repeats every colour as `color(display-p3 …)` with the sRGB numbers unchanged; Chrome takes those as real P3
+    # and pushes the pins and the glow past sRGB (green pins came out #11EF5B for #34C759). Keep the sRGB values only.
+    svg = re.sub(r"[a-z-]+:color\(display-p3[^)]*\);?", "", svg)
     return name, svg
+
+
+def graded_spokes(d):
+    """The system spinner's look (ProgressView, Chrome.swift:253): eight spokes fading round the circle, so a stepped
+    turn reads as motion. Spokes go clockwise from dimmest to brightest, so the brightest leads the turn."""
+    parts = [p for p in re.split(r"(?=M)", d) if p.strip()]
+    # each spoke's start point (its M, always an x y pair; the rest mixes in H and V) sits at the same spot on every
+    # spoke, so the eight of them ring the spinner's centre
+    cs = [tuple(map(float, re.match(r"M\s*(-?[\d.]+)[ ,]+(-?[\d.]+)", p).groups())) for p in parts]
+    cx, cy = sum(c[0] for c in cs) / len(cs), sum(c[1] for c in cs) / len(cs)
+    order = sorted(range(len(parts)), key=lambda i: math.atan2(cs[i][1] - cy, cs[i][0] - cx) % (2 * math.pi))
+    n = len(parts)
+    return "".join(f'<path d="{parts[i]}" fill="white" opacity="{0.3 + 0.7 * k / (n - 1):.3f}"/>' for k, i in enumerate(order))
 
 
 def marks(frame):
@@ -137,21 +154,25 @@ add(layer("bezel", "f1", [[c for c in f1044.childNodes if c.nodeType == 1 and c.
 add(layer("base", "f1", [c for c in f1s.childNodes if c.nodeType == 1 and (c.getAttribute("id") or "") in ("", "Top", "Bottom")]))
 add(layer("body", "f1", [child(f1s, "Body")]))
 add(layer("bodyFinal", "f8", [child(screen_group(DOCS["f8"]), "Body")]))
-add(layer("pillAnnotate", "f1", [child(f1s, "Interactive")], glass=True))
-add(layer("pillDone", "f8", [child(screen_group(DOCS["f8"]), "Interactive")], glass=True))
+# the launcher, the hint line and the bar's count are live SF Pro text in reel.js (their copy changes), not layers
 for f in ("f2", "f3", "f5", "f6", "f7"):
     add(layer(f"overlay{f[1]}", f, [in1027(f, "Overlay")] + ([in1027(f, "Glow")] if f == "f2" else [])))
 for f in ("f3", "f5", "f6", "f7"):
     add(layer(f"scrim{f[1]}", f, [in1027(f, "Rectangle 4")]))
-for f in ("f2", "f5", "f6", "f7"):
-    add(layer(f"hint{f[1]}", f, [in1027(f, "HStack")]))
-for f in ("f2", "f5", "f6"):
-    tb = in1027(f, "Interactive").cloneNode(True)
-    if f == "f2":   # "2 notes" appears with the second pin (the count text animates on its own, snappy 0.2)
-        count = [p for p in tb.getElementsByTagName("path") if p.getAttribute("id") == "2 notes"][0]
-        add(layer("count2", f, [count.cloneNode(True)]))
-        count.parentNode.removeChild(count)
-    add(layer(f"toolbar{f[1]}", f, [tb], glass=True))
+# The review bar, one layer per button so each can be pressed on its own: back, the count capsule (its text is live),
+# and the send button enabled (f5, blue) and disabled (f6, plain glass with a dimmed arrow)
+def bar_items(f):
+    return [c for c in in1027(f, "Interactive").childNodes if c.nodeType == 1]
+
+
+back, capsule, send_on = bar_items("f5")
+capsule = capsule.cloneNode(True)
+for p in [p for p in capsule.getElementsByTagName("path") if p.getAttribute("id") == "3 notes"]:
+    p.parentNode.removeChild(p)
+add(layer("barBack", "f5", [back], glass=True))
+add(layer("barCapsule", "f5", [capsule], glass=True))
+add(layer("barSendOn", "f5", [send_on], glass=True))
+add(layer("barSendOff", "f6", [bar_items("f6")[2]], glass=True))
 # Marks. Selections and the loop come from frames 2 and 3 with their pins taken out; every pin is cut per state
 # (f2/f3 number or "+", f6 spinner, f7 check) into its disc and its glyph, so a state change can crossfade the disc
 # and scale the glyph the way the overlay does (PinBadge: glyph scale 0.5 + opacity, snappy 0.25).
@@ -205,7 +226,10 @@ add(layer("card3", "f3", [card3], clip=False, glass=True))
 c4 = card4.cloneNode(True)
 typed = child(c4, "VStack")
 c4.removeChild(typed)
+card_send = [g for g in c4.getElementsByTagName("g") if g.getAttribute("id") == "Alarm Button_5"][0]
+card_send.parentNode.removeChild(card_send)   # its own layer, so the press dims the button alone
 add(layer("card4", "f4", [c4], clip=False, glass=True))
+add(layer("card4send", "f4", [card_send], clip=False, glass=True))
 add(layer("typed", "f4", [typed], clip=False))
 
 # the typed note is revealed a letter at a time: prefix widths in SF Pro Regular 25.5 (-0.645 tracking), as Figma sets it

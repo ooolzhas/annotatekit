@@ -15,6 +15,10 @@ let writer = try AVAssetWriter(url: URL(fileURLWithPath: args[4]), fileType: .mo
 let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
     AVVideoCodecKey: AVVideoCodecType.hevcWithAlpha,
     AVVideoWidthKey: outW, AVVideoHeightKey: outH,
+    // Tagged BT.709 like the VP9 file, so browsers don't guess the matrix (untagged greys shift between players)
+    AVVideoColorPropertiesKey: [AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2],
     AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 2_500_000, AVVideoExpectedSourceFrameRateKey: fps,
                                       kVTCompressionPropertyKey_TargetQualityForAlpha as String: 0.9],
 ])
