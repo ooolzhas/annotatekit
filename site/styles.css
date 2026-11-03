@@ -511,7 +511,15 @@ main:has(.hero-media) { --hero-gap: 40px; padding-top: 0; }
   .hero-media { aspect-ratio: 1 / 1; border-radius: 16px; }
 }
 @media (max-width: 440px) and (orientation: portrait) {
-  .hero-media { aspect-ratio: 2 / 3; max-height: 85svh; }
+  /* At most 85svh tall, capped through the width: a max-height would narrow the 2:3 board through its ratio
+     but leave it on the left (iOS Safari with both toolbars), so the phone sat off center. The margins center
+     whatever width wins, and give back the bleed when the column's width does. */
+  .hero-media {
+    --board-w: min(calc(100% + 2 * var(--bleed)), calc(85svh * 2 / 3));
+    aspect-ratio: 2 / 3;
+    width: var(--board-w);
+    margin-inline: calc((100% - var(--board-w)) / 2);
+  }
 }
 /* Too narrow for side by side: the phone stays centered and, just before the send, the terminal slides in
    from the left over the phone's lower part, sized to its lines, then back out as the loop restarts. */
