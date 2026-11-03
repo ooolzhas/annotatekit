@@ -14,6 +14,7 @@
   --text-muted: #737373;
   --text-faint: #a3a3a3;
   --hairline: rgba(0, 0, 0, 0.08);
+  --rule-ink: #000;   /* the hand-drawn section rules, drawn at 10% */
   --code-bg: rgba(0, 0, 0, 0.035);
   --code-border: rgba(0, 0, 0, 0.06);
   --nav-hover: rgba(0, 0, 0, 0.04);
@@ -48,6 +49,7 @@
     --text-muted: #8e8e93;
     --text-faint: #636366;
     --hairline: rgba(255, 255, 255, 0.09);
+    --rule-ink: #fff;
     --code-bg: rgba(255, 255, 255, 0.045);
     --code-border: rgba(255, 255, 255, 0.07);
     --nav-hover: rgba(255, 255, 255, 0.06);
@@ -242,8 +244,8 @@ h2::after {
   flex: 1;
   translate: 0 0.3em;
   height: 8px;
-  background: var(--text-faint);
-  opacity: 0.55;
+  background: var(--rule-ink);
+  opacity: 0.1;
   -webkit-mask: var(--hand-rule) center / 100% 100% no-repeat;
   mask: var(--hand-rule) center / 100% 100% no-repeat;
 }
@@ -271,9 +273,9 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
    It overhangs the text by up to 128px a side, never closer than 16px to the window edge. */
 .hero-media {
   --bleed: min(128px, calc((100vw - var(--col)) / 2 - 16px));
-  --grid-ink: rgba(0, 0, 0, 0.15);
+  --grid-ink: rgba(0, 0, 0, 0.1);
   --grid-major: var(--grid-ink);
-  --grid-minor: rgba(0, 0, 0, 0.075);
+  --grid-minor: rgba(0, 0, 0, 0.05);
   position: relative;
   overflow: hidden;
   aspect-ratio: 3 / 2;
@@ -375,8 +377,8 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 /* Dark mode: white lines on the dark page, fading out from the middle of the sheet toward its edges. */
 @media (prefers-color-scheme: dark) {
   .hero-media {
-    --grid-ink: rgba(255, 255, 255, 0.15);
-    --grid-minor: rgba(255, 255, 255, 0.075);
+    --grid-ink: rgba(255, 255, 255, 0.1);
+    --grid-minor: rgba(255, 255, 255, 0.05);
   }
   .hero-media::before {
     -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
@@ -1016,8 +1018,8 @@ details > p:first-of-type { margin-top: 2px; }
   left: 0;
   right: 0;
   height: 8px;
-  background: var(--text-faint);
-  opacity: 0.55;
+  background: var(--rule-ink);
+  opacity: 0.1;
   -webkit-mask: var(--hand-rule) center / 100% 100% no-repeat;
   mask: var(--hand-rule) center / 100% 100% no-repeat;
 }

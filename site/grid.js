@@ -2,7 +2,7 @@
 // (minor lines every 24px, a major line every 5th, centered so a major line runs through the middle both ways)
 // each wobble by under a pixel along slow waves and are inked with their own grain, then used as the grid's
 // mask; CSS cuts between them every 200ms. Major lines are full strength in the mask and minor lines half, so
-// the ink colour set in CSS gives the 15% / 7.5% pair. Takes are retraced when the sheet resizes. Without this
+// the ink colour set in CSS gives the 10% / 5% pair. Takes are retraced when the sheet resizes. Without this
 // the grid is the straight CSS fallback; with reduced motion it keeps one still take.
 (function () {
   var board = document.querySelector(".hero-media");
