@@ -271,9 +271,9 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
    It overhangs the text by up to 128px a side, never closer than 16px to the window edge. */
 .hero-media {
   --bleed: min(128px, calc((100vw - var(--col)) / 2 - 16px));
-  --grid-ink: rgba(0, 0, 0, 0.1);
+  --grid-ink: rgba(0, 0, 0, 0.15);
   --grid-major: var(--grid-ink);
-  --grid-minor: rgba(0, 0, 0, 0.05);
+  --grid-minor: rgba(0, 0, 0, 0.075);
   position: relative;
   overflow: hidden;
   aspect-ratio: 3 / 2;
@@ -375,12 +375,11 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
      offset one below it, so it lifts off the sheet without a halo round its sides. */
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 10px -2px rgba(0, 0, 0, 0.08), 0 18px 36px -12px rgba(0, 0, 0, 0.22);
 }
-/* Dark mode: white lines on the dark page. The grid fades away from the lamp's pool of light (centered on the
-   sheet), so the lit middle reads like a desk at night. */
+/* Dark mode: white lines on the dark page, fading out from the middle of the sheet toward its edges. */
 @media (prefers-color-scheme: dark) {
   .hero-media {
-    --grid-ink: rgba(255, 255, 255, 0.1);
-    --grid-minor: rgba(255, 255, 255, 0.05);
+    --grid-ink: rgba(255, 255, 255, 0.15);
+    --grid-minor: rgba(255, 255, 255, 0.075);
   }
   .hero-media::before {
     -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
@@ -484,11 +483,9 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 }
 @keyframes term-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes term-rot { to { transform: rotate(360deg); } }
-/* Light on the desk. Light mode: late sun through a window, two slanted beams split by the window bar,
-   coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves.
-   Dark mode: a warm desk lamp straight overhead, its pool centered on the sheet; it flickers on once at load, like a
-   bulb catching, then holds. The layer lights the sheet and its grid, under the phone and terminal so
-   their screens stay crisp. */
+/* Light on the desk (light mode only): late sun through a window, two slanted beams split by the window bar,
+   coming in from the top-left and fading as they cross the board, drifting slowly as the sun moves. The layer
+   lights the sheet and its grid, under the phone and terminal so their screens stay crisp. */
 .hero-light {
   --sun: rgba(255, 238, 200, 0.95);
   position: absolute;
@@ -507,39 +504,10 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   to { transform: translateX(1.5%) rotate(0.4deg); }
 }
 @media (prefers-color-scheme: dark) {
-  .hero-light {
-    inset: 0;
-    /* Warm light tints the blue toward amber (a plain mix: screening amber over blue goes white). */
-    background: radial-gradient(ellipse 40% 62% at 50% 50%,
-      rgba(255, 170, 90, 0.55) 0%, rgba(255, 150, 70, 0.3) 32%, rgba(255, 140, 60, 0.1) 60%, transparent 80%);
-    mix-blend-mode: normal;
-    opacity: 1;
-    -webkit-mask: none;
-    mask: none;
-  }
-  /* The bulb's hot spot, brightest in the middle of the pool. */
-  .hero-light::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 24% 38% at 50% 50%, rgba(255, 200, 130, 0.7), rgba(255, 170, 90, 0.2) 50%, transparent 75%);
-    mix-blend-mode: screen;
-    opacity: 0.7;
-  }
-}
-@keyframes lamp-on {
-  0%, 6% { opacity: 0; }
-  9% { opacity: 0.7; }
-  12% { opacity: 0.1; }
-  18% { opacity: 0.9; }
-  22% { opacity: 0.35; }
-  40%, 100% { opacity: 1; }
+  .hero-light { display: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .hero-light { animation: sun-drift 18s ease-in-out infinite alternate; }
-}
-@media (prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark) {
-  .hero-light { animation: lamp-on 1.6s linear 0.3s both; }
 }
 /* Boiling edge: edge.js traces three slightly wobbly takes of the sheet's outline (--edge-0..2, sized
    to the sheet) and the mask cuts between them on the marks' 200ms beat. */
