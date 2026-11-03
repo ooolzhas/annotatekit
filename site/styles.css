@@ -339,7 +339,6 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   /* Light by default; the dark-mode set is right below. */
   --term-bg: #fff;
   --term-text: #1d1d1f;
-  --term-ring: rgba(0, 0, 0, 0.08);
   --term-title: rgba(0, 0, 0, 0.55);
   --term-dim: rgba(0, 0, 0, 0.45);
   --term-bold: #000;
@@ -353,7 +352,7 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   font-size: clamp(9px, 1.45cqw, 12px);
   line-height: 1.6;
   overflow: hidden;
-  box-shadow: 0 0 0 1px var(--term-ring), 0 24px 48px -18px rgba(0, 0, 0, 0.35), 0 8px 18px -8px rgba(0, 0, 0, 0.2);
+  /* No ring or shadow: the window sits flat on the sheet, set off by its own fill alone. */
 }
 /* Dark mode: a deep blueprint blue (the accent mixed into near-black), with the grid and grain stepped
    down to suit the darker sheet. The sheet falls off into near-black away from the lamp's pool of light
@@ -381,7 +380,6 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
   .hero-term {
     --term-bg: #1c1c1e;
     --term-text: #e7e7ea;
-    --term-ring: rgba(255, 255, 255, 0.09);
     --term-title: rgba(255, 255, 255, 0.55);
     --term-dim: rgba(255, 255, 255, 0.45);
     --term-bold: #fff;
