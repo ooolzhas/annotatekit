@@ -271,9 +271,9 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
    It overhangs the text by up to 128px a side, never closer than 16px to the window edge. */
 .hero-media {
   --bleed: min(128px, calc((100vw - var(--col)) / 2 - 16px));
-  --grid-ink: rgba(0, 0, 0, 0.5);
+  --grid-ink: rgba(0, 0, 0, 0.1);
   --grid-major: var(--grid-ink);
-  --grid-minor: rgba(0, 0, 0, 0.25);
+  --grid-minor: rgba(0, 0, 0, 0.05);
   position: relative;
   overflow: hidden;
   aspect-ratio: 3 / 2;
@@ -379,8 +379,8 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
    sheet), so the lit middle reads like a desk at night. */
 @media (prefers-color-scheme: dark) {
   .hero-media {
-    --grid-ink: rgba(255, 255, 255, 0.5);
-    --grid-minor: rgba(255, 255, 255, 0.25);
+    --grid-ink: rgba(255, 255, 255, 0.1);
+    --grid-minor: rgba(255, 255, 255, 0.05);
   }
   .hero-media::before {
     -webkit-mask: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
