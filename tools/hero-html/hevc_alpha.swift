@@ -19,8 +19,8 @@ let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
     AVVideoColorPropertiesKey: [AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
                                 AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
                                 AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2],
-    AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 2_500_000, AVVideoExpectedSourceFrameRateKey: fps,
-                                      kVTCompressionPropertyKey_TargetQualityForAlpha as String: 0.9],
+    AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 1_200_000, AVVideoExpectedSourceFrameRateKey: fps,
+                                      kVTCompressionPropertyKey_TargetQualityForAlpha as String: 0.75],
 ])
 let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
     kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA, kCVPixelBufferWidthKey as String: outW, kCVPixelBufferHeightKey as String: outH,

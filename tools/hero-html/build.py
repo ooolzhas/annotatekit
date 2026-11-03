@@ -155,10 +155,11 @@ add(layer("base", "f1", [c for c in f1s.childNodes if c.nodeType == 1 and (c.get
 add(layer("body", "f1", [child(f1s, "Body")]))
 add(layer("bodyFinal", "f8", [child(screen_group(DOCS["f8"]), "Body")]))
 # the launcher, the hint line and the bar's count are live SF Pro text in reel.js (their copy changes), not layers
-for f in ("f2", "f3", "f5", "f6", "f7"):
-    add(layer(f"overlay{f[1]}", f, [in1027(f, "Overlay")] + ([in1027(f, "Glow")] if f == "f2" else [])))
-for f in ("f3", "f5", "f6", "f7"):
-    add(layer(f"scrim{f[1]}", f, [in1027(f, "Rectangle 4")]))
+# The overlay's 50% dim only. Figma's glow (an inset shadow on the dim) and frost (a gradient rect) are one still
+# frame of what the app draws moving: two turning rings and swaying blobs, which reel.js draws from the code.
+dim = in1027("f2", "Overlay").cloneNode(True)
+dim.removeAttribute("filter")
+add(layer("dim", "f2", [dim]))
 # The review bar, one layer per button so each can be pressed on its own: back, the count capsule (its text is live),
 # and the send button enabled (f5, blue) and disabled (f6, plain glass with a dimmed arrow)
 def bar_items(f):

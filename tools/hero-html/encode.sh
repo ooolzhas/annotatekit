@@ -5,7 +5,7 @@
 # with Pillow. Copy demo.mov, demo.webm and demo-poster.png into site/.
 set -euo pipefail
 cd "$(dirname "$0")"
-FPS=30; H=1632; POSTER_T=${POSTER_T:-15.6}
+FPS=${FPS:-60}; H=1632; POSTER_T=${POSTER_T:-21}
 [[ -d node_modules ]] || npm i --silent
 [[ -n ${SKIP_RECORD:-} ]] || node record.mjs $FPS   # SKIP_RECORD=1 re-encodes the frames already in out/
 swiftc -O hevc_alpha.swift -o out/hevc_alpha 2>/dev/null

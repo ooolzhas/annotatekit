@@ -19,6 +19,15 @@
 /* palette instances blend by addition inside their own group, so a crossfade is an exact mix (reel.js) */
 .reel-mix { position: absolute; inset: 0; isolation: isolate; }
 .reel-mix > .reel-layer { mix-blend-mode: plus-lighter; }
+/* the overlay's moving colour, clipped to the screen: glow rings in edge-band masks, and the frost's wash and blobs,
+   fading to clear toward its top (FluidLayers.swift) */
+.reel-screen { position: absolute; overflow: hidden; }
+.reel-ring-box { position: absolute; inset: 0; -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
+.reel-ring { position: absolute; }
+.reel-frost { position: absolute; left: 0; width: 100%;
+  -webkit-mask-image: linear-gradient(transparent, #000 60%); mask-image: linear-gradient(transparent, #000 60%); }
+.reel-frost-wash { position: absolute; inset: 0; }
+.reel-frost-blob { position: absolute; }
 
 /* ---------- Live text ----------
    SF Pro as Figma sets it (Medium 15/20 for the hint line, Medium 17/22 for the bar and the launcher, Semibold 15 for a
@@ -43,6 +52,7 @@
   font-weight: 500;
   color: #fff;
   text-shadow: 0 2px 4px rgba(0, 0, 0, .25);   /* ReviewHintLine: Figma text-shadow 0 2 4 25% */
+  will-change: transform;   /* composited, so a swap's last fraction of a point glides instead of snapping a pixel */
 }
 .reel-digits { display: inline-grid; font-feature-settings: "liga" 0, "clig" 0, "tnum" 1, "lnum" 1; }
 .reel-digit { grid-area: 1 / 1; display: inline-block; text-align: center; }
@@ -56,10 +66,12 @@
 }
 .reel-count > span { grid-area: 1 / 1; }
 .reel-launcher { position: absolute; }
-.reel-launcher-titles { position: absolute; inset: 0; overflow: hidden; border-radius: 22px; }
+.reel-launcher-label { position: absolute; inset: 0; }
+/* the title rides the capsule's left edge and isn't clipped by it while the capsule narrows */
+.reel-launcher-titles { position: absolute; left: 16px; top: 11px; }
 .reel-launcher-title {
-  left: 32px;
-  top: 11px;
+  left: 0;
+  top: 0;
   font-size: 17px;
   line-height: 22px;
   font-weight: 500;
@@ -75,13 +87,18 @@
   font-weight: 600;
   color: #fff;
 }
-/* StatusIndicator: an 8pt dot in its 16pt halo (opacity 0.25, blur 3) */
+/* StatusIndicator: an 8pt dot over its 16pt halo at 25% (StatusHalo.swift:137-175). The halo breathes 0.5 ↔ 1
+   (1 s each way, ease-in-out), and over the first 30% of each swell a sharp circle hands over to a σ 3 blurred one. */
 .reel-hint-dot { position: relative; flex: none; width: 16px; height: 16px; margin-right: 6px; }
 .reel-launcher-dot { position: absolute; left: 16px; top: 18px; width: 8px; height: 8px; }
-.reel-dot, .reel-dot-halo { position: absolute; border-radius: 50%; background: #34c759; }
-.reel-dot { left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; }
-.reel-dot-halo { left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; opacity: .25; filter: blur(3px);
+.reel-dot { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #34c759; }
+.reel-dot-halo { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; opacity: .25;
   animation: reel-halo 1s ease-in-out infinite alternate; }
+.reel-halo-sharp, .reel-halo-soft { position: absolute; inset: 0; border-radius: 50%; background: #34c759; }
+.reel-halo-sharp { animation: reel-halo-sharp 1s linear infinite alternate; }
+.reel-halo-soft { filter: blur(3px); animation: reel-halo-soft 1s linear infinite alternate; }
+@keyframes reel-halo-sharp { 0% { opacity: 1; } 30%, 100% { opacity: 0; } }
+@keyframes reel-halo-soft { 0% { opacity: 0; } 30%, 100% { opacity: 1; } }
 
 /* ---------- Glass ----------
    Figma's Liquid Glass, per shape. Its stacked fills (black 25%, white 25%, #444 60% plus-lighter, #F8F8F8 20%
@@ -113,4 +130,4 @@
 .reel-halo { transform-box: fill-box; transform-origin: center; animation: reel-halo 1s ease-in-out infinite alternate; }
 @keyframes reel-halo { from { transform: scale(.5); } to { transform: scale(1); } }
 @keyframes reel-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .reel-spin, .reel-halo, .reel-dot-halo { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .reel-spin, .reel-halo, .reel-dot-halo, .reel-halo-sharp, .reel-halo-soft { animation: none; } }

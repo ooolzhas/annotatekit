@@ -1,14 +1,14 @@
 // Records the hero reel (page/index.html) frame by frame: the timeline is seeked to each frame's time, not played,
 // so every frame is exact whatever the machine's speed. Frames are 2x PNGs with a transparent background (the glass
 // card's overhang shows the page through it on the site). Uses the installed Google Chrome, headless.
-// usage: npm i && node record.mjs [fps=30]   -> out/frames/f0000.png …
+// usage: npm i && node record.mjs [fps=60]   -> out/frames/f0000.png …
 import { mkdir, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import puppeteer from "puppeteer-core";
 
-const FPS = Number(process.argv[2] || 30);
+const FPS = Number(process.argv[2] || 60);
 const HERE = new URL(".", import.meta.url).pathname;
 const OUT = join(HERE, "out", "frames");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };

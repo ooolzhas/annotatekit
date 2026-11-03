@@ -94,10 +94,10 @@
             <div class="term-line term-later" data-at="9.0"><span class="term-g"><span class="term-blue">⏺</span></span><b>3 pins</b> on 1 screen · iPhone 17 Pro</div>
             <div class="term-line term-later" data-at="10.2"><span class="term-g"><span class="term-green">⏺</span></span><b>Edit</b> DashboardView.swift</div>
             <div class="term-line term-later term-dim" data-at="10.5">⎿&nbsp; Updated 4 lines</div>
-            <div class="term-line term-later" data-at="11.3"><span class="term-g"><span class="term-green">⏺</span></span><b>annotation_resolve</b> 1 <span class="term-str">"title → .largeTitle"</span></div>
-            <div class="term-line term-later" data-at="11.7"><span class="term-g"><span class="term-green">⏺</span></span><b>annotation_resolve</b> 2 <span class="term-str">"bar → accent"</span></div>
-            <div class="term-line term-later" data-at="12.1"><span class="term-g"><span class="term-green">⏺</span></span><b>annotation_resolve</b> 3 <span class="term-str">"button → accent"</span></div>
-            <div class="term-line term-later term-orange" data-at="9.6" data-until="12.1"><span class="term-g"><span class="term-star">✻</span></span>Working…</div>
+            <div class="term-line term-later" data-at="12.3"><span class="term-g"><span class="term-green">⏺</span></span><b>annotation_resolve</b> 1 <span class="term-str">"title → .largeTitle"</span></div>
+            <div class="term-line term-later" data-at="14.1"><span class="term-g"><span class="term-green">⏺</span></span><b>annotation_resolve</b> 2 <span class="term-str">"bar → accent"</span></div>
+            <div class="term-line term-later" data-at="15.9"><span class="term-g"><span class="term-green">⏺</span></span><b>annotation_resolve</b> 3 <span class="term-str">"button → accent"</span></div>
+            <div class="term-line term-later term-orange" data-at="9.6" data-until="15.9"><span class="term-g"><span class="term-star">✻</span></span>Working…</div>
           </div>
         </div>
       </div>
@@ -357,7 +357,7 @@
   </script>
   <script>
   // The header's demo is a transparent recording of the Figma storyboard animated with AnnotateKit's own motion
-  // (18s, looping; source in tools/hero-html): demo.mov (HEVC with alpha) for WebKit, demo.webm (VP9 with alpha)
+  // (25.5s, looping; source in tools/hero-html): demo.mov (HEVC with alpha) for WebKit, demo.webm (VP9 with alpha)
   // elsewhere. The light terminal beside it prints Claude's side in step: each line shows from its data-at second of
   // the video (until data-until, if set), read off the reel's timeline (tools/hero-html/page/reel.js, T): send 8.6,
   // working 9.6, pins resolved 11.3, 11.7 and 12.1, overlay out 13.9, edits land 14.5.
@@ -374,7 +374,7 @@
         var until = l.dataset.until ? parseFloat(l.dataset.until) : Infinity;
         l.classList.toggle('is-on', t >= parseFloat(l.dataset.at) && t < until);
       });
-      board.classList.toggle('is-split', t >= 7.6 && t < 13.3);
+      board.classList.toggle('is-split', t >= 7.6 && t < 18.85);
     }
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       video.removeAttribute('autoplay');
