@@ -494,8 +494,8 @@ h2 + h3, h2 + h3.sub { margin-top: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .hero-media.has-edge { animation: edge-boil 0.6s step-end infinite; }
 }
-/* The space above the header media matches the space below it, between it and the headline. */
-main:has(.hero-media) { --hero-gap: 40px; padding-top: var(--hero-gap); }
+/* The header media opens the page with no top padding; --hero-gap is the space below it, before the headline. */
+main:has(.hero-media) { --hero-gap: 40px; padding-top: 0; }
 @media (max-width: 768px) {
   .hero-media { --bleed: 8px; }
   main:has(.hero-media) { --hero-gap: 28px; }
