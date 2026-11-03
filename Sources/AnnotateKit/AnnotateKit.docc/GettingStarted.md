@@ -9,7 +9,7 @@ In Xcode choose **File → Add Package Dependencies…**, enter
 In a `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/ooolzhas/annotatekit", from: "0.2.0")
+.package(url: "https://github.com/ooolzhas/annotatekit", from: "1.0.0")
 ```
 
 > Note: React Native and Expo apps (iOS) install the `annotate-ios` npm package instead, which
