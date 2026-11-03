@@ -16,7 +16,9 @@
 // in-mode messages.
 
 #if DEBUG && canImport(UIKit)
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import SwiftUI
 
 // MARK: - Round icon button

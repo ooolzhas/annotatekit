@@ -441,22 +441,38 @@ public enum SessionInbox {
 }
 
 public enum ProjectRoot {
-    /// Nearest ancestor of `sourceFile` containing `.git`; else the nearest with `Package.swift`,
-    /// an `.xcodeproj` or an `.xcworkspace`. Nil when the path doesn't exist (a real device).
+    /// How far above the Xcode marker folder a `package.json` may sit and still claim the root:
+    /// React Native and Expo keep the project in `ios/` (one level), some layouts in `ios/App/` (two).
+    /// Bounded so a stray `package.json` high up (a home folder) can't capture a native checkout.
+    static let javaScriptRootReach = 2
+
+    /// Nearest ancestor of `sourceFile` containing `.git`. Without one, the nearest folder with
+    /// `Package.swift`, an `.xcodeproj` or an `.xcworkspace`, unless a `package.json` sits within
+    /// `javaScriptRootReach` levels above that folder: in React Native / Expo the Xcode project is in
+    /// `ios/` but the source the agent edits is at the JS root. A `package.json` at or below the
+    /// Xcode folder doesn't count. Nil when the path doesn't exist (a real device).
     public static func locate(fromSourceFile sourceFile: String, fileManager: FileManager = .default) -> URL? {
         var directory = URL(fileURLWithPath: sourceFile).deletingLastPathComponent().standardizedFileURL
         guard fileManager.fileExists(atPath: directory.path) else { return nil }
 
         var fallback: URL?
+        var javaScriptRoot: URL?
+        var levelsAboveFallback = 0
         while true {
             if fileManager.fileExists(atPath: directory.appendingPathComponent(".git").path) {
                 return directory
             }
-            if fallback == nil, isProjectDirectory(directory, fileManager: fileManager) {
+            if fallback != nil {
+                levelsAboveFallback += 1
+                if javaScriptRoot == nil, levelsAboveFallback <= javaScriptRootReach,
+                   fileManager.fileExists(atPath: directory.appendingPathComponent("package.json").path) {
+                    javaScriptRoot = directory
+                }
+            } else if isProjectDirectory(directory, fileManager: fileManager) {
                 fallback = directory
             }
             let parent = directory.deletingLastPathComponent().standardizedFileURL
-            if parent.path == directory.path { return fallback }
+            if parent.path == directory.path { return javaScriptRoot ?? fallback }
             directory = parent
         }
     }

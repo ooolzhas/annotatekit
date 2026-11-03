@@ -387,6 +387,79 @@ enum Fixtures {
         #expect(located?.standardizedFileURL.path == root.standardizedFileURL.path)
     }
 
+    /// `<root>/package.json`, `<root>/ios/App.xcworkspace`, install call in `<root>/ios/App/AppDelegate.swift`.
+    func makeReactNativeLayout(in root: URL) throws -> String {
+        let fm = FileManager.default
+        try Data("{}".utf8).write(to: root.appendingPathComponent("package.json"))
+        try fm.createDirectory(at: root.appendingPathComponent("ios/App.xcworkspace"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: root.appendingPathComponent("ios/App.xcodeproj"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: root.appendingPathComponent("ios/App"), withIntermediateDirectories: true)
+        // The packages' own package.json files sit beside the app, never above it
+        try fm.createDirectory(at: root.appendingPathComponent("node_modules/react-native"), withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: root.appendingPathComponent("node_modules/react-native/package.json"))
+        return root.appendingPathComponent("ios/App/AppDelegate.swift").path
+    }
+
+    @Test func reactNativeWithoutGitPrefersTheJavaScriptRoot() throws {
+        let root = try tempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = try makeReactNativeLayout(in: root)
+        let located = try #require(ProjectRoot.locate(fromSourceFile: file))
+        #expect(located.standardizedFileURL.path == root.standardizedFileURL.path)
+        #expect(ProjectRoot.relativePath(of: file, to: located) == "ios/App/AppDelegate.swift")
+    }
+
+    @Test func reactNativeWithGitUsesTheGitRoot() throws {
+        let repo = try tempDir()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        // A monorepo: the git root is above the app's package.json, and still wins
+        try FileManager.default.createDirectory(at: repo.appendingPathComponent(".git"), withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: repo.appendingPathComponent("package.json"))
+        let app = repo.appendingPathComponent("apps/mobile")
+        try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+        let file = try makeReactNativeLayout(in: app)
+
+        #expect(ProjectRoot.locate(fromSourceFile: file)?.standardizedFileURL.path == repo.standardizedFileURL.path)
+        // What the CLI resolves when started in the app's folder (SessionFeed.outputDirectory)
+        let fromWorkingDirectory = ProjectRoot.locate(fromSourceFile: app.appendingPathComponent("_").path)
+        #expect(fromWorkingDirectory?.standardizedFileURL.path == repo.standardizedFileURL.path)
+    }
+
+    @Test func monorepoWithoutGitPicksTheAppsPackage() throws {
+        let repo = try tempDir()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try Data("{}".utf8).write(to: repo.appendingPathComponent("package.json"))
+        let app = repo.appendingPathComponent("apps/mobile")
+        try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+        let file = try makeReactNativeLayout(in: app)
+        #expect(ProjectRoot.locate(fromSourceFile: file)?.standardizedFileURL.path == app.standardizedFileURL.path)
+    }
+
+    @Test func nativeProjectIgnoresPackageJsonAtOrBelowIt() throws {
+        let root = try tempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fm = FileManager.default
+        try fm.createDirectory(at: root.appendingPathComponent("Demo.xcodeproj"), withIntermediateDirectories: true)
+        let scripts = root.appendingPathComponent("Demo/Web")
+        try fm.createDirectory(at: scripts, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: scripts.appendingPathComponent("package.json"))
+        try Data("{}".utf8).write(to: root.appendingPathComponent("package.json"))
+        let file = scripts.appendingPathComponent("Bridge.swift").path
+        // package.json below the Xcode folder (Demo/Web) and beside it (root) don't move the root
+        #expect(ProjectRoot.locate(fromSourceFile: file)?.standardizedFileURL.path == root.standardizedFileURL.path)
+    }
+
+    @Test func packageJsonBeyondReachDoesNotWin() throws {
+        let top = try tempDir()
+        defer { try? FileManager.default.removeItem(at: top) }
+        // A stray package.json three levels above a native project (say, in a home folder)
+        try Data("{}".utf8).write(to: top.appendingPathComponent("package.json"))
+        let project = top.appendingPathComponent("a/b/Demo")
+        try FileManager.default.createDirectory(at: project.appendingPathComponent("Demo.xcodeproj"), withIntermediateDirectories: true)
+        let file = project.appendingPathComponent("App.swift").path
+        #expect(ProjectRoot.locate(fromSourceFile: file)?.standardizedFileURL.path == project.standardizedFileURL.path)
+    }
+
     @Test func nilForPathsThatDoNotExist() {
         #expect(ProjectRoot.locate(fromSourceFile: "/definitely/not/here/App.swift") == nil)
         #expect(ProjectRoot.relativePath(of: "/elsewhere/A.swift", to: URL(fileURLWithPath: "/p")) == "/elsewhere/A.swift")

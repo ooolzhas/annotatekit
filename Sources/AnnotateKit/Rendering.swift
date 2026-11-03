@@ -10,7 +10,9 @@
 // Stroke geometry and width are shared, so what the user drew is exactly what the agent sees.
 
 #if DEBUG && canImport(UIKit)
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import SwiftUI
 import UIKit
 

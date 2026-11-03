@@ -5,7 +5,9 @@
 // all on a background task, so the overlay dismisses instantly.
 
 #if DEBUG && canImport(UIKit)
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import UIKit
 
 /// `@unchecked`: the only non-Sendable members are UIImages, which are immutable and documented

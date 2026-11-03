@@ -21,7 +21,9 @@
 // bottom of the stack: the app looks paused, and every coordinate refers to exactly that image.
 
 #if DEBUG && canImport(UIKit)
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import SwiftUI
 
 struct OverlayRoot: View {

@@ -1,11 +1,12 @@
 # annotate-ios
 
-The `annotate` CLI for [AnnotateKit](https://annotatekit.com): it delivers the visual feedback you
-draw on your running iOS app (screenshots, exact coordinates and your notes) to your coding agent.
+[AnnotateKit](https://annotatekit.com) delivers the visual feedback you draw on your running iOS app
+(screenshots, exact coordinates and your notes) to your coding agent. This package holds two things:
+the `annotate` CLI and the AnnotateKit pod for React Native and Expo apps.
 
-This package is a small launcher. On first run it downloads the checksum-verified universal macOS
-binary from the matching [GitHub Release](https://github.com/ooolzhas/annotatekit/releases) and
-caches it in `~/.cache/annotate`. macOS only.
+The CLI is a small launcher. On first run it downloads the checksum-verified universal macOS binary
+from the matching [GitHub Release](https://github.com/ooolzhas/annotatekit/releases) and caches it
+in `~/.cache/annotate`. macOS only.
 
 ## Use it as an MCP server
 
@@ -25,5 +26,18 @@ npm install -g annotate-ios
 annotate help
 ```
 
-The app side is the AnnotateKit Swift package. Setup, the Claude Code plugin and every delivery
-mode are in the [README](https://github.com/ooolzhas/annotatekit#readme).
+## React Native and Expo (iOS)
+
+```sh
+npm install -D annotate-ios
+```
+
+- **Expo:** add `"plugins": ["annotate-ios"]` to `app.json` and use a development build
+  (`npx expo run:ios`). Expo Go can't load native code.
+- **Bare React Native:** in `AppDelegate.swift`, add `import AnnotateKit` and call
+  `Annotate.install()` first in `didFinishLaunchingWithOptions`, then `cd ios && pod install`. For
+  `AppDelegate.mm`: `#import "AnnotateKit-Swift.h"` and `[AnnotateBridge installWithFile:@__FILE__];`.
+
+Needs an iOS 17 deployment target. Native apps use the AnnotateKit Swift package instead. Setup, the
+Claude Code plugin and every delivery mode are in the
+[README](https://github.com/ooolzhas/annotatekit#react-native-and-expo).

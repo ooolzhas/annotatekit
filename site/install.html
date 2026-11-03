@@ -64,7 +64,7 @@
         <code>Set up AnnotateKit from github.com/ooolzhas/annotatekit in this app.</code>
         <button class="copy" type="button" aria-label="Copy setup prompt"></button>
       </div>
-      <p>The agent follows the repo's <code class="hl">annotate-setup</code> skill and handles any project: Xcode, XcodeGen, Tuist or SwiftPM.</p>
+      <p>The agent follows the repo's <code class="hl">annotate-setup</code> skill and handles any project: Xcode, XcodeGen, Tuist, SwiftPM, React Native or Expo.</p>
       <h3 class="sub">Claude plugin</h3>
       <p>Skill, MCP server and CLI in one install:</p>
       <div class="cmd">
@@ -112,6 +112,30 @@
           <button class="copy" type="button" aria-label="Copy Mint command"></button>
         </div>
       </div>
+    </section>
+
+    <section id="react-native" aria-labelledby="react-native-title">
+      <h2 id="react-native-title">React Native and Expo</h2>
+      <p>iOS only. The npm package carries the pod, and autolinking picks it up. The app's deployment target must be iOS 17 or later.</p>
+      <div class="cmd shell">
+        <code>npm install -D annotate-ios</code>
+        <button class="copy" type="button" aria-label="Copy npm dev-dependency command"></button>
+      </div>
+      <h3 class="sub">Expo</h3>
+      <p>Add the config plugin, then run a development build with <code class="hl">npx expo run:ios</code>. Expo Go can't load native code.</p>
+      <div class="code-block">
+<pre><code>{ <span class="tk-str">"expo"</span>: { <span class="tk-str">"plugins"</span>: [<span class="tk-str">"annotate-ios"</span>] } }</code></pre>
+        <button class="copy" type="button" aria-label="Copy app.json snippet"></button>
+      </div>
+      <h3 class="sub">Bare React Native</h3>
+      <p>Add two lines to <code class="hl">ios/&lt;App&gt;/AppDelegate.swift</code>, then run <code class="hl">pod install</code> in <code class="hl">ios/</code>.</p>
+      <div class="code-block">
+<pre><code><span class="tk-key">import</span> AnnotateKit   <span class="tk-com">// at the top</span>
+
+Annotate.install()   <span class="tk-com">// first line of didFinishLaunchingWithOptions</span></code></pre>
+        <button class="copy" type="button" aria-label="Copy AppDelegate snippet"></button>
+      </div>
+      <p>Then ignore <code class="hl">.annotate/</code> and install the CLI as above.</p>
     </section>
 
     <footer class="footer">

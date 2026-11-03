@@ -1,8 +1,8 @@
 ---
 name: annotate-setup
-description: Add AnnotateKit (visual feedback for iOS apps: drawings and comments on the running app become prompts for a coding agent) to an iOS project, and connect the agent so sent annotations arrive automatically. Use when the user wants to annotate, comment on, or sketch over their iOS app's UI for an agent, or asks to install AnnotateKit / annotatekit.
+description: Add AnnotateKit (visual feedback for iOS apps: drawings and comments on the running app become prompts for a coding agent) to an iOS project, including React Native and Expo apps, and connect the agent so sent annotations arrive automatically. Use when the user wants to annotate, comment on, or sketch over their iOS app's UI for an agent, or asks to install AnnotateKit / annotatekit.
 license: MIT
-compatibility: iOS 17+ apps built with Xcode 16+ (SwiftUI or UIKit). Works with Claude Code, Cursor, Codex, VS Code and any MCP client.
+compatibility: iOS 17+ apps built with Xcode 16+ (SwiftUI, UIKit, React Native or Expo). Works with Claude Code, Cursor, Codex, VS Code and any MCP client.
 ---
 
 # Set up AnnotateKit in an iOS project
@@ -18,6 +18,7 @@ Look at the repo root:
 - `project.yml` → XcodeGen. `Project.swift` / `Tuist/` → Tuist. Edit the manifest, then regenerate.
 - `*.xcodeproj` only → edit `project.pbxproj` (section 2b).
 - `Package.swift` for the app itself → add a normal SwiftPM dependency.
+- `package.json` with `react-native` or `expo` → section 2c instead of 2a/2b and 3.
 
 Find the app entry point: `grep -rn "@main" --include=*.swift`. It's a `struct …: App` (SwiftUI) or
 a `UIApplicationDelegate`.
@@ -77,6 +78,23 @@ edit `project.pbxproj` yourself, add four objects with fresh unique 24-character
 Then run `xcodebuild -resolvePackageDependencies -project <App>.xcodeproj` to confirm the
 project still parses and the package resolves.
 
+### 2c. React Native and Expo
+
+iOS only. Install the npm package as a dev dependency; autolinking adds the `AnnotateKit` pod:
+`npm install -D annotate-ios` (or the yarn/pnpm/bun equivalent). The app's iOS deployment target
+must be 17.0 or later.
+
+- **Expo** (`expo` in `package.json`, `app.json` / `app.config.*`): add `"annotate-ios"` to
+  `expo.plugins`. Raise the target with `expo-build-properties`
+  (`["expo-build-properties", { "ios": { "deploymentTarget": "17.0" } }]`) if it's below 17.
+  The plugin edits the AppDelegate during prebuild, so skip section 3. Expo Go can't load native
+  code: the user needs a development build (`npx expo run:ios`, or `expo-dev-client` + EAS).
+- **Bare React Native** (`ios/Podfile`): in `ios/<App>/AppDelegate.swift`, add `import AnnotateKit`
+  and call `Annotate.install()` first in `application(_:didFinishLaunchingWithOptions:)`. In an
+  `AppDelegate.mm`, add `#import "AnnotateKit-Swift.h"` and call
+  `[AnnotateBridge installWithFile:@__FILE__];` there instead. Raise `platform :ios` in the
+  Podfile to 17.0 if needed, then `cd ios && pod install`. Skip section 3 except the `.gitignore` line.
+
 ## 3. Install the overlay
 
 In the `@main` App, add `import AnnotateKit` and call `Annotate.install()` in `init()`, creating
@@ -130,7 +148,8 @@ Without channels, the user says "check my latest annotation" and you call `get_a
 ## 6. Verify
 
 1. Build the app for the simulator, e.g.
-   `xcodebuild build -scheme <App> -destination 'generic/platform=iOS Simulator'`.
+   `xcodebuild build -scheme <App> -destination 'generic/platform=iOS Simulator'`
+   (React Native: `npx react-native run-ios`; Expo: `npx expo run:ios`).
 2. Tell the user to run it in the Simulator (or launch with `ANNOTATE=1` in the scheme's
    environment to start in annotate mode), tap the Annotate pill, pin something, and hit Send.
 3. A bundle appears in `.annotate/sessions/`, and `annotate list` shows it.

@@ -12,6 +12,11 @@ In a `Package.swift`:
 .package(url: "https://github.com/ooolzhas/annotatekit", from: "0.2.0")
 ```
 
+> Note: React Native and Expo apps (iOS) install the `annotate-ios` npm package instead, which
+> carries the pod and an Expo config plugin. See
+> [React Native and Expo](https://github.com/ooolzhas/annotatekit#react-native-and-expo) in the
+> README.
+
 ## Install the overlay
 
 Call ``Annotate/install(_:file:)`` once at launch. Leave the `file` argument at its default: the

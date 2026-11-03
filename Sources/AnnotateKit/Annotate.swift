@@ -2,11 +2,15 @@
 // Release, but only DEBUG builds on UIKit platforms install the overlay; elsewhere these are no-ops.
 // Public: Annotate.install(_:file:), start(), stop(), toggle(), isActive; AnnotateOptions; PromptDetail
 
+#if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
+#endif
 import Foundation
 
+#if canImport(AnnotateCore)
 /// Re-exported so apps importing only AnnotateKit can write `promptDetail: .compact`.
 public typealias PromptDetail = AnnotateCore.PromptDetail
+#endif
 
 public struct AnnotateOptions: Sendable {
     /// Floating button that enters annotate mode. Turn off if you trigger it yourself.

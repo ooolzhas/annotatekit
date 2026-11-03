@@ -408,7 +408,11 @@ public actor DeviceMirror {
 public enum BundleIDPattern {
     private static let skipped: Set<String> = [".build", "DerivedData", "Pods", "Carthage", "node_modules", "build"]
 
-    /// Values from every `project.pbxproj` and XcodeGen `project.yml` within a few levels of the root.
+    /// Values from every `project.pbxproj` and XcodeGen `project.yml` within a few levels of the root,
+    /// plus `ios.bundleIdentifier` from Expo's static config (`app.json` / `app.config.json`): an EAS
+    /// cloud build often has no local `ios/` folder, so that file is the only place its id is written.
+    /// `app.config.js` / `.ts` are code and are never executed here, so apps configured only that way
+    /// are recognised by their beacon's `installFile` alone.
     public static func scan(projectRoot: URL, maxDepth: Int = 4) -> [String] {
         let fileManager = FileManager.default
         guard let enumerator = fileManager.enumerator(
@@ -429,6 +433,9 @@ public enum BundleIDPattern {
                 found.formUnion(values(in: text))
             } else if name == "project.yml" || name == "project.yaml", let text = try? String(contentsOf: url, encoding: .utf8) {
                 found.formUnion(values(in: text))
+            } else if name == "app.json" || name == "app.config.json", let data = try? Data(contentsOf: url),
+                      let bundleID = expoBundleID(in: data) {
+                found.insert(bundleID)
             }
         }
         return found.sorted()
@@ -440,6 +447,17 @@ public enum BundleIDPattern {
         return regex.matches(in: text, range: range).compactMap { match in
             Range(match.range(at: 1), in: text).map { String(text[$0]) }
         }
+    }
+
+    /// `ios.bundleIdentifier` of an Expo static config. Expo reads the `expo` object when there is one
+    /// and the whole file otherwise, so both shapes count. Malformed or unrelated JSON yields nil.
+    static func expoBundleID(in data: Data) -> String? {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        let config = root["expo"] as? [String: Any] ?? root
+        guard let ios = config["ios"] as? [String: Any],
+              let bundleID = (ios["bundleIdentifier"] as? String)?.trimmingCharacters(in: .whitespaces),
+              !bundleID.isEmpty else { return nil }
+        return bundleID
     }
 
     /// Exact match, with `$(VAR)` / `${VAR}` in a pattern matching anything.
