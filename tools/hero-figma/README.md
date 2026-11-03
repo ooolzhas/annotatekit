@@ -1,9 +1,10 @@
 # Hero reel (Figma Motion)
 
 The annotatekit.com hero is the Figma storyboard animated in Figma Motion with AnnotateKit's own motion. The source is
-the frame **"Hero reel v7 (short working, 2x timer)"** (`38:2`) in Figma file `SkaGTdRhMla8Swyl5qtbqA`:
+the frame **"Hero reel v8 (seamless loop)"** (`40:2`) in Figma file `SkaGTdRhMla8Swyl5qtbqA`:
 - 546 × 970 pt, with the 418 × 890 phone at (64, 40)
-- 20.68 s loop, 60 fps. The "working" stage runs 6.05 s, and its counter shows 2 s per real second (ticks every 0.5 s, snappy 0.15)
+- 22 s loop, 60 fps. The "working" stage runs 6.05 s, and its counter shows 2 s per real second (ticks every 0.5 s, snappy 0.15)
+- Seamless loop: it opens on the pill already showing "• Annotate" (no reveal), and after "Done → Annotate" (19.65) the app eases back to its first layout (20.45, the reload in reverse). The last frame equals frame 0, so `encode.sh` drops it; 22 s is a whole number of the status-dot halo's 2 s cycles, and the glass keep-alive drifts out and back. `stabilize.py` then makes every pixel that never changes (bezel, shadow, status bar) bit-identical to frame 0, so segment render noise can't flicker at the joins or the loop point
 
 Its motion follows `reel-truth.md` (code curves, storyboard copy, original pacing):
 - Springs are exact damped-harmonic solves sampled as linear keys on the 60 fps grid.
@@ -11,7 +12,7 @@ Its motion follows `reel-truth.md` (code curves, storyboard copy, original pacin
 
 ## Re-render
 1. **Make the segments.** In the Figma MCP, run `segments.js` through `use_figma` with `BG` set to black. It returns
-   four segment frames (0–8, 8–12, 12–16 and 16–20.68 s). A single 2x / 60 fps `export_video` job fails server side
+   four segment frames (0–8, 8–12, 12–16 and 16–22 s). A single 2x / 60 fps `export_video` job fails server side
    above ~700 frames.
 2. **Export the black pass.** `export_video` each segment with `fps: 60`, `quality: "high"` and
    `constraint: {type: "SCALE", value: 2}`. Save them as `in/black-1.mp4` … `in/black-4.mp4`.
@@ -30,7 +31,7 @@ The glass refracts whatever it sits on, so on the site it reads as translucent o
   alpha). For Safari and every iOS browser.
 - **`demo.webm`:** VP9 `yuva420p`. For everything else.
 - **Both:** 1632 px tall, 60 fps, tagged BT.709.
-- **Poster:** the last frame (the finished app, launcher back to "Annotate").
+- **Poster:** the finished state at 20.3 s (the changed app, launcher back to "Annotate"), lossless.
 
 ## Site cues
 The terminal beside the phone prints on these reel seconds (`site/index.html`, `data-at` and `is-split`):
@@ -40,5 +41,6 @@ The terminal beside the phone prints on these reel seconds (`site/index.html`, `
 - 13.65: applied
 - 15.13: overlay out
 - 15.8: hot reload
+- 20.45: app eases back to the start for the loop
 
 The terminal is in from 6.8 to 14.8. Re-read these if the timeline changes.

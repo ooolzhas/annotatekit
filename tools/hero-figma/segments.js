@@ -1,11 +1,11 @@
 // Run through the Figma MCP `use_figma` tool (Plugin API) in file SkaGTdRhMla8Swyl5qtbqA. Makes the four export
-// segments of the hero reel: one 2x / 60 fps export_video job fails server side above ~700 frames, so the 20.68s
+// segments of the hero reel: one 2x / 60 fps export_video job fails server side above ~700 frames, so the 22s
 // timeline is exported as 0-8, 8-12, 12-16 and 16-23.7s. Each segment is a clone of the reel frame whose keyframes are
 // shifted to start at its offset; a cubic-bezier key cut by the offset is resampled on the 60fps grid, so every frame
 // lands on the same value as in the full timeline. Set BG to black or white, then export each returned id.
-const SRC = "38:2";               // "Hero reel v7 (short working, 2x timer)", 546 x 970 pt, phone at (64, 40)
+const SRC = "40:2";               // "Hero reel v8 (seamless loop)", 546 x 970 pt, phone at (64, 40)
 const BG = { r: 0, g: 0, b: 0 };  // then { r: 1, g: 1, b: 1 } for the white pass
-const SEGMENTS = [[0, 8], [8, 4], [12, 4], [16, 4.68]];
+const SEGMENTS = [[0, 8], [8, 4], [12, 4], [16, 6]];
 
 const src = await figma.getNodeByIdAsync(SRC);
 function bezY(e, u) {
